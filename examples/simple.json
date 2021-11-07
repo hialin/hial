@@ -1,0 +1,18 @@
+{
+  "hosts": [
+    {
+      "host_id": "1h48",
+      "labels": {
+        "power": "weak",
+        "gateway": "true"
+      }
+    },
+    {
+      "host_id": "1h51",
+      "labels": {
+        "group2": "true",
+        "power": "strong"
+      }
+    }
+  ]
+}

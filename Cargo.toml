@@ -1,0 +1,33 @@
+[package]
+name = "hiallib"
+version = "0.1.0"
+authors = ["Emanuel Dima <emanueldima@gmail.com>"]
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[dependencies]
+lazy_static = "1.4"
+linked-hash-map = "0.5"
+yaml-rust = "0.4"
+quick-xml = "0.22"
+url = "2.2"
+reqwest = { version = "0.11", features = ["blocking", "json"] }
+tree-sitter = "0.19"
+nom="6"
+clap="2.33"
+rand = "0.8"
+
+[dependencies.serde_json]
+version = "1"
+features = ["preserve_order"]
+
+[dependencies.toml]
+version = "0.5"
+features = ["preserve_order"]
+
+[build-dependencies]
+cc = "1.0"
+cbindgen = "0.20"

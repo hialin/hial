@@ -1,0 +1,313 @@
+{
+    "hosts": [
+        {
+            "host_id": "1h48",
+            "hostname": "w.com",
+            "labels": {
+                "io.rancher.host.kvm": "true",
+                "pxc.host": "true",
+                "io.rancher.host.agent_image": "rancher/agent:v1.2.11",
+                "shibboleth.host": "true",
+                "io.rancher.host.linux_kernel_version": "4.4",
+                "gitlab.host": "true",
+                "tuppdra.host": "true",
+                "io.rancher.host.docker_version": "1.12",
+                "gernweb.host": "true",
+                "location": "wfw",
+                "io.rancher.host.os": "linux",
+                "power": "weak",
+                "nexus.host": "true",
+                "gateway": "true"
+            }
+        },
+        {
+            "host_id": "1h51",
+            "hostname": "tc.com",
+            "labels": {
+                "scaleio.sds": "true",
+                "pxc.host": "true",
+                "tundra.host": "true",
+                "io.rancher.host.agent_image": "rancher/agent:v1.2.11",
+                "io.rancher.host.linux_kernel_version": "4.4",
+                "group2": "true",
+                "group1": "true",
+                "io.rancher.host.docker_version": "18.09",
+                "cqpdata": "true",
+                "io.rancher.host.os": "linux",
+                "location": "wfw",
+                "power": "strong"
+            }
+        },
+        {
+            "host_id": "1h52",
+            "hostname": "a.com",
+            "labels": {
+                "scaleio.sds": "true",
+                "io.rancher.host.kvm": "true",
+                "pxc.host": "true",
+                "io.rancher.host.agent_image": "rancher/agent:v1.2.11",
+                "registry.host": "true",
+                "io.rancher.host.linux_kernel_version": "4.4",
+                "group2": "true",
+                "group1": "true",
+                "switchboard.host": "true",
+                "io.rancher.host.docker_version": "18.09",
+                "bagman.host": "true",
+                "cqpdata": "true",
+                "io.rancher.host.os": "linux",
+                "location": "wfw",
+                "power": "strong"
+            }
+        }
+    ],
+    "stacks": [
+        {
+            "env_id": "1a5",
+            "env_name": "Arn",
+            "stack_id": "1st3",
+            "stack_name": "ipsec",
+            "dockerCompose": "version: '2'\r\nservices:\r\n  connectivity-check:\r\n    image: rancher/net:v0.13.17\r\n    environment:\r\n      RANCHER_DEBUG: 'false'\r\n    network_mode: container:ipsec\r\n    command:\r\n    - connectivity-check\r\n    - --connectivity-check-interval\r\n    - '10000'\r\n    - --peer-connection-timeout\r\n    - '60000'\r\n  router:\r\n    cap_add:\r\n    - NET_ADMIN\r\n    image: rancher/net:v0.13.17\r\n    environment:\r\n      IPSEC_CHILD_SA_REKEY_INTERVAL: 1h\r\n      IPSEC_IKE_SA_REKEY_INTERVAL: 4h\r\n      IPSEC_REPLAY_WINDOW_SIZE: '1024'\r\n      RANCHER_DEBUG: 'false'\r\n      RANCHER_IPSEC_PSK: ''\r\n    network_mode: container:ipsec\r\n    logging:\r\n      driver: json-file\r\n      options:\r\n        max-file: '2'\r\n        max-size: 25m\r\n    command:\r\n    - start-ipsec.sh\r\n    labels:\r\n      io.rancher.container.agent_service.ipsec: 'true'\r\n      io.rancher.container.create_agent: 'true'\r\n    sysctls:\r\n      net.ipv4.conf.all.send_redirects: '0'\r\n      net.ipv4.conf.default.send_redirects: '0'\r\n      net.ipv4.conf.eth0.send_redirects: '0'\r\n      net.ipv4.xfrm4_gc_thresh: '2147483647'\r\n  ipsec:\r\n    image: rancher/net:holder\r\n    network_mode: ipsec\r\n    ports:\r\n    - 0.0.0.0:500:500/udp\r\n    - 0.0.0.0:4500:4500/udp\r\n    command:\r\n    - sh\r\n    - -c\r\n    - echo Refer to router sidekick for logs; mkfifo f; exec cat f\r\n    labels:\r\n      io.rancher.network.arpsync: 'true'\r\n      io.rancher.sidekicks: connectivity-check,router\r\n      io.rancher.network.macsync: 'true'\r\n      io.rancher.cni.link_mtu_overhead: '0'\r\n      io.rancher.scheduler.global: 'true'\r\n  cni-driver:\r\n    privileged: true\r\n    image: rancher/net:v0.13.17\r\n    environment:\r\n      RANCHER_DEBUG: 'false'\r\n    network_mode: host\r\n    volumes:\r\n    - /var/run/docker.sock:/var/run/docker.sock\r\n    - rancher-cni-driver:/opt/cni-driver\r\n    logging:\r\n      driver: json-file\r\n      options:\r\n        max-file: '2'\r\n        max-size: 25m\r\n    pid: host\r\n    command:\r\n    - start-cni-driver.sh\r\n    labels:\r\n      io.rancher.network.cni.binary: rancher-bridge\r\n      io.rancher.container.dns: 'true'\r\n      io.rancher.scheduler.global: 'true'\r\n",
+            "rancherCompose": "version: '2'\r\nservices:\r\n  connectivity-check:\r\n    network_driver: &id001\r\n      description: null\r\n      name: Rancher IPsec\r\n      defaultNetwork:\r\n        defaultPolicyAction: allow\r\n        description: null\r\n        dns:\r\n        - 169.254.169.250\r\n        dnsSearch:\r\n        - rancher.internal\r\n        hostPorts: true\r\n        kind: null\r\n        name: ipsec\r\n        subnets:\r\n        - cidrSize: 24\r\n          networkAddress: 10.42.0.0/16\r\n      cniConfig:\r\n        10-rancher.conf:\r\n          bridge: docker0\r\n          bridgeSubnet: 10.42.0.0/16\r\n          hairpinMode: true\r\n          hostNat: true\r\n          ipam:\r\n            isDebugLevel: 'false'\r\n            logToFile: /var/log/rancher-cni.log\r\n            routes:\r\n            - dst: 169.254.169.250/32\r\n            type: rancher-cni-ipam\r\n          isDebugLevel: 'false'\r\n          isDefaultGateway: true\r\n          linkMTUOverhead: 98\r\n          logToFile: /var/log/rancher-cni.log\r\n          mtu: 1500\r\n          name: rancher-cni-network\r\n          type: rancher-bridge\r\n    scale: 1\r\n    start_on_create: true\r\n  router:\r\n    network_driver: *id001\r\n    scale: 1\r\n    start_on_create: true\r\n  ipsec:\r\n    network_driver: *id001\r\n    start_on_create: true\r\n    health_check:\r\n      healthy_threshold: 2\r\n      response_timeout: 2000\r\n      port: 80\r\n      unhealthy_threshold: 3\r\n      initializing_timeout: 60000\r\n      interval: 5000\r\n      strategy: none\r\n      request_line: GET \"/connectivity\" \"HTTP/1.0\"\r\n      reinitializing_timeout: 60000\r\n  cni-driver:\r\n    network_driver:\r\n      cniConfig:\r\n        10-rancher.conf:\r\n          bridge: docker0\r\n          bridgeSubnet: 10.42.0.0/16\r\n          hairpinMode: false\r\n          hostNat: true\r\n          ipam:\r\n            isDebugLevel: 'false'\r\n            logToFile: /var/log/rancher-cni.log\r\n            subnetPrefixSize: /16\r\n            type: rancher-cni-ipam\r\n          isDebugLevel: 'false'\r\n          isDefaultGateway: true\r\n          linkMTUOverhead: 98\r\n          logToFile: /var/log/rancher-cni.log\r\n          mtu: 1500\r\n          name: rancher-cni-network\r\n          promiscMode: true\r\n          type: rancher-bridge\r\n      defaultNetwork:\r\n        dns:\r\n        - 169.254.169.250\r\n        dnsSearch:\r\n        - rancher.internal\r\n        hostPorts: true\r\n        name: ipsec\r\n        subnets:\r\n        - networkAddress: 10.42.0.0/16\r\n          cidrSize: 24\r\n        defaultPolicyAction: allow\r\n      name: Rancher IPsec\r\n    start_on_create: true\r\n",
+            "system_stack": true,
+            "state": "active",
+            "services": [
+                {
+                    "service_id": "1s5",
+                    "service_name": "ipsec",
+                    "image": "docker:rancher/net:holder",
+                    "scale": 3,
+                    "ports": [
+                        "0.0.0.0:500:500/udp",
+                        "0.0.0.0:4500:4500/udp"
+                    ],
+                    "labels": {
+                        "io.rancher.cni.link_mtu_overhead": "0",
+                        "io.rancher.network.arpsync": "true",
+                        "io.rancher.network.macsync": "true",
+                        "io.rancher.sidekicks": "router,connectivity-check",
+                        "io.rancher.scheduler.global": "true"
+                    },
+                    "sidekicks": [
+                        {
+                            "name": "connectivity-check",
+                            "image": "docker:rancher/net:v0.13.17",
+                            "labels": {
+                                "io.rancher.service.hash": "24e3f0c7154b4a838c6bf9db596e5759d903a6e7"
+                            }
+                        },
+                        {
+                            "name": "router",
+                            "image": "docker:rancher/net:v0.13.17",
+                            "labels": {
+                                "io.rancher.container.agent_service.ipsec": "true",
+                                "io.rancher.container.create_agent": "true",
+                                "io.rancher.service.hash": "1d007b54c64a38fd23bef213bedcb8f7b4b887ff"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "service_id": "1s340",
+                    "service_name": "cni-driver",
+                    "image": "docker:rancher/net:v0.13.17",
+                    "scale": 3,
+                    "dataVolumes": [
+                        "/var/run/docker.sock:/var/run/docker.sock",
+                        "rancher-cni-driver:/opt/cni-driver"
+                    ],
+                    "environment": {
+                        "RANCHER_DEBUG": "false"
+                    },
+                    "labels": {
+                        "io.rancher.container.dns": "true",
+                        "io.rancher.network.cni.binary": "rancher-bridge",
+                        "io.rancher.scheduler.global": "true",
+                        "io.rancher.service.hash": "f238f79291367ef4dfc80f4fd9f9b2e7255a4ba1"
+                    }
+                }
+            ]
+        },
+        {
+            "env_id": "1a5",
+            "env_name": "Arn",
+            "stack_id": "1st4",
+            "stack_name": "scheduler",
+            "dockerCompose": "version: '2'\r\nservices:\r\n  scheduler:\r\n    image: rancher/scheduler:v0.8.6\r\n    environment:\r\n      RANCHER_DEBUG: 'false'\r\n    logging:\r\n      driver: json-file\r\n      options:\r\n        max-file: '2'\r\n        max-size: 25m\r\n    command:\r\n    - scheduler\r\n    - --metadata-address\r\n    - 169.254.169.250\r\n    labels:\r\n      io.rancher.container.agent_service.scheduling: 'true'\r\n      io.rancher.container.create_agent: 'true'\r\n",
+            "rancherCompose": "version: '2'\r\nservices:\r\n  scheduler:\r\n    scale: 1\r\n    start_on_create: true\r\n    health_check:\r\n      healthy_threshold: 2\r\n      response_timeout: 30000\r\n      port: 80\r\n      unhealthy_threshold: 3\r\n      initializing_timeout: 10000\r\n      interval: 2000\r\n      strategy: recreate\r\n      request_line: GET /healthcheck HTTP/1.0\r\n      reinitializing_timeout: 10000\r\n",
+            "system_stack": true,
+            "state": "active",
+            "services": [
+                {
+                    "service_id": "1s2",
+                    "service_name": "scheduler",
+                    "image": "docker:rancher/scheduler:v0.8.6",
+                    "scale": 1,
+                    "environment": {
+                        "RANCHER_DEBUG": "false"
+                    },
+                    "labels": {
+                        "io.rancher.container.agent_service.scheduling": "true",
+                        "io.rancher.container.create_agent": "true",
+                        "io.rancher.service.hash": "372be7a3e1e01015497307d155751d72cdeba246"
+                    }
+                }
+            ]
+        },
+        {
+            "env_id": "1a5",
+            "env_name": "Arn",
+            "stack_id": "1st9",
+            "stack_name": "W",
+            "dockerCompose": "version: '2'\r\nservices:\r\n  w:\r\n    image: w.com:5000/Arnd/web-apps/w:6.1.2\r\n    environment:\r\n      APP_CONTEXT_PATH: /w\r\n    stdin_open: true\r\n    tty: true\r\n    labels:\r\n      io.rancher.scheduler.affinity:host_label: location=wfw\r\n      io.rancher.scheduler.affinity:container_label_soft_ne: io.rancher.stack_service.name=$${stack_name}/$${service_name}\r\n      io.rancher.container.pull_image: always\r\n",
+            "rancherCompose": "version: '2'\r\nservices:\r\n  w:\r\n    scale: 3\r\n    start_on_create: true\r\n    health_check:\r\n      healthy_threshold: 2\r\n      response_timeout: 2000\r\n      port: 8080\r\n      unhealthy_threshold: 3\r\n      initializing_timeout: 60000\r\n      interval: 30000\r\n      strategy: recreate\r\n      reinitializing_timeout: 60000\r\n",
+            "system_stack": false,
+            "state": "active",
+            "services": [
+                {
+                    "service_id": "1s11",
+                    "service_name": "w",
+                    "image": "docker:w.com:5000/Arnd/web-apps/w:6.1.2",
+                    "scale": 3,
+                    "environment": {
+                        "APP_CONTEXT_PATH": "/w"
+                    },
+                    "labels": {
+                        "io.rancher.container.pull_image": "always",
+                        "io.rancher.scheduler.affinity:container_label_soft_ne": "io.rancher.stack_service.name=${stack_name}/${service_name}",
+                        "io.rancher.scheduler.affinity:host_label": "location=wfw"
+                    }
+                }
+            ]
+        },
+        {
+            "env_id": "1a5",
+            "env_name": "Arn",
+            "stack_id": "1st11",
+            "stack_name": "harv",
+            "dockerCompose": "version: '2'\r\nservices:\r\n  harv:\r\n    image: w.com:5000/Arnd/web-apps/harv:1.4.0\r\n    volumes:\r\n    - /data/harv/:/root/\r\n    - /data/harvchains/:/easyChains\r\n    labels:\r\n      io.rancher.scheduler.affinity:host_label: power=strong\r\n      io.rancher.container.pull_image: always\r\n      io.rancher.scheduler.affinity:container_label_ne: io.rancher.stack_service.name=$${stack_name}/$${service_name}\r\n",
+            "rancherCompose": "version: '2'\r\nservices:\r\n  harv:\r\n    scale: 2\r\n    start_on_create: true\r\n",
+            "system_stack": false,
+            "state": "active",
+            "services": [
+                {
+                    "service_id": "1s14",
+                    "service_name": "harv",
+                    "image": "docker:w.com:5000/Arnd/web-apps/harv:1.4.0",
+                    "scale": 2,
+                    "dataVolumes": [
+                        "/data/harv/:/root/",
+                        "/data/harvchains/:/easyChains"
+                    ],
+                    "labels": {
+                        "io.rancher.container.pull_image": "always",
+                        "io.rancher.scheduler.affinity:container_label_ne": "io.rancher.stack_service.name=${stack_name}/${service_name}",
+                        "io.rancher.scheduler.affinity:host_label": "power=strong"
+                    }
+                }
+            ]
+        },
+        {
+            "env_id": "1a5",
+            "env_name": "Arn",
+            "stack_id": "1st17",
+            "stack_name": "awesome",
+            "dockerCompose": "version: '2'\r\nservices:\r\n  awesome:\r\n    image: w.com:5000/Arnd/web-apps/awesome:1.3.7\r\n    labels:\r\n      io.rancher.scheduler.affinity:host_label: power=strong\r\n      io.rancher.scheduler.affinity:container_label_soft_ne: io.rancher.stack_service.name=$${stack_name}/$${service_name}\r\n      io.rancher.container.pull_image: always\r\n",
+            "rancherCompose": "version: '2'\r\nservices:\r\n  awesome:\r\n    scale: 1\r\n    start_on_create: true\r\n    health_check:\r\n      healthy_threshold: 2\r\n      response_timeout: 2000\r\n      port: 8080\r\n      unhealthy_threshold: 3\r\n      initializing_timeout: 60000\r\n      interval: 30000\r\n      strategy: recreate\r\n      reinitializing_timeout: 60000\r\n",
+            "system_stack": false,
+            "state": "active",
+            "services": [
+                {
+                    "service_id": "1s28",
+                    "service_name": "awesome",
+                    "image": "docker:w.com:5000/Arnd/web-apps/awesome:1.3.7",
+                    "scale": 1,
+                    "labels": {
+                        "io.rancher.container.pull_image": "always",
+                        "io.rancher.scheduler.affinity:host_label": "power=strong",
+                        "io.rancher.scheduler.affinity:container_label_soft_ne": "io.rancher.stack_service.name=${stack_name}/${service_name}"
+                    }
+                }
+            ]
+        },
+        {
+            "env_id": "1a5",
+            "env_name": "Arn",
+            "stack_id": "1st77",
+            "stack_name": "visual",
+            "dockerCompose": "version: '2'\r\nservices:\r\n  service-visual:\r\n    image: visual\r\n    labels:\r\n      io.rancher.scheduler.affinity:host_label: power=strong\r\n      io.rancher.scheduler.affinity:container_label_soft_ne: io.rancher.stack_service.name=$${stack_name}/$${service_name}\r\n      io.rancher.container.pull_image: always\r\n",
+            "rancherCompose": "version: '2'\r\nservices:\r\n  service-visual:\r\n    scale: 2\r\n    start_on_create: true\r\n    health_check:\r\n      healthy_threshold: 2\r\n      response_timeout: 2000\r\n      port: 8080\r\n      unhealthy_threshold: 3\r\n      initializing_timeout: 60000\r\n      interval: 30000\r\n      strategy: recreate\r\n      reinitializing_timeout: 60000\r\n",
+            "system_stack": false,
+            "state": "active",
+            "services": [
+                {
+                    "service_id": "1s163",
+                    "service_name": "service-visual",
+                    "image": "docker:visual",
+                    "scale": 2,
+                    "labels": {
+                        "io.rancher.container.pull_image": "always",
+                        "io.rancher.scheduler.affinity:host_label": "power=strong",
+                        "io.rancher.scheduler.affinity:container_label_soft_ne": "io.rancher.stack_service.name=${stack_name}/${service_name}"
+                    }
+                }
+            ]
+        },
+        {
+            "env_id": "1a5431",
+            "env_name": "Test",
+            "stack_id": "1st180",
+            "stack_name": "network-services",
+            "dockerCompose": "version: '2'\r\nservices:\r\n  metadata:\r\n    cap_add:\r\n    - NET_ADMIN\r\n    image: rancher/metadata:v0.9.1\r\n    network_mode: bridge\r\n    logging:\r\n      driver: json-file\r\n      options:\r\n        max-file: '2'\r\n        max-size: 25m\r\n    command:\r\n    - start.sh\r\n    - rancher-metadata\r\n    - -subscribe\r\n    labels:\r\n      io.rancher.sidekicks: dns\r\n      io.rancher.container.create_agent: 'true'\r\n      io.rancher.scheduler.global: 'true'\r\n      io.rancher.container.agent_service.metadata: 'true'\r\n  dns:\r\n    image: rancher/dns:v0.14.2\r\n    network_mode: container:metadata\r\n    logging:\r\n      driver: json-file\r\n      options:\r\n        max-file: '2'\r\n        max-size: 25m\r\n    command:\r\n    - rancher-dns\r\n    - --metadata-server=localhost\r\n    - --answers=/etc/rancher-dns/answers.json\r\n    - --recurser-timeout\r\n    - '2'\r\n    labels:\r\n      io.rancher.scheduler.global: 'true'\r\n  network-manager:\r\n    privileged: true\r\n    image: rancher/network-manager:v0.6.6\r\n    environment:\r\n      DOCKER_BRIDGE: docker0\r\n      METADATA_IP: 169.254.169.250\r\n    network_mode: host\r\n    volumes:\r\n    - /var/run/docker.sock:/var/run/docker.sock\r\n    - /var/lib/docker:/var/lib/docker\r\n    - /var/lib/rancher/state:/var/lib/rancher/state\r\n    - /lib/modules:/lib/modules:ro\r\n    - /run:/run:ro\r\n    - /var/run:/var/run:ro\r\n    - rancher-cni-driver:/etc/cni\r\n    - rancher-cni-driver:/opt/cni\r\n    logging:\r\n      driver: json-file\r\n      options:\r\n        max-file: '2'\r\n        max-size: 25m\r\n    pid: host\r\n    command:\r\n    - plugin-manager\r\n    - --metadata-url\r\n    - http://169.254.169.250/2016-07-29\r\n    labels:\r\n      io.rancher.scheduler.global: 'true'\r\n",
+            "rancherCompose": "version: '2'\r\nservices:\r\n  metadata:\r\n    start_on_create: true\r\n  dns:\r\n    start_on_create: true\r\n  network-manager:\r\n    start_on_create: true\r\n",
+            "system_stack": true,
+            "state": "active",
+            "services": [
+                {
+                    "service_id": "1s327",
+                    "service_name": "metadata",
+                    "image": "docker:rancher/metadata:v0.9.1",
+                    "labels": {
+                        "io.rancher.container.agent_service.metadata": "true",
+                        "io.rancher.container.create_agent": "true",
+                        "io.rancher.scheduler.global": "true",
+                        "io.rancher.service.hash": "336752dab7129867b939771e92f145deb2b4fe98",
+                        "io.rancher.sidekicks": "dns"
+                    },
+                    "sidekicks": [
+                        {
+                            "name": "dns",
+                            "image": "docker:rancher/dns:v0.14.2",
+                            "labels": {
+                                "io.rancher.scheduler.global": "true",
+                                "io.rancher.service.hash": "bba90334608f74fe32c3741b0055bf4c128dacde"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "service_id": "1s328",
+                    "service_name": "network-manager",
+                    "image": "docker:rancher/network-manager:v0.6.6",
+                    "dataVolumes": [
+                        "/var/run/docker.sock:/var/run/docker.sock",
+                        "/var/lib/docker:/var/lib/docker",
+                        "/var/lib/rancher/state:/var/lib/rancher/state",
+                        "/lib/modules:/lib/modules:ro",
+                        "/run:/run:ro",
+                        "/var/run:/var/run:ro",
+                        "rancher-cni-driver:/etc/cni",
+                        "rancher-cni-driver:/opt/cni"
+                    ],
+                    "environment": {
+                        "DOCKER_BRIDGE": "docker0",
+                        "METADATA_IP": "169.254.169.250"
+                    },
+                    "labels": {
+                        "io.rancher.scheduler.global": "true",
+                        "io.rancher.service.hash": "0a243e73ba6a63e18f204b3fae92b3118c86b131"
+                    }
+                }
+            ]
+        }
+    ]
+}
