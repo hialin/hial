@@ -13,7 +13,10 @@ fn main() -> Res<()> {
 }
 
 fn test_rustapi() -> Res<()> {
-    let examples = Cell::from(".").be("file")?.sub()?.get("examples")?;
+    let examples = Cell::from(".".to_string())
+        .be("file")?
+        .sub()?
+        .get("examples")?;
     pprint(&examples, 0, 0);
     let folder = examples.sub()?;
     let stacks = folder
@@ -29,7 +32,8 @@ fn test_rustapi() -> Res<()> {
             continue;
         }
 
-        let yaml = stack_sub.get("dockerCompose")?.value()?.be("yaml")?;
+        let yaml = stack_sub.get("dockerCompose")?.value()?.to_owned_value();
+        let yaml = Cell::from(yaml).be("yaml")?;
         pprint(&yaml, 0, 0);
         let service_node = yaml.sub()?.get("services")?.sub()?.at(0)?;
         let name = service_node.label()?;
@@ -46,7 +50,10 @@ fn test_rustapi() -> Res<()> {
 }
 
 fn test_rustapi_with_path() -> Res<()> {
-    let folder = Cell::from(".").be("file")?.sub()?.get("examples")?;
+    let folder = Cell::from(".".to_string())
+        .be("file")?
+        .sub()?
+        .get("examples")?;
     let stacks = folder.path("/productiondump.json^json/stacks")?.first()?;
     for stack in stacks.sub()? {
         let stack = stack?;

@@ -6,6 +6,7 @@ use crate::{
     verbose, verbose_error, HErr, InterpretationGroup, Selector, Value,
 };
 use lazy_static::lazy_static;
+use std::rc::Rc;
 
 type ElevateFn = fn(Cell) -> Res<Cell>;
 type VecMapOfElevateFn = VecMap<&'static str, ElevateFn>;
@@ -39,7 +40,7 @@ fn get_elevation_map_for(interpretation: &str) -> Option<VecMapOfElevateFn> {
     if writer.is_none() {
         // could have been initialized inbetween
         let mut map = VecMap::new();
-        map.put("string", string_elevation_map());
+        map.put("value", value_elevation_map());
         map.put("file", file_elevation_map());
         map.put("url", url_elevation_map());
         map.put("http", http_elevation_map());
@@ -54,40 +55,40 @@ fn get_elevation_map_for(interpretation: &str) -> Option<VecMapOfElevateFn> {
     }
 }
 
-fn string_elevation_map() -> VecMap<&'static str, ElevateFn> {
-    fn get_string(cell: &Cell) -> Res<&str> {
-        if let Cell::String(url) = cell {
-            if let Value::Str(s) = cell.value()? {
-                return Ok(s);
-            }
+fn value_elevation_map() -> VecMap<&'static str, ElevateFn> {
+    fn get_string_value(cell: &Cell) -> Res<&str> {
+        if let Value::Str(s) = cell.value()? {
+            return Ok(s);
         }
         HErr::internal("elevation: not a string").into()
     }
     let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
     ret.put("url", |cell: Cell| {
-        Ok(Cell::Url(url::from_string(get_string(&cell)?)?))
+        Ok(Cell::Url(url::from_string(get_string_value(&cell)?)?))
     });
     ret.put("file", |cell: Cell| -> Res<Cell> {
-        Ok(Cell::File(file::from_string_path(get_string(&cell)?)?))
+        Ok(Cell::File(file::from_string_path(get_string_value(
+            &cell,
+        )?)?))
     });
     ret.put("json", |cell: Cell| -> Res<Cell> {
-        Ok(Cell::Json(json::from_string(get_string(&cell)?)?))
+        Ok(Cell::Json(json::from_string(get_string_value(&cell)?)?))
     });
     ret.put("toml", |cell: Cell| -> Res<Cell> {
-        Ok(Cell::Toml(toml::from_string(get_string(&cell)?)?))
+        Ok(Cell::Toml(toml::from_string(get_string_value(&cell)?)?))
     });
     ret.put("yaml", |cell: Cell| -> Res<Cell> {
-        Ok(Cell::Yaml(yaml::from_string(get_string(&cell)?)?))
+        Ok(Cell::Yaml(yaml::from_string(get_string_value(&cell)?)?))
     });
     ret.put("xml", |cell: Cell| -> Res<Cell> {
-        Ok(Cell::Xml(xml::from_string(get_string(&cell)?)?))
+        Ok(Cell::Xml(xml::from_string(get_string_value(&cell)?)?))
     });
     ret.put("http", |cell: Cell| -> Res<Cell> {
-        Ok(Cell::Http(http::from_string(get_string(&cell)?)?))
+        Ok(Cell::Http(http::from_string(get_string_value(&cell)?)?))
     });
     ret.put("rust", |cell: Cell| -> Res<Cell> {
         Ok(Cell::TreeSitter(treesitter::from_string(
-            get_string(&cell)?.to_string(),
+            get_string_value(&cell)?.to_string(),
             "rust",
         )?))
     });
@@ -146,29 +147,29 @@ fn url_elevation_map() -> VecMap<&'static str, ElevateFn> {
 }
 
 fn http_elevation_map() -> VecMap<&'static str, ElevateFn> {
-    fn get_http_body(cell: &Cell) -> Res<String> {
+    fn http_as_string(cell: &Cell) -> Res<String> {
         if let Cell::Http(h) = cell {
             return http::to_string(h);
         }
         HErr::internal("elevation: not a http cell").into()
     }
     let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
-    ret.put("string", |cell: Cell| {
-        return Ok(Cell::String(OwnedValue::new(get_http_body(&cell)?)));
-    });
+    // ret.put("value", |cell: Cell| {
+    //     return Ok(Cell::OwnedValue(OwnedValue::Bytes(cell.value()?)));
+    // });
     ret.put("json", |cell: Cell| {
-        let string = get_http_body(&cell)?;
+        let string = http_as_string(&cell)?;
         return Ok(Cell::Json(json::from_string(&string)?));
     });
     ret.put("xml", |cell: Cell| {
-        let string = get_http_body(&cell)?;
+        let string = http_as_string(&cell)?;
         return Ok(Cell::Xml(xml::from_string(&string)?));
     });
     ret
 }
 
 fn rust_elevation_map() -> VecMap<&'static str, ElevateFn> {
-    fn get_http_body(cell: &Cell) -> Res<String> {
+    fn underlying(cell: &Cell) -> Res<String> {
         if let Cell::TreeSitter(ts) = cell {
             return treesitter::get_underlying_string(&ts).map(|s| s.into());
         }
@@ -176,18 +177,24 @@ fn rust_elevation_map() -> VecMap<&'static str, ElevateFn> {
     }
     let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
     ret.put("string", |cell: Cell| {
-        return Ok(Cell::String(OwnedValue::new(get_http_body(&cell)?)));
+        return Ok(Cell::OwnedValue(Rc::new(OwnedValue::String(underlying(
+            &cell,
+        )?))));
     });
     ret
 }
 
 fn standard_interpretation(cell: &Cell) -> Option<&str> {
     let interpretation = match cell {
-        Cell::String(OwnedValue(str)) => {
-            if str.starts_with("http://") || str.starts_with("https://") {
-                Some("http")
-            } else if str.starts_with(".") || str.starts_with("/") {
-                Some("file")
+        Cell::OwnedValue(ov) => {
+            if let OwnedValue::String(s) = &**ov {
+                if s.starts_with("http://") || s.starts_with("https://") {
+                    Some("http")
+                } else if s.starts_with(".") || s.starts_with("/") {
+                    Some("file")
+                } else {
+                    None
+                }
             } else {
                 None
             }

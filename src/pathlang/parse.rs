@@ -1,6 +1,5 @@
-use crate::pathlang::parseurl::*;
-use crate::pathlang::path::*;
-use crate::{base::common::*, guard_ok};
+use crate::{base::common::*, guard_ok, pathlang::parseurl::*, pathlang::path::*};
+use nom::character::complete::space0;
 use nom::{
     branch::alt,
     bytes::complete::{escaped, tag},
@@ -11,7 +10,7 @@ use nom::{
     sequence::{delimited, terminated, tuple},
     IResult,
 };
-use std::str::FromStr;
+use std::str::{from_utf8_unchecked, FromStr};
 
 pub type NomRes<T, U> = IResult<T, U, VerboseError<T>>;
 
@@ -95,8 +94,11 @@ fn value(input: &str) -> NomRes<&str, Value> {
 }
 
 fn value_string(input: &str) -> NomRes<&str, Value> {
-    context("value_string", parse_quoted_single)(input)
-        .map(|(next_input, res)| (next_input, Value::Str(res)))
+    context(
+        "value_string",
+        alt((parse_quoted_single, parse_quoted_double)),
+    )(input)
+    .map(|(next_input, res)| (next_input, Value::Str(res)))
 }
 
 fn value_uint(input: &str) -> NomRes<&str, Value> {
@@ -112,6 +114,12 @@ fn parse_quoted_single(input: &str) -> NomRes<&str, &str> {
     let esc = escaped(none_of("\\\'"), '\\', tag("'"));
     let esc_or_empty = alt((esc, tag("")));
     delimited(tag("'"), esc_or_empty, tag("'"))(input)
+}
+
+fn parse_quoted_double(input: &str) -> NomRes<&str, &str> {
+    let esc = escaped(none_of("\\\""), '\\', tag("\""));
+    let esc_or_empty = alt((esc, tag("")));
+    delimited(tag("\""), esc_or_empty, tag("\""))(input)
 }
 
 fn string(input: &str) -> NomRes<&str, &str> {
@@ -136,21 +144,26 @@ fn path_item(input: &str) -> NomRes<&str, PathItem> {
     context(
         "path_item",
         tuple((
+            space0,
             path_item_start,
+            space0,
             opt(path_item_selector),
+            space0,
             opt(path_item_index),
+            space0,
             many0(filter),
+            space0,
         )),
     )(input)
     .and_then(|(next_input, res)| {
-        if res.1.is_none() && res.2.is_none() {
+        if res.3.is_none() && res.5.is_none() {
             Err(nom::Err::Error(VerboseError { errors: vec![] }))
         } else {
             let pi = PathItem {
-                relation: Relation::try_from(res.0).unwrap_or_else(|_| panic!("bad relation")),
-                selector: res.1,
-                index: res.2,
-                filters: res.3,
+                relation: Relation::try_from(res.1).unwrap_or_else(|_| panic!("bad relation")),
+                selector: res.3,
+                index: res.5,
+                filters: res.7,
             };
             Ok((next_input, pi))
         }
@@ -176,18 +189,13 @@ fn filter(input: &str) -> NomRes<&str, Filter> {
 }
 
 fn expression(input: &str) -> NomRes<&str, Expression> {
-    context(
-        "expression",
-        tuple((path_items, opt(accessor), operation, value)),
-    )(input)
-    .map(|(next_input, res)| {
+    context("expression", tuple((path_items, operation, value)))(input).map(|(next_input, res)| {
         (
             next_input,
             Expression {
-                left_path: res.0,
-                left_accessor: res.1,
-                op: res.2,
-                right: res.3,
+                left: res.0,
+                op: res.1,
+                right: res.2,
             },
         )
     })
@@ -198,8 +206,16 @@ fn expression_left(input: &str) -> NomRes<&str, Path> {
 }
 
 fn path_item_start(input: &str) -> NomRes<&str, char> {
-    context("path_item_start", alt((tag("/"), tag("@"), tag("^"))))(input)
-        .map(|(next_input, res)| (next_input, res.chars().next().unwrap()))
+    context(
+        "path_item_start",
+        alt((
+            tag(unsafe { from_utf8_unchecked(&[Relation::Attr as u8]) }),
+            tag(unsafe { from_utf8_unchecked(&[Relation::Sub as u8]) }),
+            tag(unsafe { from_utf8_unchecked(&[Relation::Interpretation as u8]) }),
+            tag(unsafe { from_utf8_unchecked(&[Relation::Field as u8]) }),
+        )),
+    )(input)
+    .map(|(next_input, res)| (next_input, res.chars().next().unwrap()))
 }
 
 fn number_usize(input: &str) -> NomRes<&str, usize> {
@@ -212,15 +228,4 @@ fn number_usize(input: &str) -> NomRes<&str, usize> {
 fn operation(input: &str) -> NomRes<&str, &str> {
     context("operation", alt((tag("=="), tag("!="))))(input)
         .map(|(next_input, res)| (next_input, res))
-}
-
-fn accessor(input: &str) -> NomRes<&str, &str> {
-    context(
-        "accessor",
-        tuple((
-            tag("."),
-            alt((tag("value"), tag("type"), tag("index"), tag("label"))),
-        )),
-    )(input)
-    .map(|(next_input, res)| (next_input, res.1))
 }

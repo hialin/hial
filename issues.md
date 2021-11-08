@@ -32,22 +32,24 @@
 
 ### Todos, Issues, Problems
 
+- todo: review examples, check accessors, operators
+
 - todo: c interop and a small c test
 - todo: python interop and a larger python example
-- todo: transform string cell to value cell
-- todo: make value, label, index and type cells
-- todo: support accessor calls with #
+
 - todo: improve nom parsing errors, use context
-- todo: make sure all examples work
 - todo: add regex operator and shortcuts for startswith, endswith, contains
 - todo: add <, >, <=, >= operators
+
 - todo: get should return an iterator; multiset labels
+
 - todo: write support: json, rust, fs
+
 - todo: interpretations parameters
 - todo: custom tree
 - todo: cell symlinks
 - todo: cell path
-- todo: path functions
+- todo: path bindings
 - todo: diffs
 - todo: git interpretation
 

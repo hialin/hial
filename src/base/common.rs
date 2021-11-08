@@ -2,8 +2,11 @@ use core::cmp::Ordering;
 use core::fmt;
 use core::fmt::Display;
 use core::hash::{Hash, Hasher};
+use std::borrow::Borrow;
 
 pub type Res<T> = Result<T, HErr>;
+
+pub const DISPLAY_VALUE_NONE: &str = "ø"; // ø❍•⸰·
 
 #[derive(Clone, Debug)]
 #[repr(C)]
@@ -53,10 +56,10 @@ impl<T> From<HErr> for Res<T> {
 impl HErr {
     pub fn internal<T: Into<String>>(msg: T) -> HErr {
         if cfg!(debug_assertions) {
-            HErr::Internal(msg.into())
-        } else {
             eprintln!("{}", msg.into());
             panic!("internal error");
+        } else {
+            HErr::Internal(msg.into())
         }
     }
 }
@@ -109,6 +112,23 @@ impl PartialOrd for Int {
             Int::U32(a) => a as i128,
         };
         big(*self).partial_cmp(&big(*other))
+    }
+}
+
+impl<'a> Default for Int {
+    fn default() -> Self {
+        Int::I64(0)
+    }
+}
+
+impl<'a> Display for Int {
+    fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Int::I32(x) => write!(buf, "{}", x),
+            Int::U32(x) => write!(buf, "{}", x),
+            Int::I64(x) => write!(buf, "{}", x),
+            Int::U64(x) => write!(buf, "{}", x),
+        }
     }
 }
 
@@ -183,33 +203,16 @@ pub enum Value<'a> {
     Bytes(&'a [u8]),
 }
 
-impl<'a> Default for Int {
-    fn default() -> Self {
-        Int::I64(0)
-    }
-}
-
 impl<'a> Default for Value<'a> {
     fn default() -> Self {
         Value::None
     }
 }
 
-impl<'a> Display for Int {
-    fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Int::I32(x) => write!(buf, "{}", x),
-            Int::U32(x) => write!(buf, "{}", x),
-            Int::I64(x) => write!(buf, "{}", x),
-            Int::U64(x) => write!(buf, "{}", x),
-        }
-    }
-}
-
 impl<'a> Display for Value<'a> {
     fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Value::None => write!(buf, "{}", '⸰'), // ø❍•⸰·
+            Value::None => write!(buf, "{}", DISPLAY_VALUE_NONE),
             Value::Bool(x) => write!(buf, "{}", x),
             Value::Int(x) => write!(buf, "{}", x),
             Value::Float(x) => write!(buf, "{}", x),
@@ -222,11 +225,11 @@ impl<'a> Display for Value<'a> {
 
 impl<T> PartialEq<T> for Value<'_>
 where
-    T: AsRef<str>,
+    T: Borrow<str>,
 {
     fn eq(&self, other: &T) -> bool {
         match self {
-            Value::Str(s) => s.eq(&other.as_ref()),
+            Value::Str(s) => s.eq(&other.borrow()),
             _ => false,
         }
     }
@@ -271,13 +274,13 @@ impl<'a> From<&'a String> for Selector<'a> {
 
 impl<T> PartialEq<T> for Selector<'_>
 where
-    T: AsRef<str>,
+    T: Borrow<str>,
 {
     fn eq(&self, other: &T) -> bool {
         match self {
             Selector::Star | Selector::DoubleStar => true,
             Selector::Top => false,
-            Selector::Str(s) => s.eq(&other.as_ref()),
+            Selector::Str(s) => s.eq(&other.borrow()),
         }
     }
 }
@@ -301,6 +304,85 @@ impl<'a> Display for Selector<'a> {
             Selector::Star => write!(buf, "*"),
             Selector::Str(x) => write!(buf, "{}", x),
             Selector::Top => write!(buf, "^"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum OwnedValue {
+    None,
+    Bool(bool),
+    Int(Int),
+    Float(StrFloat),
+    String(String),
+    // OsString(OsString),
+    Bytes(Vec<u8>),
+}
+
+impl Default for OwnedValue {
+    fn default() -> Self {
+        OwnedValue::None
+    }
+}
+
+impl Display for OwnedValue {
+    fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OwnedValue::None => write!(buf, "{}", DISPLAY_VALUE_NONE),
+            OwnedValue::Bool(x) => write!(buf, "{}", x),
+            OwnedValue::Int(x) => write!(buf, "{}", x),
+            OwnedValue::Float(x) => write!(buf, "{}", x),
+            OwnedValue::String(x) => write!(buf, "{}", x),
+            OwnedValue::Bytes(x) => write!(buf, "{}", String::from_utf8_lossy(x)),
+        }
+    }
+}
+
+impl<T> PartialEq<T> for OwnedValue
+where
+    T: Borrow<str>,
+{
+    fn eq(&self, other: &T) -> bool {
+        match self {
+            OwnedValue::String(s) => s.eq(&other.borrow()),
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<Selector<'_>> for OwnedValue {
+    fn eq(&self, other: &Selector) -> bool {
+        match other {
+            Selector::Str(svalue) => self.eq(svalue),
+            Selector::Star => true,
+            Selector::DoubleStar => true,
+            Selector::Top => false,
+        }
+    }
+}
+
+impl<'a> From<&'a OwnedValue> for Value<'a> {
+    fn from(ov: &'a OwnedValue) -> Self {
+        match ov {
+            OwnedValue::None => Value::None,
+            OwnedValue::Bool(x) => Value::Bool(*x),
+            OwnedValue::Int(x) => Value::Int(*x),
+            OwnedValue::Float(x) => Value::Float(*x),
+            OwnedValue::String(x) => Value::Str(&x),
+            OwnedValue::Bytes(x) => Value::Bytes(&x),
+        }
+    }
+}
+
+impl Value<'_> {
+    pub fn to_owned_value(&self) -> OwnedValue {
+        match self {
+            Value::None => OwnedValue::None,
+            Value::Bool(x) => OwnedValue::Bool(*x),
+            Value::Int(x) => OwnedValue::Int(*x),
+            Value::Float(x) => OwnedValue::Float(*x),
+            Value::Str(x) => OwnedValue::String(x.to_string()),
+            Value::Bytes(x) => OwnedValue::Bytes(Vec::from(*x)),
         }
     }
 }

@@ -39,11 +39,11 @@ pub extern "C" fn cell_str(s: *const c_char) -> CResult<Cell, HErr> {
     let s = guard_ok!(s.to_str(), err =>{
         return CResult::Err(HErr::BadArgument(format!("not an utf8 string")));
     });
-    CResult::Ok(Cell::from(s))
+    CResult::Ok(Cell::from(s.to_string()))
 }
 
-pub extern "C" fn cell_value(v: Value) -> Cell {
-    Cell::from(v)
+pub extern "C" fn cell_value(ov: OwnedValue) -> Cell {
+    Cell::from(ov)
 }
 
 pub extern "C" fn interpretation(cell: &Cell) -> &str {
@@ -66,7 +66,7 @@ pub extern "C" fn value(cell: &Cell) -> Res<Value> {
     cell.value()
 }
 
-pub extern "C" fn be(cell: &Cell, interp: &str) -> Res<Cell> {
+pub extern "C" fn be(cell: Cell, interp: &str) -> Res<Cell> {
     cell.be(interp)
 }
 

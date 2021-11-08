@@ -94,6 +94,13 @@ impl<'a> EvalIter<'a> {
             }
         }
 
+        if has_relation(Relation::Field, &self.path.0) {
+            match Self::subgroup(Relation::Field, &cell) {
+                Err(err) => verbose_error(err),
+                Ok(group) => Self::push_field(&group, &path_indices, &self.path.0, &mut self.stack),
+            }
+        }
+
         None
     }
 
@@ -174,10 +181,8 @@ impl<'a> EvalIter<'a> {
         stack: &mut Vec<CellNode>,
     ) {
         // println!(
-        //     "-- push_by_relation_without_stars: relation {:?}\npath: {} ; path_indices: {:?}",
-        //     relation,
-        //     DisplayPath(path),
-        //     path_indices
+        //     "-- push_by_relation_without_stars: relation {:?}\npath_indices: {:?}",
+        //     relation, path_indices
         // );
         for path_index in path_indices {
             let path_item = &path[*path_index];
@@ -212,11 +217,41 @@ impl<'a> EvalIter<'a> {
         }
     }
 
+    fn push_field(
+        group: &Group,
+        path_indices: &Vec<usize>,
+        path: &Vec<PathItem<'a>>,
+        stack: &mut Vec<CellNode>,
+    ) {
+        for path_index in path_indices {
+            let path_item = &path[*path_index];
+            if path_item.relation != Relation::Field {
+                continue;
+            }
+            if let Some(field) = path_item.selector {
+                let subcell = guard_ok!(group.get(field), err => {
+                    verbose_error(err);
+                    continue;
+                });
+
+                if !Self::eval_filters_match(&subcell, path_item) {
+                    continue;
+                }
+
+                stack.push(CellNode {
+                    cell: Ok(subcell),
+                    path_indices: vec![path_index + 1],
+                });
+            }
+        }
+    }
+
     fn subgroup(relation: Relation, cell: &Cell) -> Res<Group> {
         match relation {
             Relation::Sub => cell.sub(),
             Relation::Attr => cell.attr(),
-            Relation::Interpretation => cell.elevate(),
+            Relation::Interpretation => cell.clone().elevate(),
+            Relation::Field => cell.field(),
         }
     }
 
@@ -277,6 +312,7 @@ impl<'a> EvalIter<'a> {
     }
 
     fn cell_matches_selector(cell: &Cell, sel: &Selector) -> bool {
+        // println!("cell_matches_selector: selector {:?}; cell {:?}", sel, cell);
         if *sel == Selector::Star || *sel == Selector::DoubleStar {
             return true;
         } else {
@@ -293,55 +329,32 @@ impl<'a> EvalIter<'a> {
     }
 
     fn eval_bool_expression(cell: Cell, expr: &Expression<'a>) -> Res<bool> {
-        let eval_iter_left = Self::new(cell, expr.left_path.clone());
+        let eval_iter_left = Self::new(cell, expr.left.clone());
         for cell in eval_iter_left {
             let cell = guard_ok!(cell, err => {
                 verbose_error(err);
                 continue;
             });
-            let lvalue = {
-                if let Some(accessor) = expr.left_accessor {
-                    match accessor {
-                        "value" => guard_ok!(cell.value(), err => {
-                            verbose_error(err);
-                            continue;
-                        }),
-                        "type" => Value::Str(guard_ok!(cell.typ(), err => {
-                            verbose_error(err);
-                            continue;
-                        })),
-                        "index" => Value::Int(Int::U64(guard_ok!(cell.index(), err => {
-                            verbose_error(err);
-                            continue;
-                        }) as u64)),
-                        "label" => Value::Str(guard_ok!(cell.label(), err => {
-                            verbose_error(err);
-                            continue;
-                        })),
-                        _ => return Err(HErr::Internal(format!("unknown accessor: {}", accessor))),
-                    }
-                } else {
-                    guard_ok!(cell.value(), err => {
-                        verbose_error(err);
-                        continue;
-                    })
-                }
-            };
-            match expr.op {
-                "==" => {
-                    if lvalue == expr.right {
-                        return Ok(true);
-                    }
-                }
-                "!=" => {
-                    if lvalue != expr.right {
-                        return Ok(true);
-                    }
-                }
-                _ => return Err(HErr::Other(format!("bad operand: {}", expr.op))),
-            };
+            let lvalue = guard_ok!(cell.value(), err => {
+                verbose_error(err);
+                continue;
+            });
+            if Self::eval_expr(expr.op, lvalue, expr.right)? {
+                return Ok(true);
+            }
         }
         Ok(false)
+    }
+
+    fn eval_expr(op: &str, left: Value, right: Value) -> Res<bool> {
+        if !["==", "!="].contains(&op) {
+            return Err(HErr::Other(format!("bad operand: {}", op)));
+        }
+        match op {
+            "==" if left == right => Ok(true),
+            "!=" if left != right => Ok(true),
+            _ => Ok(false),
+        }
     }
 }
 

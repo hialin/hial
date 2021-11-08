@@ -1,11 +1,12 @@
 use crate::{
     base::common::*,
+    base::interpretation_api::*,
     base::rust_api::*,
     pathlang::{eval::EvalIter, parseurl::*},
 };
 use std::fmt::{Display, Formatter};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Path<'a>(pub(crate) Vec<PathItem<'a>>);
 
 #[derive(Clone, Debug)]
@@ -15,7 +16,7 @@ pub enum CellRepresentation<'a> {
     String(&'a str),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PathItem<'a> {
     pub(crate) relation: Relation,
     pub(crate) selector: Option<Selector<'a>>, // field name (string) or '*' or '**'
@@ -24,32 +25,29 @@ pub struct PathItem<'a> {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[repr(u8)]
 pub enum Relation {
-    Attr,           // @
-    Sub,            // /
-    Interpretation, // ^
+    Attr = '@' as u8,
+    Sub = '/' as u8,
+    Interpretation = '^' as u8,
+    Field = '#' as u8,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Filter<'a> {
     pub(crate) expr: Expression<'a>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Expression<'a> {
-    pub(crate) left_path: Path<'a>,
-    pub(crate) left_accessor: Option<&'a str>,
+    pub(crate) left: Path<'a>,
     pub(crate) op: &'a str,
     pub(crate) right: Value<'a>,
 }
 
 impl Display for Relation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            Relation::Attr => write!(f, "@"),
-            Relation::Sub => write!(f, "/"),
-            Relation::Interpretation => write!(f, "^"),
-        }
+        write!(f, "{}", *self as u8 as char)
     }
 }
 
@@ -57,11 +55,17 @@ impl TryFrom<char> for Relation {
     type Error = ();
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
-        match value {
-            '@' => Ok(Relation::Attr),
-            '/' => Ok(Relation::Sub),
-            '^' => Ok(Relation::Interpretation),
-            _ => Err(()),
+        let value = value as u8;
+        if value == Relation::Attr as u8 {
+            Ok(Relation::Attr)
+        } else if value == Relation::Sub as u8 {
+            Ok(Relation::Sub)
+        } else if value == Relation::Interpretation as u8 {
+            Ok(Relation::Interpretation)
+        } else if value == Relation::Field as u8 {
+            Ok(Relation::Field)
+        } else {
+            Err(())
         }
     }
 }
@@ -94,10 +98,7 @@ impl Display for CellRepresentation<'_> {
 impl Display for Filter<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "[")?;
-        fmt_path_items(&self.expr.left_path.0, f)?;
-        if let Some(accessor) = self.expr.left_accessor {
-            write!(f, ".{}", accessor)?;
-        }
+        fmt_path_items(&self.expr.left.0, f)?;
         write!(f, "{}", self.expr.op)?;
         match self.expr.right {
             Value::Str(s) => write!(f, "'{}'", s)?,
@@ -153,9 +154,9 @@ fn fmt_path_item(path_item: &PathItem, f: &mut Formatter<'_>) -> std::fmt::Resul
 impl<'a> CellRepresentation<'a> {
     pub fn eval(&self) -> Res<Cell> {
         match self {
-            CellRepresentation::Url(url) => Cell::from(url.to_string()).be("url"),
-            CellRepresentation::File(file) => Cell::from(file.to_string()).be("file"),
-            CellRepresentation::String(str) => Ok(Cell::from(*str)),
+            CellRepresentation::Url(url) => Cell::from(url.to_string()).elevate()?.get("url"),
+            CellRepresentation::File(file) => Cell::from(file.to_string()).elevate()?.get("file"),
+            CellRepresentation::String(str) => Ok(Cell::from(str.to_string())),
         }
     }
 }

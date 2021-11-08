@@ -98,7 +98,7 @@ Python:
 Bash:
 ```bash
 echo "Bad images:"
-hial print "./config.yaml^yaml/services[/image^string^http@status/code>=400]/name"
+hial print "./config.yaml ^yaml /services [ /image ::value ^http @status /code >= 400 ] / name"
 ```
 
 Python:

@@ -7,21 +7,22 @@
     // missing_docs
 )]
 
-pub use base::common::{HErr, Int, Res, Selector, Value};
-pub use base::interpretation_api::*;
-pub use base::rust_api;
 use std::borrow::Borrow;
 
 pub mod base;
+pub mod c_api;
 mod interpretations;
+pub mod pathlang;
+pub mod perftests;
+pub mod pprint;
 mod utils;
 
-pub mod c_api;
-pub mod pathlang;
-pub mod pprint;
-
-pub mod perftests;
+#[cfg(test)]
 mod tests;
+
+pub use base::common::{HErr, Int, Res, Selector, Value};
+pub use base::interpretation_api::*;
+pub use base::rust_api;
 
 #[macro_export]
 macro_rules! guard_ok {

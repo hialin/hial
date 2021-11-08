@@ -9,7 +9,7 @@ use std::rc::Rc;
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub enum Cell {
-    String(OwnedValue),
+    OwnedValue(Rc<OwnedValue>),
     File(file::Cell),
     Json(json::Cell),
     Toml(toml::Cell),
@@ -21,16 +21,11 @@ pub enum Cell {
 }
 
 #[derive(Clone, Debug)]
-#[repr(C)]
-pub struct OwnedValue(pub(crate) Rc<String>);
-impl OwnedValue {
-    pub fn new(s: String) -> OwnedValue {
-        OwnedValue(Rc::new(s))
-    }
-}
-
-#[derive(Clone, Debug)]
 pub enum Group {
+    Elevation(ElevationGroup),
+    Field(Cell),
+    Mixed(Vec<Cell>),
+
     File(file::Group),
     Json(json::Group),
     Toml(toml::Group),
@@ -39,31 +34,23 @@ pub enum Group {
     Url(url::Cell),
     Http(http::Group),
     TreeSitter(treesitter::Group),
-    Elevation(ElevationGroup),
-    Mixed(Vec<Cell>),
 }
 
-impl Default for Cell {
-    fn default() -> Self {
-        Cell::String(OwnedValue::new(String::new()))
-    }
-}
-
-impl From<&str> for Cell {
-    fn from(s: &str) -> Cell {
-        Cell::String(OwnedValue::new(s.into()))
-    }
-}
+// impl Default for Cell {
+//     fn default() -> Self {
+//         Cell::OwnedValue(Rc::new(OwnedValue::None))
+//     }
+// }
 
 impl From<String> for Cell {
     fn from(s: String) -> Cell {
-        Cell::String(OwnedValue::new(s))
+        Cell::OwnedValue(Rc::new(OwnedValue::String(s)))
     }
 }
 
-impl From<Value<'_>> for Cell {
-    fn from(v: Value) -> Cell {
-        Cell::String(OwnedValue::new(format!("{}", v)))
+impl From<OwnedValue> for Cell {
+    fn from(ov: OwnedValue) -> Cell {
+        Cell::OwnedValue(Rc::new(ov))
     }
 }
 
@@ -72,7 +59,7 @@ impl InterpretationCell for Cell {
 
     fn typ(&self) -> Res<&str> {
         match self {
-            Cell::String(_) => Ok("value"),
+            Cell::OwnedValue(_) => Ok("value"),
             Cell::File(x) => Ok(x.typ()?),
             Cell::Json(x) => Ok(x.typ()?),
             Cell::Toml(x) => Ok(x.typ()?),
@@ -86,7 +73,7 @@ impl InterpretationCell for Cell {
 
     fn index(&self) -> Res<usize> {
         match self {
-            Cell::String(_) => NotFound::NoIndex().into(),
+            Cell::OwnedValue(_) => NotFound::NoIndex().into(),
             Cell::File(x) => Ok(x.index()?),
             Cell::Json(x) => Ok(x.index()?),
             Cell::Toml(x) => Ok(x.index()?),
@@ -100,7 +87,7 @@ impl InterpretationCell for Cell {
 
     fn label(&self) -> Res<&str> {
         match self {
-            Cell::String(_) => NotFound::NoLabel().into(),
+            Cell::OwnedValue(_) => NotFound::NoLabel().into(),
             Cell::File(x) => Ok(x.label()?),
             Cell::Json(x) => Ok(x.label()?),
             Cell::Toml(x) => Ok(x.label()?),
@@ -114,7 +101,7 @@ impl InterpretationCell for Cell {
 
     fn value(&self) -> Res<Value> {
         match self {
-            Cell::String(OwnedValue(x)) => Ok(Value::Str(x.as_str())),
+            Cell::OwnedValue(ov) => Ok((&**ov).into()),
             Cell::File(x) => Ok(x.value()?),
             Cell::Json(x) => Ok(x.value()?),
             Cell::Toml(x) => Ok(x.value()?),
@@ -128,7 +115,7 @@ impl InterpretationCell for Cell {
 
     fn sub(&self) -> Res<Group> {
         match self {
-            Cell::String(_) => NotFound::NoGroup("/".into()).into(),
+            Cell::OwnedValue(_) => NotFound::NoGroup("/".into()).into(),
             Cell::File(x) => Ok(Group::File(x.sub()?)),
             Cell::Json(x) => Ok(Group::Json(x.sub()?)),
             Cell::Toml(x) => Ok(Group::Toml(x.sub()?)),
@@ -142,7 +129,7 @@ impl InterpretationCell for Cell {
 
     fn attr(&self) -> Res<Group> {
         match self {
-            Cell::String(_) => NotFound::NoGroup("@".into()).into(),
+            Cell::OwnedValue(_) => NotFound::NoGroup("@".into()).into(),
             Cell::File(x) => Ok(Group::File(x.attr()?)),
             Cell::Json(x) => Ok(Group::Json(x.attr()?)),
             Cell::Toml(x) => Ok(Group::Toml(x.attr()?)),
@@ -160,14 +147,14 @@ pub trait InterInterpretation {
 
     fn standard_interpretation(&self) -> Option<&str>;
 
-    fn elevate(&self) -> Res<Group>;
-
-    fn be(&self, interp: &str) -> Res<Cell> {
-        self.elevate()?.get(interp)
-    }
+    fn elevate(self) -> Res<Group>;
 }
 
-impl InterInterpretation for Value<'_> {
+pub trait FieldTrait {
+    fn field(&self) -> Res<Group>;
+}
+
+impl InterInterpretation for OwnedValue {
     fn interpretation(&self) -> &str {
         "value"
     }
@@ -176,15 +163,15 @@ impl InterInterpretation for Value<'_> {
         None
     }
 
-    fn elevate(&self) -> Res<Group> {
-        Cell::from(*self).elevate()
+    fn elevate(self) -> Res<Group> {
+        Cell::from(self).elevate()
     }
 }
 
 impl InterInterpretation for Cell {
     fn interpretation(&self) -> &str {
         match self {
-            Cell::String(_) => "string",
+            Cell::OwnedValue(_) => "value",
             Cell::File(_) => "file",
             Cell::Json(_) => "json",
             Cell::Toml(_) => "toml",
@@ -198,11 +185,13 @@ impl InterInterpretation for Cell {
 
     fn standard_interpretation(&self) -> Option<&str> {
         match self {
-            Cell::String(OwnedValue(str)) => {
-                if str.starts_with("http://") || str.starts_with("https://") {
-                    return Some("http");
-                } else if str.starts_with(".") || str.starts_with("/") {
-                    return Some("file");
+            Cell::OwnedValue(ov) => {
+                if let OwnedValue::String(s) = &**ov {
+                    if s.starts_with("http://") || s.starts_with("https://") {
+                        return Some("http");
+                    } else if s.starts_with(".") || s.starts_with("/") {
+                        return Some("file");
+                    }
                 }
             }
             Cell::File(file) => {
@@ -230,8 +219,8 @@ impl InterInterpretation for Cell {
         None
     }
 
-    fn elevate(&self) -> Res<Group> {
-        Ok(Group::Elevation(ElevationGroup(self.clone())))
+    fn elevate(self) -> Res<Group> {
+        Ok(Group::Elevation(ElevationGroup(self)))
     }
 }
 
@@ -240,6 +229,15 @@ impl InterpretationGroup for Group {
 
     fn label_type(&self) -> LabelType {
         match self {
+            Group::Elevation(x) => x.label_type(),
+            Group::Field(cell) => LabelType {
+                is_indexed: false,
+                unique_labels: true,
+            },
+            Group::Mixed(_) => LabelType {
+                is_indexed: false,
+                unique_labels: false,
+            },
             Group::File(x) => x.label_type(),
             Group::Json(x) => x.label_type(),
             Group::Toml(x) => x.label_type(),
@@ -248,16 +246,14 @@ impl InterpretationGroup for Group {
             Group::Url(x) => x.label_type(),
             Group::Http(x) => x.label_type(),
             Group::TreeSitter(x) => x.label_type(),
-            Group::Elevation(x) => x.label_type(),
-            Group::Mixed(_) => LabelType {
-                is_indexed: false,
-                unique_labels: false,
-            },
         }
     }
 
     fn len(&self) -> usize {
         match self {
+            Group::Elevation(x) => x.len(),
+            Group::Field(cell) => 4,
+            Group::Mixed(x) => x.len(),
             Group::File(x) => x.len(),
             Group::Json(x) => x.len(),
             Group::Toml(x) => x.len(),
@@ -266,13 +262,33 @@ impl InterpretationGroup for Group {
             Group::Url(x) => x.len(),
             Group::Http(x) => x.len(),
             Group::TreeSitter(x) => x.len(),
-            Group::Elevation(x) => x.len(),
-            Group::Mixed(x) => x.len(),
         }
     }
 
     fn at(&self, index: usize) -> Res<Cell> {
         match self {
+            Group::Elevation(x) => x.at(index),
+            Group::Field(cell) => {
+                if index == 0 {
+                    return cell.value().map(|v| Cell::from(v.to_owned_value()));
+                } else if index == 1 {
+                    return cell.label().map(|s| Cell::from(s.to_owned()));
+                } else if index == 2 {
+                    return cell.typ().map(|s| Cell::from(s.to_owned()));
+                } else if index == 3 {
+                    return cell
+                        .index()
+                        .map(|i| Cell::from(OwnedValue::Int(Int::U64(i as u64))));
+                }
+                Err(HErr::BadArgument(format!(
+                    "field index must be in 0..<4; was: {}",
+                    index
+                )))
+            }
+            Group::Mixed(x) => x
+                .get(index)
+                .map(|x| x.clone())
+                .ok_or_else(|| NotFound::NoResult(format!("{}", index)).into()),
             Group::File(x) => Ok(Cell::File(x.at(index)?)),
             Group::Json(x) => Ok(Cell::Json(x.at(index)?)),
             Group::Toml(x) => Ok(Cell::Toml(x.at(index)?)),
@@ -281,11 +297,6 @@ impl InterpretationGroup for Group {
             Group::Url(x) => Ok(Cell::Url(x.at(index)?)),
             Group::Http(x) => Ok(Cell::Http(x.at(index)?)),
             Group::TreeSitter(x) => Ok(Cell::TreeSitter(x.at(index)?)),
-            Group::Elevation(x) => x.at(index),
-            Group::Mixed(x) => x
-                .get(index)
-                .map(|x| x.clone())
-                .ok_or_else(|| NotFound::NoResult(format!("{}", index)).into()),
         }
     }
 
@@ -293,15 +304,25 @@ impl InterpretationGroup for Group {
         let key = key.into();
         // println!("generic get: {:?}", key);
         match self {
-            Group::File(x) => Ok(Cell::File(x.get(key)?)),
-            Group::Json(x) => Ok(Cell::Json(x.get(key)?)),
-            Group::Toml(x) => Ok(Cell::Toml(x.get(key)?)),
-            Group::Yaml(x) => Ok(Cell::Yaml(x.get(key)?)),
-            Group::Xml(x) => Ok(Cell::Xml(x.get(key)?)),
-            Group::Url(x) => Ok(Cell::Url(x.get(key)?)),
-            Group::Http(x) => Ok(Cell::Http(x.get(key)?)),
-            Group::TreeSitter(x) => Ok(Cell::TreeSitter(x.get(key)?)),
             Group::Elevation(elevation_group) => elevation_group.get(key),
+            Group::Field(_) => {
+                if let Selector::Str(key) = key {
+                    if key == "value" {
+                        return self.at(0);
+                    } else if key == "label" {
+                        println!("label: {:?}", self.at(1));
+                        return self.at(1);
+                    } else if key == "type" {
+                        return self.at(2);
+                    } else if key == "index" {
+                        return self.at(3);
+                    }
+                }
+                Err(HErr::BadArgument(format!(
+                    "field keys must be one of [value, label, type, index]; was: {}",
+                    key
+                )))
+            }
             Group::Mixed(v) => {
                 for x in v {
                     if Selector::Str(x.label()?) == key {
@@ -310,6 +331,14 @@ impl InterpretationGroup for Group {
                 }
                 NotFound::NoResult(format!("")).into()
             }
+            Group::File(x) => Ok(Cell::File(x.get(key)?)),
+            Group::Json(x) => Ok(Cell::Json(x.get(key)?)),
+            Group::Toml(x) => Ok(Cell::Toml(x.get(key)?)),
+            Group::Yaml(x) => Ok(Cell::Yaml(x.get(key)?)),
+            Group::Xml(x) => Ok(Cell::Xml(x.get(key)?)),
+            Group::Url(x) => Ok(Cell::Url(x.get(key)?)),
+            Group::Http(x) => Ok(Cell::Http(x.get(key)?)),
+            Group::TreeSitter(x) => Ok(Cell::TreeSitter(x.get(key)?)),
         }
     }
 }
@@ -337,11 +366,19 @@ impl Iterator for GroupIter {
 }
 
 impl Cell {
+    pub fn be(self, interpretation: &str) -> Res<Cell> {
+        self.elevate()?.get(interpretation)
+    }
+
     pub fn path<'a>(&self, path: &'a str) -> Res<PathSearch<'a>> {
         Ok(PathSearch {
             cell: self.clone(),
             path: crate::pathlang::Path::parse(path)?,
         })
+    }
+
+    pub fn field(&self) -> Res<Group> {
+        Ok(Group::Field(self.clone()))
     }
 }
 
