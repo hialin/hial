@@ -189,13 +189,17 @@ fn filter(input: &str) -> NomRes<&str, Filter> {
 }
 
 fn expression(input: &str) -> NomRes<&str, Expression> {
-    context("expression", tuple((path_items, operation, value)))(input).map(|(next_input, res)| {
+    context(
+        "expression",
+        tuple((path_items, opt(tuple((operation, value))))),
+    )(input)
+    .map(|(next_input, res)| {
         (
             next_input,
             Expression {
                 left: res.0,
-                op: res.1,
-                right: res.2,
+                op: res.1.map(|x| x.0),
+                right: res.1.map(|x| x.1),
             },
         )
     })

@@ -335,11 +335,17 @@ impl<'a> EvalIter<'a> {
                 verbose_error(err);
                 continue;
             });
-            let lvalue = guard_ok!(cell.value(), err => {
-                verbose_error(err);
-                continue;
-            });
-            if Self::eval_expr(expr.op, lvalue, expr.right)? {
+            if let Some(op) = expr.op {
+                if let Some(right) = expr.right {
+                    let lvalue = guard_ok!(cell.value(), err => {
+                        verbose_error(err);
+                        continue;
+                    });
+                    if Self::eval_expr(op, lvalue, right)? {
+                        return Ok(true);
+                    }
+                }
+            } else {
                 return Ok(true);
             }
         }

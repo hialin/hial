@@ -41,8 +41,8 @@ pub struct Filter<'a> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Expression<'a> {
     pub(crate) left: Path<'a>,
-    pub(crate) op: &'a str,
-    pub(crate) right: Value<'a>,
+    pub(crate) op: Option<&'a str>,
+    pub(crate) right: Option<Value<'a>>,
 }
 
 impl Display for Relation {
@@ -99,10 +99,13 @@ impl Display for Filter<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "[")?;
         fmt_path_items(&self.expr.left.0, f)?;
-        write!(f, "{}", self.expr.op)?;
+        if let Some(op) = self.expr.op {
+            write!(f, "{}", op)?;
+        }
         match self.expr.right {
-            Value::Str(s) => write!(f, "'{}'", s)?,
-            x @ _ => write!(f, "{}", x)?,
+            Some(Value::Str(s)) => write!(f, "'{}'", s)?,
+            Some(v) => write!(f, "{}", v)?,
+            None => {}
         }
         write!(f, "]")?;
         Ok(())

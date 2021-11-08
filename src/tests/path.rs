@@ -7,7 +7,7 @@ use crate::*;
 
 #[test]
 fn test_path_items() -> Res<()> {
-    let path = Path::parse("/a@name/[2]/*[#value=='3']")?;
+    let path = Path::parse("/a@name/[2]/*[#value=='3'][/x]")?;
     assert_eq!(
         path.0.as_slice(),
         &[
@@ -33,18 +33,32 @@ fn test_path_items() -> Res<()> {
                 relation: Relation::Sub,
                 selector: Some(Selector::Star),
                 index: None,
-                filters: vec![Filter {
-                    expr: Expression {
-                        left: Path(vec![PathItem {
-                            relation: Relation::Field,
-                            selector: Some("value".into()),
-                            index: None,
-                            filters: vec![],
-                        },]),
-                        op: "==",
-                        right: Value::Str("3")
+                filters: vec![
+                    Filter {
+                        expr: Expression {
+                            left: Path(vec![PathItem {
+                                relation: Relation::Field,
+                                selector: Some("value".into()),
+                                index: None,
+                                filters: vec![],
+                            },]),
+                            op: Some("=="),
+                            right: Some(Value::Str("3"))
+                        }
+                    },
+                    Filter {
+                        expr: Expression {
+                            left: Path(vec![PathItem {
+                                relation: Relation::Sub,
+                                selector: Some("x".into()),
+                                index: None,
+                                filters: vec![],
+                            },]),
+                            op: None,
+                            right: None,
+                        }
                     }
-                }],
+                ],
             }
         ]
     );
@@ -59,6 +73,8 @@ const TREE: &str = r#"
                 c:
                     x: xc
                     y: yc
+            m: mval
+            n: nval
         "#;
 
 #[test]
@@ -74,18 +90,48 @@ fn test_path_simple_search() -> Res<()> {
 #[test]
 fn test_path_kleene() -> Res<()> {
     let root = Cell::from(TREE.to_string()).be("yaml")?;
-    let eval = str_eval(root, "/*/x")?;
+
+    let eval = str_eval(root.clone(), pr("/*"))?;
+    assert_eq!(eval, [NOVAL, "mval", "nval"]);
+
+    let eval = str_eval(root.clone(), pr("/*#label"))?;
+    assert_eq!(eval, ["a", "m", "n"]);
+
+    let eval = str_eval(root.clone(), pr("/*[#label=='a']"))?;
+    assert_eq!(eval, [NOVAL]);
+
+    let eval = str_eval(root.clone(), pr("/*[#label=='a']#index"))?;
+    assert_eq!(eval, ["0"]);
+
+    let eval = str_eval(root.clone(), "/*/x")?;
     assert_eq!(eval, ["xa"]);
+
+    Ok(())
+}
+
+#[test]
+fn test_path_filter() -> Res<()> {
+    let root = Cell::from(TREE.to_string()).be("yaml")?;
+    let eval = str_eval(root.clone(), pr("/*[/x]"))?;
+    assert_eq!(eval, [NOVAL]);
+    let eval = str_eval(root.clone(), pr("/a/*[/x]"))?;
+    assert_eq!(eval, [NOVAL]);
+    let eval = str_eval(root.clone(), pr("/a/*[/x]#label"))?;
+    assert_eq!(eval, ["b"]);
     Ok(())
 }
 
 #[test]
 fn test_path_double_kleene() -> Res<()> {
+    set_verbose(true);
     let root = Cell::from(TREE.to_string()).be("yaml")?;
+
     let eval = str_eval(root.clone(), "/**/x")?;
     assert_eq!(eval, ["xa", "xb", "xc"]);
+
     let eval = str_eval(root.clone(), "/**/y")?;
     assert_eq!(eval, ["yc"]);
+
     Ok(())
 }
 
@@ -94,40 +140,21 @@ fn test_path_double_kleene_all() -> Res<()> {
     let root = Cell::from(TREE.to_string()).be("yaml")?;
 
     let eval = str_eval(root.clone(), "/**")?;
-    assert_eq!(eval, [NOVAL, "xa", NOVAL, "xb", NOVAL, "xc", "yc"]);
+    assert_eq!(
+        eval,
+        [NOVAL, "xa", NOVAL, "xb", NOVAL, "xc", "yc", "mval", "nval"]
+    );
 
     let eval = str_eval(root.clone(), "/**#label")?;
-    assert_eq!(eval, ["a", "x", "b", "x", "c", "x", "y"]);
+    assert_eq!(eval, ["a", "x", "b", "x", "c", "x", "y", "m", "n"]);
 
     Ok(())
 }
 
-const TREE_2: &str = r#"
-            a:
-              x: xa
-              b:
-                x: xb
-                c:
-                    x: xc
-                    y: yc
-        "#;
-
 #[test]
 fn test_path_double_kleene_top_filter() -> Res<()> {
     set_verbose(true);
-    let root = Cell::from(TREE_2.to_string()).be("yaml")?;
-
-    let eval = str_eval(root.clone(), pr("/*"))?;
-    assert_eq!(eval, [NOVAL]);
-
-    let eval = str_eval(root.clone(), pr("/*#label"))?;
-    assert_eq!(eval, ["a"]);
-
-    let eval = str_eval(root.clone(), pr("/*[#label=='a']"))?;
-    assert_eq!(eval, [NOVAL]);
-
-    let eval = str_eval(root.clone(), pr("/*[#label=='a']#index"))?;
-    assert_eq!(eval, ["0"]);
+    let root = Cell::from(TREE.to_string()).be("yaml")?;
 
     let eval = str_eval(root.clone(), pr("/*[#label=='a']/**[=='xa']"))?;
     assert_eq!(eval, ["xa"]);
@@ -139,7 +166,7 @@ fn test_path_double_kleene_top_filter() -> Res<()> {
 
 #[test]
 fn test_path_double_kleene_deep_filter() -> Res<()> {
-    let root = Cell::from(TREE_2.to_string()).be("yaml")?;
+    let root = Cell::from(TREE.to_string()).be("yaml")?;
     let eval = str_eval(root.clone(), "/**/*[#label=='x']")?;
     assert_eq!(eval, ["xa", "xb", "xc"]);
     let eval = str_eval(root.clone(), "/a/**[#label!='x']/y")?;
