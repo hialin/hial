@@ -89,7 +89,15 @@ impl InterpretationCell for Cell {
     type Group = Group;
 
     fn typ(&self) -> Res<&str> {
-        Ok("")
+        match (&self.group.kind, self.pos) {
+            (GroupKind::Root, _) => Ok("body"),
+            (GroupKind::Attr, 0) => Ok(""),
+            (GroupKind::Attr, 1) => Ok(""),
+            (GroupKind::Status, 0) => Ok("int"),
+            (GroupKind::Status, 1) => Ok("string"),
+            (GroupKind::Headers, _) => Ok("header"),
+            _ => Ok(""),
+        }
     }
 
     fn index(&self) -> Res<usize> {

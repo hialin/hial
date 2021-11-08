@@ -31,6 +31,8 @@ Each cell may have a numeric **index** and/or a **label** that makes it reachabl
 
 A cell is an **interpretation** of some underlying data. For example a series of bytes can be interpreted as a byte array (a cell with a blob value) or as an utf-8 encoded string (another cell with a string value) or as a json tree (a tree of cells). From a cell of a certain interpretation we can jump to the cell of a different interpretation.
 
+A cell also has a string **type**describing its kind, depending on the interpretation. Such types can be: "file", "folder", "array" (in the json interpretation), "function_item" (in the rust interpretation), "response" (in the http interpretation), etc.
+
 ### Examples:
 
 - A *folder* of the file system is a cell. It may have *sub* items (files or folders which it contains) and may have a *super* (parent folder). Its *attr* items are creation/modification date, access rights, size, etc. The folder name is both the *label* and the *value*.
@@ -56,15 +58,21 @@ Examples:
 - `.^file` is the current folder ("." in the `file` interpretation). It is equivalent to just `.`.
 - `./src/main.rs` is the `main.rs` file in the ./src/ folder.
 - `./src/main.rs@size` is the size of this file (the `size` attribute of the file).
-- `./src/main.rs^rust/*[.type=='function_item']` are all the cells representing the functions in the `main.rs` rust file.
+
+- `./src/main.rs^rust` represents the rust AST tree.
+- `./src/main.rs^rust/*[#type=='function_item']` are all the top-level cells representing functions in the `main.rs` rust file.
 
 - `http://api.github.com` is a url cell.
 - `http://api.github.com^http` is the http response of a GET request to this url.
 - `http://api.github.com^http^json` is the json tree interpretation of a http response of a GET request to this url.
 - `http://api.github.com^http^json/rate_limit_url#value^http^json/resources/core/remaining` makes one http call and uses a field in the respose to make another http call, then select a subfield in the returning json.
 
-- `./src/**[#label=='.rs']` returns a list of all rust (.rs extension) files descending from the `src` folder.
-- `./src/**[#name ~ '.rs')]^rust/fn/*/body/**/"Cell"` lists all the occurences of "Cell" in bodies of top level functions.
+- `./src/**^rust` returns a list of all rust files (all files that have a rust interpretation) descending from the `src` folder.
+- `./src/**^rust/**[#type=="function_item"]` lists all rust functions in all rust files in the `src` folder.
+- `./src/**^rust/**[#type=="function_item"]/**/*[#type=="let_declaration"]` lists all occurences of *let* declarations in all functions in all rust files in the src folder.
+- `./src/**^rust/**[#type=="function_item"]/**/*[#type=="let_declaration"][/pattern/*]` lists only destructuring patterns in all occurences of *let* declarations in all functions in all rust files in the src folder. The destructuring patterns are the only ones that have a descendant of `pattern`, for which this filter: `[/pattern/*]` is true.
+
+All these examples should currently work.
 
 ## What's the current feature implementation status?
 
@@ -74,38 +82,36 @@ See [issues.md](./issues.md).
 
 - [x] Rust API is natively available; Rust is also the implementation language.
 - [ ] C interop: work in progress.
-- [ ] Python, Javascript, Go, Java wrappers are planned.
+- [ ] Python, Java, Go, Javascript wrappers are planned.
 
-## API Examples
+## API examples, use cases
 
-*(These examples are not all functional, wrappers are not yet implemented)*
+#### Explore files on the file system
 
-1. quickly explore files on the file system
-
-Bash:
 ```bash
+# bash, works
 hial explore "."
 ```
 
-Python:
 ```python
-    for cell in path('./**'):
-        print(cell.value())
+# python, in progress: python interop not done; ** not listing all nodes
+for cell in path('./**'):
+    print(cell.value())
 ```
 
-1. read a list of services from a Docker compose file and print those that have inaccessible images:
+#### Read a list of services from a Docker compose file and print those that have inaccessible images [working]
 
-Bash:
 ```bash
+# bash, works
 echo "Bad images:"
-hial print "./config.yaml ^yaml /services [ /image ::value ^http @status /code >= 400 ] / name"
+hial print "./config.yaml ^yaml /services [ /image ::value ^http @status /code != 200 ] / name"
 ```
 
-Python:
 ```python
-    for service in cell('config.yaml').be('file').be('yaml').sub('services'):
-        name = service.value
-        image = service.sub('image')
-        if image.be('http').attr('status').sub('code') >= 400:
-            print(f"service {name} has an invalid image: {image}")
+# python, in progress: python interop not done
+for service in cell('config.yaml').be('file').be('yaml').sub('services'):
+    name = service.value
+    image = service.sub('image')
+    if image.be('http').attr('status').sub('code') >= 400:
+        print(f"service {name} has an invalid image: {image}")
 ```

@@ -32,18 +32,19 @@
 
 ### Todos, Issues, Problems
 
+- todo: add regex operator and shortcuts for startswith, endswith, contains
+- todo: add <, >, <=, >= operators
+
+- todo: write support: json, rust, fs
+
 - todo: review examples, check accessors, operators
 
 - todo: c interop and a small c test
 - todo: python interop and a larger python example
 
-- todo: improve nom parsing errors, use context
-- todo: add regex operator and shortcuts for startswith, endswith, contains
-- todo: add <, >, <=, >= operators
-
 - todo: get should return an iterator; multiset labels
 
-- todo: write support: json, rust, fs
+- todo: improve nom parsing errors, use context
 
 - todo: interpretations parameters
 - todo: custom tree
