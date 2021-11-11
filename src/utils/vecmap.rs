@@ -31,6 +31,11 @@ where
         Some((&x.0, &x.1))
     }
 
+    pub fn at_mut(&mut self, pos: usize) -> Option<(&K, &mut V)> {
+        let x = guard_some!(self.vec.get_mut(pos), { return None });
+        Some((&x.0, &mut x.1))
+    }
+
     pub fn iter(&self) -> VecMapIter<'_, '_, K, V, K> {
         VecMapIter {
             map: self,

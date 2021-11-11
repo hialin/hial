@@ -1,7 +1,7 @@
 use crate::pathlang::eval::EvalIter;
 use crate::pathlang::Path;
 use crate::{
-    base::{common::*, elevation::ElevationGroup, interpretation_api::*},
+    base::{common::*, elevation::ElevationGroup, in_api::*},
     interpretations::*,
 };
 use std::rc::Rc;
@@ -36,12 +36,6 @@ pub enum Group {
     TreeSitter(treesitter::Group),
 }
 
-// impl Default for Cell {
-//     fn default() -> Self {
-//         Cell::OwnedValue(Rc::new(OwnedValue::None))
-//     }
-// }
-
 impl From<String> for Cell {
     fn from(s: String) -> Cell {
         Cell::OwnedValue(Rc::new(OwnedValue::String(s)))
@@ -54,10 +48,8 @@ impl From<OwnedValue> for Cell {
     }
 }
 
-impl InterpretationCell for Cell {
-    type Group = Group;
-
-    fn typ(&self) -> Res<&str> {
+impl Cell {
+    pub fn typ(&self) -> Res<&str> {
         match self {
             Cell::OwnedValue(_) => Ok("value"),
             Cell::File(x) => Ok(x.typ()?),
@@ -71,7 +63,7 @@ impl InterpretationCell for Cell {
         }
     }
 
-    fn index(&self) -> Res<usize> {
+    pub fn index(&self) -> Res<usize> {
         match self {
             Cell::OwnedValue(_) => NotFound::NoIndex().into(),
             Cell::File(x) => Ok(x.index()?),
@@ -85,7 +77,7 @@ impl InterpretationCell for Cell {
         }
     }
 
-    fn label(&self) -> Res<&str> {
+    pub fn label(&self) -> Res<&str> {
         match self {
             Cell::OwnedValue(_) => NotFound::NoLabel().into(),
             Cell::File(x) => Ok(x.label()?),
@@ -99,7 +91,7 @@ impl InterpretationCell for Cell {
         }
     }
 
-    fn value(&self) -> Res<Value> {
+    pub fn value(&self) -> Res<Value> {
         match self {
             Cell::OwnedValue(ov) => Ok((&**ov).into()),
             Cell::File(x) => Ok(x.value()?),
@@ -113,7 +105,7 @@ impl InterpretationCell for Cell {
         }
     }
 
-    fn sub(&self) -> Res<Group> {
+    pub fn sub(&self) -> Res<Group> {
         match self {
             Cell::OwnedValue(_) => NotFound::NoGroup("/".into()).into(),
             Cell::File(x) => Ok(Group::File(x.sub()?)),
@@ -127,7 +119,7 @@ impl InterpretationCell for Cell {
         }
     }
 
-    fn attr(&self) -> Res<Group> {
+    pub fn attr(&self) -> Res<Group> {
         match self {
             Cell::OwnedValue(_) => NotFound::NoGroup("@".into()).into(),
             Cell::File(x) => Ok(Group::File(x.attr()?)),
@@ -140,36 +132,8 @@ impl InterpretationCell for Cell {
             Cell::TreeSitter(x) => Ok(Group::TreeSitter(x.attr()?)),
         }
     }
-}
 
-pub trait InterInterpretation {
-    fn interpretation(&self) -> &str;
-
-    fn standard_interpretation(&self) -> Option<&str>;
-
-    fn elevate(self) -> Res<Group>;
-}
-
-pub trait FieldTrait {
-    fn field(&self) -> Res<Group>;
-}
-
-impl InterInterpretation for OwnedValue {
-    fn interpretation(&self) -> &str {
-        "value"
-    }
-
-    fn standard_interpretation(&self) -> Option<&str> {
-        None
-    }
-
-    fn elevate(self) -> Res<Group> {
-        Cell::from(self).elevate()
-    }
-}
-
-impl InterInterpretation for Cell {
-    fn interpretation(&self) -> &str {
+    pub fn interpretation(&self) -> &str {
         match self {
             Cell::OwnedValue(_) => "value",
             Cell::File(_) => "file",
@@ -183,7 +147,7 @@ impl InterInterpretation for Cell {
         }
     }
 
-    fn standard_interpretation(&self) -> Option<&str> {
+    pub fn standard_interpretation(&self) -> Option<&str> {
         match self {
             Cell::OwnedValue(ov) => {
                 if let OwnedValue::String(s) = &**ov {
@@ -219,15 +183,37 @@ impl InterInterpretation for Cell {
         None
     }
 
-    fn elevate(self) -> Res<Group> {
+    pub fn elevate(self) -> Res<Group> {
         Ok(Group::Elevation(ElevationGroup(self)))
+    }
+
+    pub fn field(&self) -> Res<Group> {
+        Ok(Group::Field(self.clone()))
+    }
+
+    pub fn set(&mut self, ov: OwnedValue) -> Res<()> {
+        match self {
+            Cell::OwnedValue(x) => *x = Rc::new(ov),
+            Cell::Json(x) => x.set(ov)?,
+            _ => return HErr::internal("").into(),
+        }
+        Ok(())
+    }
+
+    pub fn be(self, interpretation: &str) -> Res<Cell> {
+        self.elevate()?.get(interpretation)
+    }
+
+    pub fn path<'a>(&self, path: &'a str) -> Res<PathSearch<'a>> {
+        Ok(PathSearch {
+            cell: self.clone(),
+            path: crate::pathlang::Path::parse(path)?,
+        })
     }
 }
 
-impl InterpretationGroup for Group {
-    type Cell = Cell;
-
-    fn label_type(&self) -> LabelType {
+impl Group {
+    pub fn label_type(&self) -> LabelType {
         match self {
             Group::Elevation(x) => x.label_type(),
             Group::Field(cell) => LabelType {
@@ -249,7 +235,7 @@ impl InterpretationGroup for Group {
         }
     }
 
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         match self {
             Group::Elevation(x) => x.len(),
             Group::Field(cell) => 4,
@@ -265,7 +251,7 @@ impl InterpretationGroup for Group {
         }
     }
 
-    fn at(&self, index: usize) -> Res<Cell> {
+    pub fn at(&self, index: usize) -> Res<Cell> {
         match self {
             Group::Elevation(x) => x.at(index),
             Group::Field(cell) => {
@@ -300,9 +286,8 @@ impl InterpretationGroup for Group {
         }
     }
 
-    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
+    pub fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
         let key = key.into();
-        // println!("generic get: {:?}", key);
         match self {
             Group::Elevation(elevation_group) => elevation_group.get(key),
             Group::Field(_) => {
@@ -310,7 +295,6 @@ impl InterpretationGroup for Group {
                     if key == "value" {
                         return self.at(0);
                     } else if key == "label" {
-                        println!("label: {:?}", self.at(1));
                         return self.at(1);
                     } else if key == "type" {
                         return self.at(2);
@@ -362,23 +346,6 @@ impl Iterator for GroupIter {
         }
         self.1 += 1;
         Some(self.0.at(self.1 - 1))
-    }
-}
-
-impl Cell {
-    pub fn be(self, interpretation: &str) -> Res<Cell> {
-        self.elevate()?.get(interpretation)
-    }
-
-    pub fn path<'a>(&self, path: &'a str) -> Res<PathSearch<'a>> {
-        Ok(PathSearch {
-            cell: self.clone(),
-            path: crate::pathlang::Path::parse(path)?,
-        })
-    }
-
-    pub fn field(&self) -> Res<Group> {
-        Ok(Group::Field(self.clone()))
     }
 }
 

@@ -1,33 +1,51 @@
 use crate::pathlang::path::{PathItem, Relation};
 use crate::{
-    base::common::*,
-    base::rust_api::*,
+    base::{common::*, rust_api::*},
     guard_ok, guard_some,
     pathlang::{path::Expression, Path},
-    verbose, verbose_error, InterpretationCell, InterpretationGroup,
+    verbose, verbose_error,
 };
+use std::collections::HashSet;
 
 #[derive(Clone, Debug)]
-pub struct EvalIter<'a> {
-    path: Path<'a>,
+pub struct EvalIter<'s> {
+    path: Vec<PathItem<'s>>,
     stack: Vec<CellNode>,
 }
 
 #[derive(Clone, Debug)]
 pub struct CellNode {
     cell: Res<Cell>,
-    path_indices: Vec<usize>,
+    path_indices: HashSet<usize>,
 }
 
-impl<'a> EvalIter<'a> {
-    pub(crate) fn new(start: Cell, path: Path<'a>) -> EvalIter<'a> {
+impl<'s> EvalIter<'s> {
+    pub(crate) fn new(start: Cell, path: Path<'s>) -> EvalIter<'s> {
+        let mut path_indices = HashSet::from([0]);
+        if Self::is_doublestar_match(&start, 0, &path.0) {
+            path_indices.insert(1);
+        }
         let start_node = CellNode {
             cell: Ok(start),
-            path_indices: vec![0],
+            path_indices,
         };
         let stack = vec![start_node];
-        let eval_iter = EvalIter { path, stack };
+        let eval_iter = EvalIter {
+            path: path.0,
+            stack,
+        };
         eval_iter
+    }
+
+    fn is_doublestar_match(cell: &Cell, path_index: usize, path: &Vec<PathItem<'s>>) -> bool {
+        if let Some(path_item) = path.get(path_index) {
+            if let Some(Selector::DoubleStar) = path_item.selector {
+                if EvalIter::eval_filters_match(cell, path_item) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn eval_next(&mut self) -> Option<Res<Cell>> {
@@ -40,7 +58,22 @@ impl<'a> EvalIter<'a> {
     }
 
     fn pump(&mut self) -> Option<Res<Cell>> {
-        let CellNode { cell, path_indices } = guard_some!(self.stack.pop(), {
+        // println!("----");
+        // print!("stack:");
+        // for cn in &self.stack {
+        //     print!(
+        //         "    {}:{} : {:?}",
+        //         cn.cell.as_ref().unwrap().label().unwrap_or(""),
+        //         cn.cell.as_ref().unwrap().value().unwrap(),
+        //         cn.path_indices
+        //     );
+        // }
+        // println!();
+
+        let CellNode {
+            cell,
+            mut path_indices,
+        } = guard_some!(self.stack.pop(), {
             return None;
         });
         let cell = guard_ok!(cell, err => {
@@ -48,35 +81,54 @@ impl<'a> EvalIter<'a> {
             return None;
         });
 
-        if path_indices.iter().any(|i| *i >= self.path.0.len()) {
+        // println!(
+        //     "pump:     {}:{} : {:?}",
+        //     cell.label().unwrap_or(""),
+        //     cell.value().unwrap(),
+        //     path_indices
+        // );
+
+        if path_indices.iter().any(|i| *i >= self.path.len()) {
+            path_indices.retain(|i| *i < self.path.len());
+            // println!(
+            //     "found result {}:{};    push back: {}:{} : {:?}",
+            //     cell.label().unwrap_or(""),
+            //     cell.value().unwrap(),
+            //     cell.label().unwrap_or(""),
+            //     cell.value().unwrap(),
+            //     path_indices
+            // );
+            self.stack.push(CellNode {
+                cell: Ok(cell.clone()),
+                path_indices,
+            });
             return Some(Ok(cell));
         }
 
         let has_relation =
-            |r, path: &Vec<PathItem<'a>>| path_indices.iter().any(|i| path[*i].relation == r);
+            |r, path: &Vec<PathItem<'s>>| path_indices.iter().any(|i| path[*i].relation == r);
 
-        if has_relation(Relation::Interpretation, &self.path.0) {
+        if has_relation(Relation::Interpretation, &self.path) {
             match Self::subgroup(Relation::Interpretation, &cell) {
                 Err(err) => verbose_error(err),
                 Ok(group) => {
-                    Self::push_interpretations(&group, &path_indices, &self.path.0, &mut self.stack)
+                    Self::push_interpretations(&group, &path_indices, &self.path, &mut self.stack)
                 }
             }
         }
 
         for relation in [Relation::Attr, Relation::Sub] {
-            if has_relation(relation, &self.path.0) {
+            if has_relation(relation, &self.path) {
+                let (star, doublestar) = Self::has_stars(relation, &path_indices, &self.path);
                 match Self::subgroup(relation, &cell) {
                     Err(err) => verbose_error(err),
                     Ok(group) => {
-                        let (star, doublestar) =
-                            Self::has_stars(relation, &path_indices, &self.path.0);
                         if star || doublestar {
                             Self::push_by_relation_with_stars(
                                 relation,
                                 &group,
                                 &path_indices,
-                                &self.path.0,
+                                &self.path,
                                 &mut self.stack,
                                 doublestar,
                             );
@@ -85,7 +137,7 @@ impl<'a> EvalIter<'a> {
                                 relation,
                                 &group,
                                 &path_indices,
-                                &self.path.0,
+                                &self.path,
                                 &mut self.stack,
                             )
                         }
@@ -94,10 +146,10 @@ impl<'a> EvalIter<'a> {
             }
         }
 
-        if has_relation(Relation::Field, &self.path.0) {
+        if has_relation(Relation::Field, &self.path) {
             match Self::subgroup(Relation::Field, &cell) {
                 Err(err) => verbose_error(err),
-                Ok(group) => Self::push_field(&group, &path_indices, &self.path.0, &mut self.stack),
+                Ok(group) => Self::push_field(&group, &path_indices, &self.path, &mut self.stack),
             }
         }
 
@@ -106,8 +158,8 @@ impl<'a> EvalIter<'a> {
 
     fn push_interpretations(
         group: &Group,
-        path_indices: &Vec<usize>,
-        path: &Vec<PathItem<'a>>,
+        path_indices: &HashSet<usize>,
+        path: &Vec<PathItem<'s>>,
         stack: &mut Vec<CellNode>,
     ) {
         for path_index in path_indices {
@@ -125,9 +177,15 @@ impl<'a> EvalIter<'a> {
                     continue;
                 }
 
+                // println!(
+                //     "push interpretation: {}:{} : {:?}",
+                //     subcell.label().unwrap_or(""),
+                //     subcell.value().unwrap(),
+                //     path_index + 1
+                // );
                 stack.push(CellNode {
                     cell: Ok(subcell),
-                    path_indices: vec![path_index + 1],
+                    path_indices: HashSet::from([path_index + 1]),
                 });
             }
         }
@@ -136,17 +194,13 @@ impl<'a> EvalIter<'a> {
     fn push_by_relation_with_stars(
         relation: Relation,
         group: &Group,
-        path_indices: &Vec<usize>,
-        path: &Vec<PathItem<'a>>,
+        path_indices: &HashSet<usize>,
+        path: &Vec<PathItem<'s>>,
         stack: &mut Vec<CellNode>,
         double_stars: bool,
     ) {
-        // println!(
-        //     "-- push_by_relation_with_stars: relation {:?}, double_stars {}\npath: {} ; path_indices: {:?}",
-        //     relation, double_stars, DisplayPath(path), path_indices
-        // );
         for i in (0..group.len()).rev() {
-            let mut accepted_path_indices = vec![];
+            let mut accepted_path_indices = HashSet::new();
             let subcell = guard_ok!(group.at(i), err => {
                 verbose_error(err);
                 continue;
@@ -158,13 +212,35 @@ impl<'a> EvalIter<'a> {
                     continue;
                 }
                 if Self::accept_subcell(subcell.clone(), path_item) {
+                    // println!(
+                    //     "match: {}:{} for {}",
+                    //     subcell.label().unwrap_or(""),
+                    //     subcell.value().unwrap(),
+                    //     path_item
+                    // );
                     if double_stars {
-                        accepted_path_indices.push(*path_index);
+                        accepted_path_indices.insert(*path_index);
                     }
-                    accepted_path_indices.push(*path_index + 1);
+                    accepted_path_indices.insert(*path_index + 1);
+                    if Self::is_doublestar_match(&subcell, *path_index + 1, path) {
+                        accepted_path_indices.insert(*path_index + 2);
+                    }
+                } else {
+                    // println!(
+                    //     "no match {}:{} for {}",
+                    //     subcell.label().unwrap_or(""),
+                    //     subcell.value().unwrap(),
+                    //     path_item
+                    // );
                 }
             }
             if !accepted_path_indices.is_empty() {
+                // println!(
+                //     "push by star relation: {}:{} : {:?}",
+                //     subcell.label().unwrap_or(""),
+                //     subcell.value().unwrap(),
+                //     accepted_path_indices
+                // );
                 stack.push(CellNode {
                     cell: Ok(subcell),
                     path_indices: accepted_path_indices,
@@ -176,17 +252,13 @@ impl<'a> EvalIter<'a> {
     fn push_by_relation_without_stars(
         relation: Relation,
         group: &Group,
-        path_indices: &Vec<usize>,
-        path: &Vec<PathItem<'a>>,
+        path_indices: &HashSet<usize>,
+        path: &Vec<PathItem<'s>>,
         stack: &mut Vec<CellNode>,
     ) {
-        // println!(
-        //     "-- push_by_relation_without_stars: relation {:?}\npath_indices: {:?}",
-        //     relation, path_indices
-        // );
         for path_index in path_indices {
             let path_item = &path[*path_index];
-            let mut accepted_path_indices = vec![];
+            let mut accepted_path_indices = HashSet::new();
             if relation != path_item.relation {
                 continue;
             }
@@ -206,9 +278,18 @@ impl<'a> EvalIter<'a> {
                 continue;
             });
             if Self::accept_subcell(subcell.clone(), path_item) {
-                accepted_path_indices.push(path_index + 1);
+                accepted_path_indices.insert(path_index + 1);
+                if Self::is_doublestar_match(&subcell, *path_index + 1, path) {
+                    accepted_path_indices.insert(*path_index + 2);
+                }
             }
             if !accepted_path_indices.is_empty() {
+                // println!(
+                //     "push by non-star relation: {}:{} : {:?}",
+                //     subcell.label().unwrap_or(""),
+                //     subcell.value().unwrap(),
+                //     accepted_path_indices
+                // );
                 stack.push(CellNode {
                     cell: Ok(subcell),
                     path_indices: accepted_path_indices,
@@ -219,8 +300,8 @@ impl<'a> EvalIter<'a> {
 
     fn push_field(
         group: &Group,
-        path_indices: &Vec<usize>,
-        path: &Vec<PathItem<'a>>,
+        path_indices: &HashSet<usize>,
+        path: &Vec<PathItem<'s>>,
         stack: &mut Vec<CellNode>,
     ) {
         for path_index in path_indices {
@@ -238,9 +319,15 @@ impl<'a> EvalIter<'a> {
                     continue;
                 }
 
+                // println!(
+                //     "push by field: {}:{} : {:?}",
+                //     subcell.label().unwrap_or(""),
+                //     subcell.value().unwrap(),
+                //     path_index + 1
+                // );
                 stack.push(CellNode {
                     cell: Ok(subcell),
-                    path_indices: vec![path_index + 1],
+                    path_indices: HashSet::from([path_index + 1]),
                 });
             }
         }
@@ -257,8 +344,8 @@ impl<'a> EvalIter<'a> {
 
     fn has_stars(
         relation: Relation,
-        path_indices: &Vec<usize>,
-        path: &Vec<PathItem<'a>>,
+        path_indices: &HashSet<usize>,
+        path: &Vec<PathItem<'s>>,
     ) -> (bool, bool) {
         let (mut star, mut doublestar) = (false, false);
         for i in path_indices {
@@ -328,7 +415,7 @@ impl<'a> EvalIter<'a> {
         false
     }
 
-    fn eval_bool_expression(cell: Cell, expr: &Expression<'a>) -> Res<bool> {
+    fn eval_bool_expression(cell: Cell, expr: &Expression<'s>) -> Res<bool> {
         let eval_iter_left = Self::new(cell, expr.left.clone());
         for cell in eval_iter_left {
             let cell = guard_ok!(cell, err => {
@@ -364,7 +451,7 @@ impl<'a> EvalIter<'a> {
     }
 }
 
-impl<'a> Iterator for EvalIter<'a> {
+impl<'s> Iterator for EvalIter<'s> {
     type Item = Res<Cell>;
     fn next(&mut self) -> Option<Res<Cell>> {
         self.eval_next()

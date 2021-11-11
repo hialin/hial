@@ -3,9 +3,15 @@ use crate::*;
 use std::fmt::Debug;
 
 pub fn str_eval(root: Cell, path: &str) -> Res<Vec<String>> {
-    pr(root.path(path))?
+    root.path(path)?
         .into_iter()
-        .map(|c| Ok(c?.value()?.to_string()))
+        .map(|c| {
+            Ok(format!(
+                "{}:{}",
+                c.clone()?.label().unwrap_or(""),
+                c?.value()?
+            ))
+        })
         .collect::<Res<Vec<_>>>()
 }
 

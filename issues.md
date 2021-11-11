@@ -32,20 +32,22 @@
 
 ### Todos, Issues, Problems
 
-- todo: add regex operator and shortcuts for startswith, endswith, contains
-- todo: add <, >, <=, >= operators
+- todo: add domain and trace traits, with full support in implementations
+- todo: change json to use lifetimes?
 
 - todo: write support: json, rust, fs
-
-- todo: review examples, check accessors, operators
-
+- unclear: make a light refcell with lifetimes?
 - todo: c interop and a small c test
+
 - todo: python interop and a larger python example
+- todo: review examples, check accessors, operators
 
 - todo: get should return an iterator; multiset labels
 
-- todo: improve nom parsing errors, use context
+- todo: add regex operator and shortcuts for startswith, endswith, contains
+- todo: add <, >, <=, >= operators
 
+- todo: improve nom parsing errors, use context
 - todo: interpretations parameters
 - todo: custom tree
 - todo: cell symlinks

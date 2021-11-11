@@ -1,9 +1,31 @@
 // use crate::vecmap::*;
-use crate::{base::common::*, base::interpretation_api::*, guard_some, verbose};
+use crate::{
+    base::{common::*, in_api::*},
+    guard_some, verbose,
+};
 use quick_xml::{events::Event, Error as XmlError, Reader};
 use std::io::BufRead;
 use std::path::Path;
 use std::rc::Rc;
+
+#[derive(Clone, Debug)]
+pub struct Domain {
+    preroot: NodeList,
+}
+impl InDomain for Domain {
+    type Cell = Cell;
+    type Group = Group;
+
+    fn root(self: &Rc<Self>) -> Res<Cell> {
+        Ok(Cell {
+            group: Group {
+                domain: self.clone(),
+                nodes: NodeGroup::Node(self.preroot.clone()),
+            },
+            pos: 0,
+        })
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Cell {
@@ -12,13 +34,20 @@ pub struct Cell {
 }
 
 #[derive(Clone, Debug)]
-pub enum Group {
+pub struct Group {
+    domain: Rc<Domain>,
+    nodes: NodeGroup,
+}
+
+#[derive(Clone, Debug)]
+pub enum NodeGroup {
     Node(NodeList),
     Attr(AttrList),
 }
 
 #[derive(Clone, Debug)]
 pub struct NodeList(Rc<Vec<Node>>);
+
 #[derive(Clone, Debug)]
 pub struct AttrList(Rc<Vec<Attribute>>);
 
@@ -45,15 +74,19 @@ enum Attribute {
 pub fn from_path(path: &Path) -> Res<Cell> {
     let mut reader = Reader::from_file(path.clone()).map_err(HErr::from)?;
     let root = xml_to_node(&mut reader)?;
-    let group = Group::Node(NodeList(Rc::new(vec![root])));
-    Ok(Cell { group, pos: 0 })
+    let domain = Rc::new(Domain {
+        preroot: NodeList(Rc::new(vec![root])),
+    });
+    domain.root()
 }
 
 pub fn from_string(string: &str) -> Res<Cell> {
     let mut reader = Reader::from_str(string);
     let root = xml_to_node(&mut reader)?;
-    let group = Group::Node(NodeList(Rc::new(vec![root])));
-    Ok(Cell { group, pos: 0 })
+    let domain = Rc::new(Domain {
+        preroot: NodeList(Rc::new(vec![root])),
+    });
+    domain.root()
 }
 
 fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
@@ -206,12 +239,16 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
     Ok(document)
 }
 
-impl InterpretationCell for Cell {
-    type Group = Group;
+impl InCell for Cell {
+    type Domain = Domain;
+
+    fn domain(&self) -> &Rc<Self::Domain> {
+        &self.group.domain
+    }
 
     fn typ(&self) -> Res<&str> {
-        match &self.group {
-            Group::Node(group) => match &group.0[self.pos] {
+        match &self.group.nodes {
+            NodeGroup::Node(group) => match &group.0[self.pos] {
                 Node::Document(_) => Ok("document"),
                 Node::Decl(_) => Ok("decl"),
                 Node::DocType(_) => Ok("doctype"),
@@ -222,7 +259,7 @@ impl InterpretationCell for Cell {
                 Node::CData(_) => Ok("cdata"),
                 Node::Error(_) => Ok("error"),
             },
-            Group::Attr(group) => Ok("attribute"),
+            NodeGroup::Attr(group) => Ok("attribute"),
         }
     }
 
@@ -231,22 +268,22 @@ impl InterpretationCell for Cell {
     }
 
     fn label(&self) -> Res<&str> {
-        match &self.group {
-            Group::Node(group) => match &group.0[self.pos] {
+        match &self.group.nodes {
+            NodeGroup::Node(group) => match &group.0[self.pos] {
                 Node::Element((x, _, _)) => Ok(x.as_str()),
                 Node::Decl(_) => Ok("xml"),
                 Node::DocType(x) => Ok("DOCTYPE"),
                 x => NotFound::NoResult(format!("")).into(),
             },
-            Group::Attr(group) => match &group.0[self.pos] {
+            NodeGroup::Attr(group) => match &group.0[self.pos] {
                 Attribute::Attribute(k, _) => Ok(k.as_str()),
                 _ => NotFound::NoResult(format!("")).into(),
             },
         }
     }
     fn value(&self) -> Res<Value> {
-        match &self.group {
-            Group::Node(group) => match &group.0[self.pos] {
+        match &self.group.nodes {
+            NodeGroup::Node(group) => match &group.0[self.pos] {
                 Node::Document(_) => Ok(Value::None),
                 Node::Decl(_) => Ok(Value::Str("xml")),
                 Node::DocType(x) => Ok(Value::Str(x.trim())),
@@ -257,17 +294,23 @@ impl InterpretationCell for Cell {
                 Node::CData(x) => Ok(Value::Bytes(x.as_slice())),
                 Node::Error(x) => Ok(Value::Str(x)),
             },
-            Group::Attr(group) => match &group.0[self.pos] {
+            NodeGroup::Attr(group) => match &group.0[self.pos] {
                 Attribute::Attribute(_, x) => Ok(Value::Str(x)),
                 Attribute::Error(x) => Ok(Value::Str(x)),
             },
         }
     }
-    fn sub(&self) -> Res<Self::Group> {
-        match &self.group {
-            Group::Node(group) => match &group.0[self.pos] {
-                Node::Document(x) => Ok(Group::Node(NodeList(x.clone()))),
-                Node::Element((_, _, x)) => Ok(Group::Node(NodeList(x.clone()))),
+    fn sub(&self) -> Res<Group> {
+        match &self.group.nodes {
+            NodeGroup::Node(group) => match &group.0[self.pos] {
+                Node::Document(x) => Ok(Group {
+                    domain: self.group.domain.clone(),
+                    nodes: NodeGroup::Node(NodeList(x.clone())),
+                }),
+                Node::Element((_, _, x)) => Ok(Group {
+                    domain: self.group.domain.clone(),
+                    nodes: NodeGroup::Node(NodeList(x.clone())),
+                }),
                 _ => NotFound::NoGroup(format!("/")).into(),
             },
             _ => NotFound::NoGroup(format!("/")).into(),
@@ -275,9 +318,12 @@ impl InterpretationCell for Cell {
     }
 
     fn attr(&self) -> Res<Group> {
-        match &self.group {
-            Group::Node(group) => match &group.0[self.pos] {
-                Node::Element((_, x, _)) => Ok(Group::Attr(AttrList(x.clone()))),
+        match &self.group.nodes {
+            NodeGroup::Node(group) => match &group.0[self.pos] {
+                Node::Element((_, x, _)) => Ok(Group {
+                    domain: self.group.domain.clone(),
+                    nodes: NodeGroup::Attr(AttrList(x.clone())),
+                }),
                 _ => NotFound::NoGroup(format!("@")).into(),
             },
             _ => NotFound::NoGroup(format!("@")).into(),
@@ -285,8 +331,8 @@ impl InterpretationCell for Cell {
     }
 }
 
-impl InterpretationGroup for Group {
-    type Cell = Cell;
+impl InGroup for Group {
+    type Domain = Domain;
 
     fn label_type(&self) -> LabelType {
         LabelType {
@@ -296,13 +342,13 @@ impl InterpretationGroup for Group {
     }
 
     fn len(&self) -> usize {
-        match &self {
-            Group::Node(group) => group.0.len(),
-            Group::Attr(group) => group.0.len(),
+        match &self.nodes {
+            NodeGroup::Node(group) => group.0.len(),
+            NodeGroup::Attr(group) => group.0.len(),
         }
     }
 
-    fn at(&self, index: usize) -> Res<Self::Cell> {
+    fn at(&self, index: usize) -> Res<Cell> {
         if index >= self.len() {
             return NotFound::NoResult(format!("{}", index)).into();
         }
@@ -312,7 +358,7 @@ impl InterpretationGroup for Group {
         })
     }
 
-    fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, key: S) -> Res<Self::Cell> {
+    fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, key: S) -> Res<Cell> {
         let key = key.into();
         for i in 0..self.len() {
             let cell = self.at(i)?;

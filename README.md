@@ -68,11 +68,11 @@ Examples:
 - `http://api.github.com^http^json/rate_limit_url#value^http^json/resources/core/remaining` makes one http call and uses a field in the respose to make another http call, then select a subfield in the returning json.
 
 - `./src/**^rust` returns a list of all rust files (all files that have a rust interpretation) descending from the `src` folder.
-- `./src/**^rust/**[#type=="function_item"]` lists all rust functions in all rust files in the `src` folder.
-- `./src/**^rust/**[#type=="function_item"]/**/*[#type=="let_declaration"]` lists all occurences of *let* declarations in all functions in all rust files in the src folder.
-- `./src/**^rust/**[#type=="function_item"]/**/*[#type=="let_declaration"][/pattern/*]` lists only destructuring patterns in all occurences of *let* declarations in all functions in all rust files in the src folder. The destructuring patterns are the only ones that have a descendant of `pattern`, for which this filter: `[/pattern/*]` is true.
+- `./src/**^rust/**/*[#type=="function_item"]` lists all rust functions in all rust files in the `src` folder.
+- `./src/**^rust/**/*[#type=="function_item"]/**/*[#type=="let_declaration"]` lists all occurences of *let* declarations in all functions in all rust files in the src folder.
+- `./src/**^rust/**/*[#type=="function_item"]/**/*[#type=="let_declaration"][/pattern/*]` lists only destructuring patterns in all occurences of *let* declarations in all functions in all rust files in the src folder. The destructuring patterns are the only ones that have a descendant of `pattern`, for which this filter: `[/pattern/*]` is true.
 
-All these examples should currently work.
+To test the examples yourself, run the `hial` tool in bash, e.g.: `hial explore 'http://api.github.com^http^json'`
 
 ## What's the current feature implementation status?
 
@@ -94,7 +94,7 @@ hial explore "."
 ```
 
 ```python
-# python, in progress: python interop not done; ** not listing all nodes
+# python, in progress: python interop not done
 for cell in path('./**'):
     print(cell.value())
 ```
@@ -104,7 +104,7 @@ for cell in path('./**'):
 ```bash
 # bash, works
 echo "Bad images:"
-hial print "./config.yaml ^yaml /services [ /image ::value ^http @status /code != 200 ] / name"
+hial print "./config.yaml^yaml/services[/image#value^http@status/code!=200]/name"
 ```
 
 ```python

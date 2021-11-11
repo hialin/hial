@@ -1,24 +1,38 @@
-use crate::base::common::*;
-use crate::base::interpretation_api::*;
+use crate::base::{common::*, in_api::*};
 use reqwest::Url;
 use std::rc::Rc;
 use url::ParseError;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Cell(Rc<Url>);
+pub struct Domain(Url);
+impl InDomain for Domain {
+    type Cell = Cell;
+    type Group = Cell;
+
+    fn root(self: &Rc<Self>) -> Res<Self::Cell> {
+        Ok(Cell(self.clone()))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Cell(Rc<Domain>);
 
 pub fn from_string(s: &str) -> Res<Cell> {
-    Ok(Cell(Rc::new(Url::parse(s)?)))
+    Rc::new(Domain(Url::parse(s)?)).root()
 }
 
 impl Cell {
     pub fn as_str(&self) -> &str {
-        self.0.as_str()
+        self.0 .0.as_str()
     }
 }
 
-impl InterpretationCell for Cell {
-    type Group = Cell;
+impl InCell for Cell {
+    type Domain = Domain;
+
+    fn domain(&self) -> &Rc<Self::Domain> {
+        &self.0
+    }
 
     fn typ(&self) -> Res<&str> {
         Ok("value")
@@ -33,7 +47,7 @@ impl InterpretationCell for Cell {
     }
 
     fn value(&self) -> Res<Value> {
-        Ok(Value::Str(self.0.as_str()))
+        Ok(Value::Str(self.0 .0.as_str()))
     }
 
     fn sub(&self) -> Res<Cell> {
@@ -45,8 +59,8 @@ impl InterpretationCell for Cell {
     }
 }
 
-impl InterpretationGroup for Cell {
-    type Cell = Cell;
+impl InGroup for Cell {
+    type Domain = Domain;
 
     fn label_type(&self) -> LabelType {
         LabelType {
@@ -55,15 +69,15 @@ impl InterpretationGroup for Cell {
         }
     }
 
-    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
-        NotFound::NoResult(format!("")).into()
-    }
-
     fn len(&self) -> usize {
         0
     }
 
     fn at(&self, index: usize) -> Res<Cell> {
+        NotFound::NoResult(format!("")).into()
+    }
+
+    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
         NotFound::NoResult(format!("")).into()
     }
 }

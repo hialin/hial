@@ -1,6 +1,7 @@
-use crate::base::common::*;
-use crate::base::interpretation_api::*;
-use crate::utils::vecmap::VecMap;
+use crate::{
+    base::{common::*, in_api::*},
+    utils::vecmap::VecMap,
+};
 use reqwest::{blocking::Client, Error as ReqwestError};
 use std::rc::Rc;
 
@@ -9,6 +10,14 @@ use std::rc::Rc;
 //          code
 //          reason
 //       @headers/...
+
+#[derive(Clone, Debug)]
+pub struct ResponseDomain {
+    status: i16,
+    reason: String,
+    headers: VecMap<String, Vec<String>>,
+    body: Vec<u8>,
+}
 
 #[derive(Clone, Debug)]
 pub struct Cell {
@@ -27,15 +36,7 @@ pub enum GroupKind {
 #[derive(Clone, Debug)]
 pub struct Group {
     kind: GroupKind,
-    response: Rc<Response>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Response {
-    status: i16,
-    reason: String,
-    headers: VecMap<String, Vec<String>>,
-    body: Vec<u8>,
+    response: Rc<ResponseDomain>,
 }
 
 pub fn from_string(url: &str) -> Res<Cell> {
@@ -63,17 +64,13 @@ pub fn from_string(url: &str) -> Res<Cell> {
     if status >= 400 {
         eprintln!("Error: http call failed: {} = {} {}", url, status, reason);
     }
-    let group = Group {
-        kind: GroupKind::Root,
-        response: Rc::new(Response {
-            status,
-            reason,
-            headers,
-            body: response.bytes()?.as_ref().to_vec(),
-        }),
-    };
-
-    Ok(Cell { group, pos: 0 })
+    let domain = Rc::new(ResponseDomain {
+        status,
+        reason,
+        headers,
+        body: response.bytes()?.as_ref().to_vec(),
+    });
+    domain.root()
 }
 
 pub fn to_string(cell: &Cell) -> Res<String> {
@@ -85,8 +82,27 @@ pub fn to_string(cell: &Cell) -> Res<String> {
     }
 }
 
-impl InterpretationCell for Cell {
+impl InDomain for ResponseDomain {
+    type Cell = Cell;
     type Group = Group;
+
+    fn root(self: &Rc<Self>) -> Res<Self::Cell> {
+        Ok(Cell {
+            group: Group {
+                kind: GroupKind::Root,
+                response: self.clone(),
+            },
+            pos: 0,
+        })
+    }
+}
+
+impl InCell for Cell {
+    type Domain = ResponseDomain;
+
+    fn domain(&self) -> &Rc<Self::Domain> {
+        &self.group.response
+    }
 
     fn typ(&self) -> Res<&str> {
         match (&self.group.kind, self.pos) {
@@ -169,8 +185,8 @@ impl InterpretationCell for Cell {
     }
 }
 
-impl InterpretationGroup for Group {
-    type Cell = Cell;
+impl InGroup for Group {
+    type Domain = ResponseDomain;
     // type SelectIterator = std::vec::IntoIter<Res<Cell>>;
 
     fn label_type(&self) -> LabelType {

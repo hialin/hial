@@ -1,9 +1,30 @@
-use crate::base::common::*;
-use crate::base::interpretation_api::*;
-use crate::utils::vecmap::*;
+use crate::{
+    base::{common::*, in_api::*},
+    utils::vecmap::*,
+};
 use std::{path::Path, rc::Rc};
 use toml;
 use toml::Value as TomlValue;
+
+#[derive(Clone, Debug)]
+pub struct Domain {
+    preroot: NodeGroup,
+}
+
+impl InDomain for Domain {
+    type Cell = Cell;
+    type Group = Group;
+
+    fn root(self: &Rc<Self>) -> Res<Self::Cell> {
+        Ok(Cell {
+            group: Group {
+                domain: self.clone(),
+                nodes: self.preroot.clone(),
+            },
+            pos: 0,
+        })
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Cell {
@@ -12,18 +33,23 @@ pub struct Cell {
 }
 
 #[derive(Clone, Debug)]
+pub struct Group {
+    domain: Rc<Domain>,
+    nodes: NodeGroup,
+}
+
+#[derive(Clone, Debug)]
+pub enum NodeGroup {
+    Array(Rc<Vec<Node>>),
+    Table(Rc<VecMap<String, Node>>),
+}
+#[derive(Clone, Debug)]
 pub enum Node {
     Bool(bool),
     I64(i64),
     F64(f64),
     String(String),
     Datetime(String),
-    Array(Rc<Vec<Node>>),
-    Table(Rc<VecMap<String, Node>>),
-}
-
-#[derive(Clone, Debug)]
-pub enum Group {
     Array(Rc<Vec<Node>>),
     Table(Rc<VecMap<String, Node>>),
 }
@@ -42,23 +68,27 @@ pub fn from_path(path: &Path) -> Res<Cell> {
 pub fn from_string(source: &str) -> Res<Cell> {
     let toml: TomlValue = toml::from_str(source)?;
     let root_node = node_from_toml(toml);
-    let root_group = Rc::new(vec![root_node]);
-    Ok(Cell {
-        group: Group::Array(root_group),
-        pos: 0,
-    })
+    let preroot = Rc::new(vec![root_node]);
+    let domain = Rc::new(Domain {
+        preroot: NodeGroup::Array(preroot),
+    });
+    domain.root()
 }
 
-impl InterpretationCell for Cell {
-    type Group = Group;
+impl InCell for Cell {
+    type Domain = Domain;
+
+    fn domain(&self) -> &Rc<Self::Domain> {
+        &self.group.domain
+    }
 
     fn typ(&self) -> Res<&str> {
-        match self.group {
-            Group::Array(ref a) => match a.get(self.pos) {
+        match self.group.nodes {
+            NodeGroup::Array(ref a) => match a.get(self.pos) {
                 Some(n) => Ok(get_typ(n)),
                 None => HErr::internal("").into(),
             },
-            Group::Table(ref t) => match t.at(self.pos) {
+            NodeGroup::Table(ref t) => match t.at(self.pos) {
                 Some(x) => Ok(get_typ(&x.1)),
                 None => HErr::internal("").into(),
             },
@@ -70,9 +100,9 @@ impl InterpretationCell for Cell {
     }
 
     fn label(&self) -> Res<&str> {
-        match self.group {
-            Group::Array(ref a) => NotFound::NoLabel().into(),
-            Group::Table(ref t) => match t.at(self.pos) {
+        match self.group.nodes {
+            NodeGroup::Array(ref a) => NotFound::NoLabel().into(),
+            NodeGroup::Table(ref t) => match t.at(self.pos) {
                 Some(x) => Ok(x.0),
                 None => HErr::internal("").into(),
             },
@@ -80,12 +110,12 @@ impl InterpretationCell for Cell {
     }
 
     fn value(&self) -> Res<Value> {
-        match self.group {
-            Group::Array(ref a) => match a.get(self.pos) {
+        match self.group.nodes {
+            NodeGroup::Array(ref a) => match a.get(self.pos) {
                 Some(x) => Ok(get_value(x)),
                 None => HErr::internal("").into(),
             },
-            Group::Table(ref t) => match t.at(self.pos) {
+            NodeGroup::Table(ref t) => match t.at(self.pos) {
                 Some(x) => Ok(get_value(&x.1)),
                 None => HErr::internal("").into(),
             },
@@ -93,15 +123,27 @@ impl InterpretationCell for Cell {
     }
 
     fn sub(&self) -> Res<Group> {
-        match self.group {
-            Group::Array(ref array) => match &array.get(self.pos) {
-                Some(Node::Array(a)) => Ok(Group::Array(a.clone())),
-                Some(Node::Table(o)) => Ok(Group::Table(o.clone())),
+        match self.group.nodes {
+            NodeGroup::Array(ref array) => match &array.get(self.pos) {
+                Some(Node::Array(a)) => Ok(Group {
+                    domain: self.group.domain.clone(),
+                    nodes: NodeGroup::Array(a.clone()),
+                }),
+                Some(Node::Table(o)) => Ok(Group {
+                    domain: self.group.domain.clone(),
+                    nodes: NodeGroup::Table(o.clone()),
+                }),
                 _ => HErr::internal("").into(),
             },
-            Group::Table(ref table) => match table.at(self.pos) {
-                Some((_, Node::Array(a))) => Ok(Group::Array(a.clone())),
-                Some((_, Node::Table(o))) => Ok(Group::Table(o.clone())),
+            NodeGroup::Table(ref table) => match table.at(self.pos) {
+                Some((_, Node::Array(a))) => Ok(Group {
+                    domain: self.group.domain.clone(),
+                    nodes: NodeGroup::Array(a.clone()),
+                }),
+                Some((_, Node::Table(o))) => Ok(Group {
+                    domain: self.group.domain.clone(),
+                    nodes: NodeGroup::Table(o.clone()),
+                }),
                 _ => HErr::internal("").into(),
             },
         }
@@ -136,8 +178,8 @@ fn get_value(node: &Node) -> Value {
     }
 }
 
-impl InterpretationGroup for Group {
-    type Cell = Cell;
+impl InGroup for Group {
+    type Domain = Domain;
 
     fn label_type(&self) -> LabelType {
         LabelType {
@@ -147,9 +189,9 @@ impl InterpretationGroup for Group {
     }
 
     fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
-        match self {
-            Group::Array(a) => NotFound::NoLabel().into(),
-            Group::Table(t) => match key.into() {
+        match &self.nodes {
+            NodeGroup::Array(a) => NotFound::NoLabel().into(),
+            NodeGroup::Table(t) => match key.into() {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
                 Selector::Str(k) => match t.get(k) {
                     Some((pos, _, _)) => Ok(Cell {
@@ -163,19 +205,19 @@ impl InterpretationGroup for Group {
     }
 
     fn len(&self) -> usize {
-        match self {
-            Group::Array(array) => array.len(),
-            Group::Table(t) => t.len(),
+        match &self.nodes {
+            NodeGroup::Array(array) => array.len(),
+            NodeGroup::Table(t) => t.len(),
         }
     }
 
     fn at(&self, index: usize) -> Res<Cell> {
-        match self {
-            Group::Array(array) if index < array.len() => Ok(Cell {
+        match &self.nodes {
+            NodeGroup::Array(array) if index < array.len() => Ok(Cell {
                 group: self.clone(),
                 pos: index as usize,
             }),
-            Group::Table(t) if index < t.len() => Ok(Cell {
+            NodeGroup::Table(t) if index < t.len() => Ok(Cell {
                 group: self.clone(),
                 pos: index as usize,
             }),

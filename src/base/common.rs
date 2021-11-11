@@ -1,7 +1,8 @@
-use core::cmp::Ordering;
-use core::fmt;
-use core::fmt::Display;
-use core::hash::{Hash, Hasher};
+use core::{
+    cmp::Ordering,
+    fmt::{self, Display},
+    hash::{Hash, Hasher},
+};
 use std::borrow::Borrow;
 
 pub type Res<T> = Result<T, HErr>;

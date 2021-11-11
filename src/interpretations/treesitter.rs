@@ -1,22 +1,37 @@
-use crate::base::common::*;
-use crate::base::interpretation_api::*;
-use crate::{tree_sitter_language, *};
-use std::ops::Range;
-use std::{path::Path, rc::Rc};
+use crate::{
+    base::{common::*, in_api::*},
+    tree_sitter_language, *,
+};
+use std::{ops::Range, path::Path, rc::Rc};
 use tree_sitter::{Parser, Tree, TreeCursor};
 
 #[derive(Clone, Debug)]
-pub struct Group {
-    context: Rc<Context>,
-    // since the tree is in a Rc, the treecursor is valid on self's lifetime
-    nodes: Rc<Vec<CNode>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Context {
+pub struct Domain {
     language: &'static str,
     source: String,
     tree: Tree,
+}
+
+impl InDomain for Domain {
+    type Cell = Cell;
+    type Group = Group;
+
+    fn root(self: &Rc<Self>) -> Res<Self::Cell> {
+        let cnode = node_to_cnode(self.tree.walk(), &self.source);
+
+        let group = Group {
+            domain: self.clone(),
+            nodes: Rc::new(vec![cnode]),
+        };
+        Ok(Cell { group, pos: 0 })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Group {
+    domain: Rc<Domain>,
+    // since the tree is in a Rc, the treecursor is valid on self's lifetime
+    nodes: Rc<Vec<CNode>>,
 }
 
 #[derive(Clone, Debug)]
@@ -47,7 +62,7 @@ pub fn get_underlying_string(cell: &Cell) -> Res<&str> {
     let cnode = guard_some!(cell.group.nodes.get(cell.pos), {
         return HErr::internal("bad pos in rust cell").into();
     });
-    Ok(&cell.group.context.source[cnode.src.clone()])
+    Ok(&cell.group.domain.source[cnode.src.clone()])
 }
 
 fn sitter_from_source(source: String, language: &'static str) -> Res<Cell> {
@@ -81,19 +96,12 @@ fn sitter_from_source(source: String, language: &'static str) -> Res<Cell> {
     let tree = guard_some!(parser.parse(&source, None), {
         return Err(HErr::Sitter(format!("cannot get parse tree")));
     });
-    let context = Rc::new(Context {
+    let domain = Rc::new(Domain {
         language,
         source,
         tree,
     });
-
-    let cnode = node_to_cnode(context.tree.walk(), &context.source);
-
-    let group = Group {
-        context,
-        nodes: Rc::new(vec![cnode]),
-    };
-    Ok(Cell { group, pos: 0 })
+    domain.root()
 }
 
 fn node_to_cnode(mut cursor: TreeCursor, source: &str) -> CNode {
@@ -171,8 +179,12 @@ fn reshape_subs(value: &mut String, typ: &str, subs: &mut Vec<CNode>, source: &s
     }
 }
 
-impl InterpretationCell for Cell {
-    type Group = Group;
+impl InCell for Cell {
+    type Domain = Domain;
+
+    fn domain(&self) -> &Rc<Self::Domain> {
+        &self.group.domain
+    }
 
     fn typ(&self) -> Res<&str> {
         Ok(self.group.nodes[self.pos].typ)
@@ -211,8 +223,8 @@ impl InterpretationCell for Cell {
     }
 }
 
-impl InterpretationGroup for Group {
-    type Cell = Cell;
+impl InGroup for Group {
+    type Domain = Domain;
 
     fn label_type(&self) -> LabelType {
         LabelType {
@@ -251,6 +263,6 @@ impl InterpretationGroup for Group {
 
 impl Cell {
     pub fn language(&self) -> &'static str {
-        self.group.context.language
+        self.group.domain.language
     }
 }

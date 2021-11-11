@@ -1,9 +1,9 @@
 use crate::{
-    base::{common::*, interpretation_api::*, rust_api::*},
+    base::{common::*, in_api::*, rust_api::*},
     guard_ok, guard_some,
     interpretations::*,
     utils::vecmap::VecMap,
-    verbose, verbose_error, HErr, InterpretationGroup, Selector, Value,
+    verbose, verbose_error, HErr, Selector, Value,
 };
 use lazy_static::lazy_static;
 use std::rc::Rc;
@@ -235,17 +235,15 @@ pub struct ElevationGroup(pub Cell);
 #[derive(Debug, Clone)]
 pub struct Mixed(pub Cell);
 
-impl InterpretationGroup for ElevationGroup {
-    type Cell = Cell;
-
-    fn label_type(&self) -> LabelType {
+impl ElevationGroup {
+    pub fn label_type(&self) -> LabelType {
         LabelType {
             is_indexed: true,
             unique_labels: true,
         }
     }
 
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         if let Some(e) = get_elevation_map_for(self.0.interpretation()) {
             e.len()
         } else {
@@ -253,7 +251,7 @@ impl InterpretationGroup for ElevationGroup {
         }
     }
 
-    fn at(&self, index: usize) -> Res<Cell> {
+    pub fn at(&self, index: usize) -> Res<Cell> {
         let interp = self.0.interpretation();
         if let Some(e) = get_elevation_map_for(interp) {
             if let Some(func_tuple) = e.at(index) {
@@ -266,7 +264,7 @@ impl InterpretationGroup for ElevationGroup {
         }
     }
 
-    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
+    pub fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
         let key = key.into();
         let old_interp = self.0.interpretation();
         let interp = match key {

@@ -1,7 +1,7 @@
 use crate::{
     base::{
         common::*,
-        interpretation_api::{InterpretationCell, InterpretationGroup},
+        in_api::{InCell, InGroup},
         rust_api::*,
     },
     guard_ok,

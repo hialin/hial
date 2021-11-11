@@ -2,7 +2,7 @@
 #![deny(
 	// warnings, // todo uncomment this
     missing_debug_implementations,
-    missing_copy_implementations,
+    // missing_copy_implementations, // todo uncomment this
     bare_trait_objects,
     // missing_docs
 )]
@@ -10,7 +10,7 @@
 use std::borrow::Borrow;
 
 pub mod base;
-pub mod c_api;
+// pub mod c_api;
 mod interpretations;
 pub mod pathlang;
 pub mod perftests;
@@ -21,7 +21,7 @@ mod utils;
 mod tests;
 
 pub use base::common::{HErr, Int, Res, Selector, Value};
-pub use base::interpretation_api::*;
+pub use base::in_api::*;
 pub use base::rust_api;
 
 #[macro_export]
