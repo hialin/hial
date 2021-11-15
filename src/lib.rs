@@ -20,9 +20,11 @@ mod utils;
 #[cfg(test)]
 mod tests;
 
-pub use base::common::{HErr, Int, Res, Selector, Value};
-pub use base::in_api::*;
-pub use base::rust_api;
+// pub use base::common::Selector;
+// pub use base::error::{HErr, Res};
+// pub use base::intra::*;
+// pub use base::rust_api;
+// pub use base::value::{Int, OwnedValue, Value};
 
 #[macro_export]
 macro_rules! guard_ok {
@@ -55,9 +57,9 @@ pub fn set_verbose(flag: bool) {
     unsafe { VERBOSE = flag }
 }
 
-pub fn verbose_error(e: impl Borrow<HErr>) {
+pub fn verbose_error(e: impl Borrow<crate::base::HErr>) {
     let e = e.borrow();
-    if !matches!(e, HErr::NotFound(_)) {
+    if !matches!(e, crate::base::HErr::NotFound(_)) {
         verbose!("Error: {:?}", e)
     }
 }

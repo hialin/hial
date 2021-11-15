@@ -1,5 +1,5 @@
 use clap::{App, Arg, SubCommand};
-use hiallib::{pathlang::Path, pprint::pprint, *};
+use hiallib::{base::*, pathlang::Path, pprint::pprint, *};
 
 fn main() -> Res<()> {
     let args = parse_args()?;

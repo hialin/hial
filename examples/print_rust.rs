@@ -1,4 +1,4 @@
-use hiallib::base::rust_api::*;
+use hiallib::base::*;
 use hiallib::pprint::pprint;
 use hiallib::*;
 

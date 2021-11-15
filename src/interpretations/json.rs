@@ -1,11 +1,15 @@
-use crate::{base::common::*, base::in_api::*, utils::vecmap::*};
+use crate::{
+    base::*,
+    guard_some,
+    utils::{orc::Orc, vecmap::*},
+};
 use serde_json::Value as SerdeValue;
 use std::rc::Rc;
 use std::{fs::File, path::Path};
 
 #[derive(Clone, Debug)]
 pub struct Domain {
-    preroot: NodeGroup,
+    preroot: Orc<Vec<Node>>,
 }
 impl InDomain for Domain {
     type Cell = Cell;
@@ -15,11 +19,23 @@ impl InDomain for Domain {
         Ok(Cell {
             group: Group {
                 domain: self.clone(),
-                nodes: self.preroot.clone(),
+                nodes: NodeGroup::Array(self.preroot.clone()),
             },
             pos: 0,
         })
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum Node {
+    Null,
+    Bool(bool),
+    I64(i64),
+    U64(u64),
+    F64(f64),
+    String(String),
+    Array(Orc<Vec<Node>>),
+    Object(Orc<VecMap<String, Node>>),
 }
 
 #[derive(Clone, Debug)]
@@ -36,20 +52,8 @@ pub struct Group {
 
 #[derive(Clone, Debug)]
 pub enum NodeGroup {
-    Array(Rc<Vec<Node>>),
-    Object(Rc<VecMap<String, Node>>),
-}
-
-#[derive(Clone, Debug)]
-pub enum Node {
-    Null,
-    Bool(bool),
-    I64(i64),
-    U64(u64),
-    F64(f64),
-    String(String),
-    Array(Rc<Vec<Node>>),
-    Object(Rc<VecMap<String, Node>>),
+    Array(Orc<Vec<Node>>),
+    Object(Orc<VecMap<String, Node>>),
 }
 
 impl From<serde_json::Error> for HErr {
@@ -71,10 +75,8 @@ pub fn from_string(source: &str) -> Res<Cell> {
 
 fn from_json_value(json: SerdeValue) -> Res<Cell> {
     let root_node = node_from_json(json);
-    let preroot = Rc::new(vec![root_node]);
-    let domain = Rc::new(Domain {
-        preroot: NodeGroup::Array(preroot),
-    });
+    let preroot = Orc::new(vec![root_node]);
+    let domain = Rc::new(Domain { preroot });
     domain.root()
 }
 
@@ -172,33 +174,53 @@ impl InCell for Cell {
         NotFound::NoGroup(format!("")).into()
     }
 
-    // fn set(&mut self, v: OwnedValue) -> Res<()> {
-    //     match self.group {
-    //         Group::Array(ref mut a) => {
-    //             let x = guard_some!(a.get_mut(self.pos), {
-    //                 return HErr::internal("bad pos").into();
-    //             });
-    //             *x = owned_value_to_node(v)?;
-    //         }
-    //
-    //         Group::Object(ref mut o) => {
-    //             let x = guard_some!(o.at_mut(self.pos), {
-    //                 return HErr::internal("bad pos").into();
-    //             });
-    //             println!("at mut: {:?}", x);
-    //             let nv = owned_value_to_node(v)?;
-    //             println!("  new value: {:?}", nv);
-    //             *x.1 = nv;
-    //             println!("  test: {:?}", x);
-    //             println!("  test: {:?}", o.at_mut(self.pos));
-    //         }
-    //     };
-    //
-    //     Ok(())
-    // }
+    fn set(&mut self, v: OwnedValue) -> Res<()> {
+        match self.group.nodes {
+            NodeGroup::Array(ref mut ra) => {
+                let a = guard_some!(Orc::get_mut(ra), {
+                    return HErr::ExclusivityRequired("cannot set value".into()).into();
+                });
+                let x = guard_some!(a.get_mut(self.pos), {
+                    return HErr::internal("bad pos").into();
+                });
+                *x = owned_value_to_node(v)?;
+            }
+
+            NodeGroup::Object(ref mut ro) => {
+                let o = guard_some!(Orc::get_mut(ro), {
+                    return HErr::ExclusivityRequired("cannot set value".into()).into();
+                });
+                let x = guard_some!(o.at_mut(self.pos), {
+                    return HErr::internal("bad pos").into();
+                });
+                let nv = owned_value_to_node(v)?;
+                *x.1 = nv;
+            }
+        };
+
+        Ok(())
+    }
+
+    fn delete(&mut self) -> Res<()> {
+        match self.group.nodes {
+            NodeGroup::Array(ref mut a) => {
+                let v = guard_some!(Orc::get_mut(a), {
+                    return HErr::ExclusivityRequired("cannot delete".into()).into();
+                });
+                v.remove(self.pos);
+            }
+            NodeGroup::Object(ref mut o) => {
+                let v = guard_some!(Orc::get_mut(o), {
+                    return HErr::ExclusivityRequired("cannot delete".into()).into();
+                });
+                v.remove(self.pos);
+            }
+        };
+        Ok(())
+    }
 }
 
-fn get_typ(node: &Node) -> &str {
+fn get_typ(node: &Node) -> &'static str {
     match node {
         Node::Null => "null",
         Node::Bool(_) => "bool",
@@ -234,7 +256,7 @@ impl InGroup for Group {
         }
     }
 
-    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
+    fn get<'s, S: Into<Selector<'s>>>(&self, key: S) -> Res<Cell> {
         match &self.nodes {
             NodeGroup::Array(a) => NotFound::NoLabel().into(),
             NodeGroup::Object(o) => match key.into() {
@@ -259,11 +281,11 @@ impl InGroup for Group {
 
     fn at(&self, index: usize) -> Res<Cell> {
         match &self.nodes {
-            NodeGroup::Array(array) if index < array.len() => Ok(Cell {
+            NodeGroup::Array(ref array) if index < array.len() => Ok(Cell {
                 group: self.clone(),
                 pos: index as usize,
             }),
-            NodeGroup::Object(o) if index < o.len() => Ok(Cell {
+            NodeGroup::Object(ref o) if index < o.len() => Ok(Cell {
                 group: self.clone(),
                 pos: index as usize,
             }),
@@ -291,14 +313,14 @@ fn node_from_json(sv: SerdeValue) -> Node {
             for v in a {
                 na.push(node_from_json(v));
             }
-            Node::Array(Rc::new(na))
+            Node::Array(Orc::new(na))
         }
         SerdeValue::Object(o) => {
             let mut no = VecMap::new();
             for (k, v) in o {
                 no.put(k, node_from_json(v));
             }
-            Node::Object(Rc::new(no))
+            Node::Object(Orc::new(no))
         }
     }
 }

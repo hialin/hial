@@ -82,6 +82,12 @@ where
         let x = guard_some!(self.vec.get_mut(pos), { return None });
         Some(&mut x.1)
     }
+
+    pub fn remove(&mut self, pos: usize) -> Option<(K, V)> {
+        let (k, v) = self.vec.remove(pos);
+        self.map.remove(&k);
+        Some((k, v))
+    }
 }
 
 #[derive(Debug)]
@@ -124,7 +130,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Res;
+    use crate::base::Res;
 
     #[test]
     fn test() -> Res<()> {

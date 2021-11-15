@@ -1,8 +1,5 @@
 // use crate::vecmap::*;
-use crate::{
-    base::{common::*, in_api::*},
-    guard_some, verbose,
-};
+use crate::{base::*, guard_some, verbose};
 use quick_xml::{events::Event, Error as XmlError, Reader};
 use std::io::BufRead;
 use std::path::Path;

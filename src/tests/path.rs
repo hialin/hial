@@ -1,6 +1,6 @@
 use super::utils::*;
+use crate::base::*;
 use crate::pathlang::path::{Expression, Filter, Path, PathItem, Relation};
-use crate::rust_api::*;
 use crate::set_verbose;
 use crate::*;
 

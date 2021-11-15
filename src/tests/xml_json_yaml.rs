@@ -1,4 +1,4 @@
-use crate::rust_api::*;
+use crate::base::*;
 use crate::*;
 
 #[test]

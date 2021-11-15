@@ -1,5 +1,5 @@
 // use hiallib::c_api::*;
-use hiallib::*;
+use hiallib::base::*;
 // use std::ffi::CString;
 
 fn main() -> Res<()> {

@@ -33,10 +33,7 @@
 ### Todos, Issues, Problems
 
 - todo: add domain and trace traits, with full support in implementations
-- todo: change json to use lifetimes?
-
 - todo: write support: json, rust, fs
-- unclear: make a light refcell with lifetimes?
 - todo: c interop and a small c test
 
 - todo: python interop and a larger python example
