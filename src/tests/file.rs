@@ -1,6 +1,5 @@
 use crate::base::*;
 use crate::pathlang::path::Path;
-use crate::*;
 
 #[test]
 fn test_files() -> Res<()> {

@@ -4,6 +4,20 @@ use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 #[repr(C)]
+pub enum Domain {
+    OwnedValue(Rc<OwnedValue>),
+    // File(file::Cell),
+    Json(Rc<json::Domain>),
+    // Toml(toml::Cell),
+    // Yaml(yaml::Cell),
+    // Xml(xml::Cell),
+    // Url(url::Cell),
+    // Http(http::Cell),
+    // TreeSitter(treesitter::Cell),
+}
+
+#[derive(Clone, Debug)]
+#[repr(C)]
 pub enum Cell {
     OwnedValue(Rc<OwnedValue>),
     File(file::Cell),
@@ -30,6 +44,20 @@ pub enum Group {
     Url(url::Cell),
     Http(http::Group),
     TreeSitter(treesitter::Group),
+}
+
+impl Domain {
+    pub fn root(&self) -> Res<Cell> {
+        match self {
+            Domain::OwnedValue(x) => Ok(Cell::OwnedValue(x.clone())),
+            Domain::Json(x) => Ok(Cell::Json(x.root()?)),
+            // _ => todo!(),
+        }
+    }
+
+    pub fn save_to_origin(&self) -> Res<()> {
+        Ok(())
+    }
 }
 
 impl From<String> for Cell {
@@ -187,15 +215,6 @@ impl Cell {
         Ok(Group::Field(self.clone()))
     }
 
-    pub fn set(&mut self, ov: OwnedValue) -> Res<()> {
-        match self {
-            Cell::OwnedValue(x) => *x = Rc::new(ov),
-            Cell::Json(x) => x.set(ov)?,
-            _ => return HErr::internal("").into(),
-        }
-        Ok(())
-    }
-
     pub fn be(self, interpretation: &str) -> Res<Cell> {
         self.elevate()?.get(interpretation)
     }
@@ -205,6 +224,23 @@ impl Cell {
             cell: self.clone(),
             path: crate::pathlang::Path::parse(path)?,
         })
+    }
+
+    pub fn set(&mut self, ov: OwnedValue) -> Res<()> {
+        match self {
+            Cell::OwnedValue(x) => *x = Rc::new(ov),
+            Cell::Json(x) => x.set(ov)?,
+            _ => return HErr::internal("").into(),
+        }
+        Ok(())
+    }
+
+    pub fn domain(&self) -> Domain {
+        match self {
+            Cell::OwnedValue(x) => Domain::OwnedValue(x.clone()),
+            Cell::Json(x) => Domain::Json(x.domain().clone()),
+            _ => todo!(),
+        }
     }
 }
 

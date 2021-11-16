@@ -1,5 +1,4 @@
 use crate::base::*;
-use crate::*;
 
 #[test]
 fn mutate_json() -> Res<()> {
@@ -32,13 +31,9 @@ fn mutate_and_write_json() -> Res<()> {
             "hosts": [
                 {
                     "host_id": "1h48",
-                    "labels": {
-                        "power": "weak",
-                        "gateway": "true"
-                    }
+                    "dummy": true
                 },
                 {
-                    "host_id": "1h51",
                     "labels": {
                         "group2": true,
                         "power": "strong"
@@ -47,7 +42,7 @@ fn mutate_and_write_json() -> Res<()> {
             ]
         }"#;
     let json_original = Cell::from(json.to_string());
-    let json = json_original.be("json")?;
+    let json = json_original.clone().be("json")?;
 
     // pprint::pprint(&json, 0, 0);
 
@@ -63,7 +58,24 @@ fn mutate_and_write_json() -> Res<()> {
     assert_eq!(json.path(path1)?.first()?.value()?, newvalue);
     assert_eq!(json.path(path2)?.first()?.value()?, Value::None);
 
-    // json.domain().Ok(())
+    // json.domain().save_to_origin();
+    assert_eq!(
+        json_original.value()?,
+        r#"{
+            "hosts": [
+                {
+                    "host_id": "1h48",
+                    "dummy": true
+                },
+                {
+                    "labels": {
+                        "group2": true,
+                        "power": "strong"
+                    }
+                }
+            ]
+        }"#
+    );
 
     Ok(())
 }

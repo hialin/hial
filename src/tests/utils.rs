@@ -1,5 +1,4 @@
 use crate::base::*;
-use crate::*;
 use std::fmt::Debug;
 
 pub fn str_eval(root: Cell, path: &str) -> Res<Vec<String>> {

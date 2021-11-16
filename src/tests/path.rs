@@ -2,7 +2,6 @@ use super::utils::*;
 use crate::base::*;
 use crate::pathlang::path::{Expression, Filter, Path, PathItem, Relation};
 use crate::set_verbose;
-use crate::*;
 
 #[test]
 fn path_items() -> Res<()> {

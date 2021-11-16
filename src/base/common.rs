@@ -1,9 +1,5 @@
 use crate::base::value::*;
-use core::{
-    cmp::Ordering,
-    fmt::{self, Display},
-    hash::{Hash, Hasher},
-};
+use core::fmt::{self, Display};
 use std::borrow::Borrow;
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]

@@ -1,5 +1,4 @@
 use crate::base::*;
-use crate::*;
 
 #[test]
 fn test_files() -> Res<()> {

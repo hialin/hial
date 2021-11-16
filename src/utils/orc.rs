@@ -35,9 +35,9 @@ impl<T> Orc<T> {
         }
     }
 
-    pub fn get_mut(x: &mut Self) -> Option<&mut T> {
+    pub fn get_mut(x: &mut Self, max_allowed_references: usize) -> Option<&mut T> {
         let x = x.inner_mut();
-        if x.references.get() > 2 {
+        if x.references.get() > max_allowed_references as isize {
             None
         } else {
             Some(&mut x.value)
