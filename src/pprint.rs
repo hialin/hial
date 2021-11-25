@@ -94,7 +94,7 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
     write!(
         buffer,
         "{} {}",
-        cell.interpretation(),
+        cell.domain().interpretation(),
         cell.typ().unwrap_or_else(|e| {
             typ = format!("⚠{:?}⚠", e);
             &typ

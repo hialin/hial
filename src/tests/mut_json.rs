@@ -19,7 +19,7 @@ fn mutate_json() -> Res<()> {
     let path = "/hosts/[1]/labels/power";
     let newvalue = Value::Str("insanely strong");
     let mut f1 = json.path(path)?.first()?;
-    f1.set(newvalue.to_owned_value())?;
+    f1.set_value(newvalue.to_owned_value())?;
     // pprint::pprint(&json, 0, 0);
     assert_eq!(json.path(path)?.first()?.value()?, newvalue);
     Ok(())
@@ -48,29 +48,31 @@ fn mutate_and_write_json() -> Res<()> {
 
     let path1 = "/hosts/[1]/labels/power";
     let newvalue = Value::Str("weak as putty");
-    json.path(path1)?.first()?.set(newvalue.to_owned_value())?;
+    json.path(path1)?
+        .first()?
+        .set_value(newvalue.to_owned_value())?;
 
     let path2 = "/hosts/[0]/host_id";
-    json.path(path2)?.first()?.set(OwnedValue::None)?;
+    json.path(path2)?.first()?.set_value(OwnedValue::None)?;
 
     // pprint::pprint(&json, 0, 0);
 
     assert_eq!(json.path(path1)?.first()?.value()?, newvalue);
     assert_eq!(json.path(path2)?.first()?.value()?, Value::None);
 
-    // json.domain().save_to_origin();
+    json.domain().save_to_origin()?;
     assert_eq!(
-        json_original.value()?,
+        json_original.value()?.to_string(),
         r#"{
             "hosts": [
                 {
-                    "host_id": "1h48",
+                    "host_id": null,
                     "dummy": true
                 },
                 {
                     "labels": {
                         "group2": true,
-                        "power": "strong"
+                        "power": "weak as putty"
                     }
                 }
             ]

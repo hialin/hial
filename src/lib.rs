@@ -26,26 +26,6 @@ mod tests;
 // pub use base::rust_api;
 // pub use base::value::{Int, OwnedValue, Value};
 
-#[macro_export]
-macro_rules! guard_ok {
-    ($var:expr, $err:ident => $else_block:expr) => {
-        match $var {
-            Ok(x) => x,
-            Err($err) => $else_block,
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! guard_some {
-    ($var:expr, $else_block:expr) => {
-        match $var {
-            Some(x) => x,
-            None => $else_block,
-        }
-    };
-}
-
 pub static mut VERBOSE: bool = false;
 
 #[macro_export]

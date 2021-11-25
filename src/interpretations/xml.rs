@@ -13,7 +13,11 @@ impl InDomain for Domain {
     type Cell = Cell;
     type Group = Group;
 
-    fn root(self: &Rc<Self>) -> Res<Cell> {
+    fn interpretation(&self) -> &str {
+        "xml"
+    }
+
+    fn root(&self) -> Res<Cell> {
         Ok(Cell {
             group: Group {
                 domain: self.clone(),
@@ -32,7 +36,7 @@ pub struct Cell {
 
 #[derive(Clone, Debug)]
 pub struct Group {
-    domain: Rc<Domain>,
+    domain: Domain,
     nodes: NodeGroup,
 }
 
@@ -239,7 +243,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
 impl InCell for Cell {
     type Domain = Domain;
 
-    fn domain(&self) -> &Rc<Self::Domain> {
+    fn domain(&self) -> &Domain {
         &self.group.domain
     }
 

@@ -9,7 +9,10 @@ use std::rc::Rc;
 //       @headers/...
 
 #[derive(Clone, Debug)]
-pub struct ResponseDomain {
+pub struct Domain(Rc<Response>);
+
+#[derive(Debug)]
+pub struct Response {
     status: i16,
     reason: String,
     headers: VecMap<String, Vec<String>>,
@@ -33,7 +36,7 @@ pub enum GroupKind {
 #[derive(Clone, Debug)]
 pub struct Group {
     kind: GroupKind,
-    response: Rc<ResponseDomain>,
+    response: Domain,
 }
 
 pub fn from_string(url: &str) -> Res<Cell> {
@@ -61,17 +64,17 @@ pub fn from_string(url: &str) -> Res<Cell> {
     if status >= 400 {
         eprintln!("Error: http call failed: {} = {} {}", url, status, reason);
     }
-    let domain = Rc::new(ResponseDomain {
+    let domain = Domain(Rc::new(Response {
         status,
         reason,
         headers,
         body: response.bytes()?.as_ref().to_vec(),
-    });
+    }));
     domain.root()
 }
 
 pub fn to_string(cell: &Cell) -> Res<String> {
-    let bytes = &*cell.group.response.body;
+    let bytes = &*cell.group.response.0.body;
     let string = String::from_utf8(bytes.into());
     match string {
         Ok(s) => Ok(s),
@@ -79,11 +82,15 @@ pub fn to_string(cell: &Cell) -> Res<String> {
     }
 }
 
-impl InDomain for ResponseDomain {
+impl InDomain for Domain {
     type Cell = Cell;
     type Group = Group;
 
-    fn root(self: &Rc<Self>) -> Res<Self::Cell> {
+    fn interpretation(&self) -> &str {
+        "http"
+    }
+
+    fn root(&self) -> Res<Self::Cell> {
         Ok(Cell {
             group: Group {
                 kind: GroupKind::Root,
@@ -95,9 +102,9 @@ impl InDomain for ResponseDomain {
 }
 
 impl InCell for Cell {
-    type Domain = ResponseDomain;
+    type Domain = Domain;
 
-    fn domain(&self) -> &Rc<Self::Domain> {
+    fn domain(&self) -> &Self::Domain {
         &self.group.response
     }
 
@@ -125,7 +132,7 @@ impl InCell for Cell {
             (GroupKind::Status, 0) => Ok("code"),
             (GroupKind::Status, 1) => Ok("reason"),
             (GroupKind::Headers, _) => {
-                if let Some((k, _)) = self.group.response.headers.at(self.pos) {
+                if let Some((k, _)) = self.group.response.0.headers.at(self.pos) {
                     return Ok(k);
                 }
                 HErr::internal(format!("bad pos in headers: {}", self.pos)).into()
@@ -136,17 +143,17 @@ impl InCell for Cell {
 
     fn value(&self) -> Res<Value> {
         match (&self.group.kind, self.pos) {
-            (GroupKind::Root, 0) => Ok(Value::Bytes(&self.group.response.body)),
+            (GroupKind::Root, 0) => Ok(Value::Bytes(&self.group.response.0.body)),
             (GroupKind::Attr, 0) => Ok(Value::None),
             (GroupKind::Attr, 1) => Ok(Value::None),
-            (GroupKind::Status, 0) => Ok(Value::Int(Int::I32(self.group.response.status as i32))),
-            (GroupKind::Status, 1) => Ok(if self.group.response.reason.is_empty() {
+            (GroupKind::Status, 0) => Ok(Value::Int(Int::I32(self.group.response.0.status as i32))),
+            (GroupKind::Status, 1) => Ok(if self.group.response.0.reason.is_empty() {
                 Value::None
             } else {
-                Value::Str(&self.group.response.reason)
+                Value::Str(&self.group.response.0.reason)
             }),
             (GroupKind::Headers, _) => {
-                let header_values = if let Some(hv) = self.group.response.headers.at(self.pos) {
+                let header_values = if let Some(hv) = self.group.response.0.headers.at(self.pos) {
                     hv.1
                 } else {
                     return Err(HErr::Http(format!("logic error")));
@@ -183,7 +190,7 @@ impl InCell for Cell {
 }
 
 impl InGroup for Group {
-    type Domain = ResponseDomain;
+    type Domain = Domain;
     // type SelectIterator = std::vec::IntoIter<Res<Cell>>;
 
     fn label_type(&self) -> LabelType {
@@ -198,7 +205,7 @@ impl InGroup for Group {
             GroupKind::Root => 0,
             GroupKind::Attr => 2,
             GroupKind::Status => 2,
-            GroupKind::Headers => self.response.headers.len(),
+            GroupKind::Headers => self.response.0.headers.len(),
         }
     }
 
@@ -212,7 +219,7 @@ impl InGroup for Group {
                 group: self.clone(),
                 pos: index,
             }),
-            (GroupKind::Headers, i) if i < self.response.headers.len() => Ok(Cell {
+            (GroupKind::Headers, i) if i < self.response.0.headers.len() => Ok(Cell {
                 group: self.clone(),
                 pos: index,
             }),
@@ -242,7 +249,7 @@ impl InGroup for Group {
             (GroupKind::Headers, sel) => match sel {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
                 Selector::Str(k) => {
-                    if let Some((i, _, _)) = self.response.headers.get(k) {
+                    if let Some((i, _, _)) = self.response.0.headers.get(k) {
                         Ok(Cell {
                             group: self.clone(),
                             pos: i,

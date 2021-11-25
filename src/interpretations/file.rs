@@ -9,7 +9,10 @@ use std::{
 };
 
 #[derive(Clone, Debug)]
-pub struct Domain {
+pub struct Domain(Rc<DomainData>);
+
+#[derive(Debug)]
+pub struct DomainData {
     file_map: HashMap<PathBuf, Rc<Vec<Res<FileEntry>>>>,
     root_path: PathBuf,
     root_pos: u32,
@@ -23,7 +26,7 @@ pub struct Cell {
 
 #[derive(Clone, Debug)]
 pub struct Group {
-    domain: Rc<Domain>,
+    domain: Domain,
     files: Rc<Vec<Res<FileEntry>>>,
     attribute_group_file_pos: u32,
 }
@@ -43,63 +46,25 @@ struct Metadata {
     is_link: bool,
 }
 
-pub fn from_string_path(path: &str) -> Res<Cell> {
-    from_path(PathBuf::from(path))
-}
-
-fn from_path(path: PathBuf) -> Res<Cell> {
-    let path = path.canonicalize()?;
-    if !path.exists() {
-        return NotFound::NoResult(format!("file not found: {:?}", path)).into();
-    }
-
-    let mut siblings = vec![];
-    let mut pos = 0;
-    if let Some(parent) = path.clone().parent() {
-        read_files(parent, &mut siblings)?;
-        let pos_res = siblings
-            .iter()
-            .position(|f| f.is_ok() && f.as_ref().unwrap().path == path);
-        pos = match pos_res {
-            Some(pos) => pos,
-            None => {
-                return NotFound::NoResult(format!("file removed concurrently: {:?}", path)).into();
-            }
-        };
-    } else {
-        let os_name = path
-            .file_name()
-            .map(|x| x.to_os_string())
-            .unwrap_or(OsString::new());
-        let metadata = fs::metadata(path.clone())
-            .map(|xmd| Metadata {
-                name: os_name.to_string_lossy().to_string(),
-                os_name,
-                filesize: xmd.len(),
-                is_dir: xmd.is_dir(),
-                is_link: xmd.file_type().is_symlink(),
-            })
-            .map_err(HErr::from);
-        siblings.push(Ok(FileEntry {
-            path: path.clone(),
-            metadata,
-        }));
-    }
-    let roots = Rc::new(siblings);
-    let domain = Rc::new(Domain {
-        file_map: HashMap::from([(path.clone(), roots.clone())]),
-        root_pos: pos as u32,
-        root_path: path,
-    });
-    domain.root()
-}
-
 impl InDomain for Domain {
     type Cell = Cell;
     type Group = Group;
 
-    fn root(self: &Rc<Self>) -> Res<Self::Cell> {
-        let files = guard_some!(self.file_map.get(self.root_path.as_path()), {
+    fn interpretation(&self) -> &str {
+        "file"
+    }
+
+    fn new_from(source_interpretation: &str, source: DataSource) -> Res<Self> {
+        if let DataSource::File(path) = source {
+            from_path(path.to_path_buf())
+        } else {
+            Err(HErr::IncompatibleSource("".into()))
+        }
+    }
+
+    fn write_to(&self, destination: DataDestination) {}
+    fn root(&self) -> Res<Self::Cell> {
+        let files = guard_some!(self.0.file_map.get(self.0.root_path.as_path()), {
             return HErr::internal("").into();
         })
         .clone();
@@ -111,7 +76,7 @@ impl InDomain for Domain {
         };
         Ok(Cell {
             group,
-            pos: self.root_pos,
+            pos: self.0.root_pos,
         })
     }
 }
@@ -119,7 +84,7 @@ impl InDomain for Domain {
 impl InCell for Cell {
     type Domain = Domain;
 
-    fn domain(&self) -> &Rc<Self::Domain> {
+    fn domain(&self) -> &Self::Domain {
         &self.group.domain
     }
 
@@ -283,6 +248,52 @@ impl InGroup for Group {
             }
         }
     }
+}
+
+pub fn from_path(path: PathBuf) -> Res<Domain> {
+    let path = path.canonicalize()?;
+    if !path.exists() {
+        return NotFound::NoResult(format!("file not found: {:?}", path)).into();
+    }
+
+    let mut siblings = vec![];
+    let mut pos = 0;
+    if let Some(parent) = path.clone().parent() {
+        read_files(parent, &mut siblings)?;
+        let pos_res = siblings
+            .iter()
+            .position(|f| f.is_ok() && f.as_ref().unwrap().path == path);
+        pos = match pos_res {
+            Some(pos) => pos,
+            None => {
+                return NotFound::NoResult(format!("file removed concurrently: {:?}", path)).into();
+            }
+        };
+    } else {
+        let os_name = path
+            .file_name()
+            .map(|x| x.to_os_string())
+            .unwrap_or(OsString::new());
+        let metadata = fs::metadata(path.clone())
+            .map(|xmd| Metadata {
+                name: os_name.to_string_lossy().to_string(),
+                os_name,
+                filesize: xmd.len(),
+                is_dir: xmd.is_dir(),
+                is_link: xmd.file_type().is_symlink(),
+            })
+            .map_err(HErr::from);
+        siblings.push(Ok(FileEntry {
+            path: path.clone(),
+            metadata,
+        }));
+    }
+    let roots = Rc::new(siblings);
+    Ok(Domain(Rc::new(DomainData {
+        file_map: HashMap::from([(path.clone(), roots.clone())]),
+        root_pos: pos as u32,
+        root_path: path,
+    })))
 }
 
 pub fn get_path(file: &Cell) -> Res<&Path> {

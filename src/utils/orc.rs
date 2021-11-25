@@ -19,7 +19,7 @@ impl<T> Deref for Orc<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner().value
+        unsafe { &self.inner().value }
     }
 }
 
@@ -35,7 +35,7 @@ impl<T> Orc<T> {
         }
     }
 
-    pub fn get_mut(x: &mut Self, max_allowed_references: usize) -> Option<&mut T> {
+    pub unsafe fn get_mut(x: &mut Self, max_allowed_references: usize) -> Option<&mut T> {
         let x = x.inner_mut();
         if x.references.get() > max_allowed_references as isize {
             None
@@ -45,49 +45,47 @@ impl<T> Orc<T> {
     }
 
     pub fn count(x: &Self) -> isize {
-        let x = x.inner();
+        let x = unsafe { x.inner() };
         x.references.get()
     }
 
     #[inline(always)]
-    fn inner(&self) -> &OrcBox<T> {
-        // this is safe
-        unsafe { self.ptr.as_ref() }
+    unsafe fn inner(&self) -> &OrcBox<T> {
+        self.ptr.as_ref()
     }
 
     #[inline(always)]
-    fn inner_mut(&mut self) -> &mut OrcBox<T> {
-        // this is safe
-        unsafe { self.ptr.as_mut() }
+    unsafe fn inner_mut(&mut self) -> &mut OrcBox<T> {
+        self.ptr.as_mut()
     }
 
     #[inline(always)]
     fn add_reference(&self) -> isize {
-        let mut references = self.inner().references.get();
+        let mut references = unsafe { self.inner() }.references.get();
         // has at least one from constructor
         if references > 0 {
             references += 1;
-            self.inner().references.set(references);
+            unsafe { self.inner() }.references.set(references);
         }
         references
     }
 
     #[inline(always)]
     fn remove_reference(&self) -> isize {
-        let mut references = self.inner().references.get();
+        let mut references = unsafe { self.inner() }.references.get();
         if references > 0 {
             references -= 1;
-            self.inner().references.set(references);
+            unsafe { self.inner() }.references.set(references);
         }
         references
     }
 
     fn to_manual(&self) {
-        self.inner().references.set(-1);
+        unsafe { self.inner() }.references.set(-1);
     }
 
     fn free(&self) {
-        if self.inner().references.get() == -1 {
+        if unsafe { self.inner() }.references.get() == -1 {
             unsafe { Box::from_raw(self.ptr.as_ptr()) };
         }
     }

@@ -315,10 +315,6 @@ impl<'s> EvalIter<'s> {
                     continue;
                 });
 
-                if !Self::eval_filters_match(&subcell, path_item) {
-                    continue;
-                }
-
                 // println!(
                 //     "push by field: {}:{} : {:?}",
                 //     subcell.label().unwrap_or(""),

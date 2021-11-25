@@ -4,21 +4,25 @@ use std::rc::Rc;
 use url::ParseError;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Domain(Url);
+pub struct Domain(Rc<Url>);
 impl InDomain for Domain {
     type Cell = Cell;
-    type Group = Cell;
+    type Group = VoidGroup<Domain>;
 
-    fn root(self: &Rc<Self>) -> Res<Self::Cell> {
+    fn interpretation(&self) -> &str {
+        "url"
+    }
+
+    fn root(&self) -> Res<Self::Cell> {
         Ok(Cell(self.clone()))
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Cell(Rc<Domain>);
+pub struct Cell(Domain);
 
 pub fn from_string(s: &str) -> Res<Cell> {
-    Rc::new(Domain(Url::parse(s)?)).root()
+    Domain(Rc::new(Url::parse(s)?)).root()
 }
 
 impl Cell {
@@ -30,7 +34,7 @@ impl Cell {
 impl InCell for Cell {
     type Domain = Domain;
 
-    fn domain(&self) -> &Rc<Self::Domain> {
+    fn domain(&self) -> &Domain {
         &self.0
     }
 
@@ -50,35 +54,12 @@ impl InCell for Cell {
         Ok(Value::Str(self.0 .0.as_str()))
     }
 
-    fn sub(&self) -> Res<Cell> {
+    fn sub(&self) -> Res<VoidGroup<Domain>> {
         NotFound::NoGroup(format!("/")).into()
     }
 
-    fn attr(&self) -> Res<Cell> {
+    fn attr(&self) -> Res<VoidGroup<Domain>> {
         NotFound::NoGroup(format!("@")).into()
-    }
-}
-
-impl InGroup for Cell {
-    type Domain = Domain;
-
-    fn label_type(&self) -> LabelType {
-        LabelType {
-            is_indexed: false,
-            unique_labels: false,
-        }
-    }
-
-    fn len(&self) -> usize {
-        0
-    }
-
-    fn at(&self, index: usize) -> Res<Cell> {
-        NotFound::NoResult(format!("")).into()
-    }
-
-    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
-        NotFound::NoResult(format!("")).into()
     }
 }
 

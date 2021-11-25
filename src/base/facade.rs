@@ -1,180 +1,120 @@
-use crate::base::*;
-use crate::{interpretations::*, pathlang::eval::EvalIter, pathlang::Path};
-use std::rc::Rc;
+use crate::{
+    base::*, interpretations::*, pathlang::eval::EvalIter, pathlang::Path,
+    pub_enumerated_dynamic_type,
+};
 
-#[derive(Clone, Debug)]
-#[repr(C)]
-pub enum Domain {
-    OwnedValue(Rc<OwnedValue>),
-    // File(file::Cell),
-    Json(Rc<json::Domain>),
-    // Toml(toml::Cell),
-    // Yaml(yaml::Cell),
-    // Xml(xml::Cell),
-    // Url(url::Cell),
-    // Http(http::Cell),
-    // TreeSitter(treesitter::Cell),
+pub_enumerated_dynamic_type! {
+    enum Domain {
+        OwnedValue(ownedvalue::Domain),
+        File(file::Domain),
+        Json(json::Domain),
+        Toml(toml::Domain),
+        Yaml(yaml::Domain),
+        Xml(xml::Domain),
+        Url(url::Domain),
+        Http (http::Domain),
+        TreeSitter (treesitter::Domain),
+    }
+    with_domain
 }
 
-#[derive(Clone, Debug)]
-#[repr(C)]
-pub enum Cell {
-    OwnedValue(Rc<OwnedValue>),
-    File(file::Cell),
-    Json(json::Cell),
-    Toml(toml::Cell),
-    Yaml(yaml::Cell),
-    Xml(xml::Cell),
-    Url(url::Cell),
-    Http(http::Cell),
-    TreeSitter(treesitter::Cell),
+pub_enumerated_dynamic_type! {
+    enum Cell {
+        Field(Field),
+        OwnedValue(ownedvalue::Cell),
+        File(file::Cell),
+        Json(json::Cell),
+        Toml(toml::Cell),
+        Yaml(yaml::Cell),
+        Xml(xml::Cell),
+        Url(url::Cell),
+        Http(http::Cell),
+        TreeSitter(treesitter::Cell),
+    }
+    with_cell
 }
 
-#[derive(Clone, Debug)]
-pub enum Group {
-    Elevation(ElevationGroup),
-    Field(Cell),
-    Mixed(Vec<Cell>),
+pub_enumerated_dynamic_type! {
+    enum Group {
+        // Void(VoidGroup<VoidDomain<>>),
+        Elevation(ElevationGroup),
+        Field(Field),
+        // Mixed(Vec<Cell>),
 
-    File(file::Group),
-    Json(json::Group),
-    Toml(toml::Group),
-    Yaml(yaml::Group),
-    Xml(xml::Group),
-    Url(url::Cell),
-    Http(http::Group),
-    TreeSitter(treesitter::Group),
+        OwnedValue(VoidGroup<ownedvalue::Domain>),
+        File(file::Group),
+        Json(json::Group),
+        Toml(toml::Group),
+        Yaml(yaml::Group),
+        Xml(xml::Group),
+        Url(VoidGroup<url::Domain>),
+        Http(http::Group),
+        TreeSitter(treesitter::Group),
+    }
+    with_group
 }
 
 impl Domain {
     pub fn root(&self) -> Res<Cell> {
-        match self {
-            Domain::OwnedValue(x) => Ok(Cell::OwnedValue(x.clone())),
-            Domain::Json(x) => Ok(Cell::Json(x.root()?)),
-            // _ => todo!(),
-        }
+        with_domain!(self, |x| { Ok(Cell::from(x.root()?)) })
     }
 
     pub fn save_to_origin(&self) -> Res<()> {
-        Ok(())
+        todo!()
     }
-}
 
-impl From<String> for Cell {
-    fn from(s: String) -> Cell {
-        Cell::OwnedValue(Rc::new(OwnedValue::String(s)))
+    pub fn interpretation(&self) -> &str {
+        with_domain!(self, |x| { x.interpretation() })
     }
 }
 
 impl From<OwnedValue> for Cell {
-    fn from(ov: OwnedValue) -> Cell {
-        Cell::OwnedValue(Rc::new(ov))
+    fn from(ov: OwnedValue) -> Self {
+        Cell::from(ownedvalue::Cell::from(ov))
+    }
+}
+
+impl From<Value<'_>> for Cell {
+    fn from(v: Value) -> Self {
+        Cell::from(ownedvalue::Cell::from(v))
+    }
+}
+
+impl From<String> for Cell {
+    fn from(s: String) -> Self {
+        Cell::from(ownedvalue::Cell::from(s))
     }
 }
 
 impl Cell {
     pub fn typ(&self) -> Res<&str> {
-        match self {
-            Cell::OwnedValue(_) => Ok("value"),
-            Cell::File(x) => Ok(x.typ()?),
-            Cell::Json(x) => Ok(x.typ()?),
-            Cell::Toml(x) => Ok(x.typ()?),
-            Cell::Yaml(x) => Ok(x.typ()?),
-            Cell::Xml(x) => Ok(x.typ()?),
-            Cell::Url(x) => Ok(x.typ()?),
-            Cell::Http(x) => Ok(x.typ()?),
-            Cell::TreeSitter(x) => Ok(x.typ()?),
-        }
+        with_cell!(self, |x| { Ok(x.typ()?) })
     }
 
     pub fn index(&self) -> Res<usize> {
-        match self {
-            Cell::OwnedValue(_) => NotFound::NoIndex().into(),
-            Cell::File(x) => Ok(x.index()?),
-            Cell::Json(x) => Ok(x.index()?),
-            Cell::Toml(x) => Ok(x.index()?),
-            Cell::Yaml(x) => Ok(x.index()?),
-            Cell::Xml(x) => Ok(x.index()?),
-            Cell::Url(x) => Ok(x.index()?),
-            Cell::Http(x) => Ok(x.index()?),
-            Cell::TreeSitter(x) => Ok(x.index()?),
-        }
+        with_cell!(self, |x| { Ok(x.index()?) })
     }
 
     pub fn label(&self) -> Res<&str> {
-        match self {
-            Cell::OwnedValue(_) => NotFound::NoLabel().into(),
-            Cell::File(x) => Ok(x.label()?),
-            Cell::Json(x) => Ok(x.label()?),
-            Cell::Toml(x) => Ok(x.label()?),
-            Cell::Yaml(x) => Ok(x.label()?),
-            Cell::Xml(x) => Ok(x.label()?),
-            Cell::Url(x) => Ok(x.label()?),
-            Cell::Http(x) => Ok(x.label()?),
-            Cell::TreeSitter(x) => Ok(x.label()?),
-        }
+        with_cell!(self, |x| { Ok(x.label()?) })
     }
 
     pub fn value(&self) -> Res<Value> {
-        match self {
-            Cell::OwnedValue(ov) => Ok((&**ov).into()),
-            Cell::File(x) => Ok(x.value()?),
-            Cell::Json(x) => Ok(x.value()?),
-            Cell::Toml(x) => Ok(x.value()?),
-            Cell::Yaml(x) => Ok(x.value()?),
-            Cell::Xml(x) => Ok(x.value()?),
-            Cell::Url(x) => Ok(x.value()?),
-            Cell::Http(x) => Ok(x.value()?),
-            Cell::TreeSitter(x) => Ok(x.value()?),
-        }
+        with_cell!(self, |x| { Ok(x.value()?) })
     }
 
     pub fn sub(&self) -> Res<Group> {
-        match self {
-            Cell::OwnedValue(_) => NotFound::NoGroup("/".into()).into(),
-            Cell::File(x) => Ok(Group::File(x.sub()?)),
-            Cell::Json(x) => Ok(Group::Json(x.sub()?)),
-            Cell::Toml(x) => Ok(Group::Toml(x.sub()?)),
-            Cell::Yaml(x) => Ok(Group::Yaml(x.sub()?)),
-            Cell::Xml(x) => Ok(Group::Xml(x.sub()?)),
-            Cell::Url(x) => Ok(Group::Url(x.sub()?)),
-            Cell::Http(x) => Ok(Group::Http(x.sub()?)),
-            Cell::TreeSitter(x) => Ok(Group::TreeSitter(x.sub()?)),
-        }
+        with_cell!(self, |x| { Ok(Group::from(x.sub()?)) })
     }
 
     pub fn attr(&self) -> Res<Group> {
-        match self {
-            Cell::OwnedValue(_) => NotFound::NoGroup("@".into()).into(),
-            Cell::File(x) => Ok(Group::File(x.attr()?)),
-            Cell::Json(x) => Ok(Group::Json(x.attr()?)),
-            Cell::Toml(x) => Ok(Group::Toml(x.attr()?)),
-            Cell::Yaml(x) => Ok(Group::Yaml(x.attr()?)),
-            Cell::Xml(x) => Ok(Group::Xml(x.attr()?)),
-            Cell::Url(x) => Ok(Group::Url(x.attr()?)),
-            Cell::Http(x) => Ok(Group::Http(x.attr()?)),
-            Cell::TreeSitter(x) => Ok(Group::TreeSitter(x.attr()?)),
-        }
-    }
-
-    pub fn interpretation(&self) -> &str {
-        match self {
-            Cell::OwnedValue(_) => "value",
-            Cell::File(_) => "file",
-            Cell::Json(_) => "json",
-            Cell::Toml(_) => "toml",
-            Cell::Yaml(_) => "yaml",
-            Cell::Xml(_) => "xml",
-            Cell::Url(_) => "url",
-            Cell::Http(_) => "http",
-            Cell::TreeSitter(cell) => cell.language(),
-        }
+        with_cell!(self, |x| { Ok(Group::from(x.attr()?)) })
     }
 
     pub fn standard_interpretation(&self) -> Option<&str> {
         match self {
             Cell::OwnedValue(ov) => {
-                if let OwnedValue::String(s) = &**ov {
+                if let Ok(Value::Str(s)) = ov.value() {
                     if s.starts_with("http://") || s.starts_with("https://") {
                         return Some("http");
                     } else if s.starts_with(".") || s.starts_with("/") {
@@ -212,7 +152,10 @@ impl Cell {
     }
 
     pub fn field(&self) -> Res<Group> {
-        Ok(Group::Field(self.clone()))
+        Ok(Group::Field(Field(
+            Box::new(self.clone()),
+            FieldType::Value,
+        )))
     }
 
     pub fn be(self, interpretation: &str) -> Res<Cell> {
@@ -226,127 +169,54 @@ impl Cell {
         })
     }
 
-    pub fn set(&mut self, ov: OwnedValue) -> Res<()> {
-        match self {
-            Cell::OwnedValue(x) => *x = Rc::new(ov),
-            Cell::Json(x) => x.set(ov)?,
-            _ => return HErr::internal("").into(),
-        }
-        Ok(())
+    pub fn set_value(&mut self, ov: OwnedValue) -> Res<()> {
+        with_cell!(self, |x| { x.set_value(ov) })
+    }
+
+    pub fn set_label(&mut self, ov: OwnedValue) -> Res<()> {
+        with_cell!(self, |x| { x.set_label(ov) })
     }
 
     pub fn domain(&self) -> Domain {
-        match self {
-            Cell::OwnedValue(x) => Domain::OwnedValue(x.clone()),
-            Cell::Json(x) => Domain::Json(x.domain().clone()),
-            _ => todo!(),
-        }
+        with_cell!(self, |x| { Domain::from(x.domain().clone()) })
     }
+
+    pub fn as_data_source(&self) -> Option<Res<DataSource>> {
+        with_cell!(self, |x| { x.as_data_source() })
+    }
+
+    // pub fn as_data_destination(&mut self) -> Option<Res<DataDestination>> {
+    //     with_cell!(self, |x| { x.as_data_destination() })
+    // }
 }
 
 impl Group {
     pub fn label_type(&self) -> LabelType {
-        match self {
-            Group::Elevation(x) => x.label_type(),
-            Group::Field(cell) => LabelType {
-                is_indexed: false,
-                unique_labels: true,
-            },
-            Group::Mixed(_) => LabelType {
-                is_indexed: false,
-                unique_labels: false,
-            },
-            Group::File(x) => x.label_type(),
-            Group::Json(x) => x.label_type(),
-            Group::Toml(x) => x.label_type(),
-            Group::Yaml(x) => x.label_type(),
-            Group::Xml(x) => x.label_type(),
-            Group::Url(x) => x.label_type(),
-            Group::Http(x) => x.label_type(),
-            Group::TreeSitter(x) => x.label_type(),
-        }
+        with_group!(self, |x| { x.label_type() })
     }
 
     pub fn len(&self) -> usize {
-        match self {
-            Group::Elevation(x) => x.len(),
-            Group::Field(cell) => 4,
-            Group::Mixed(x) => x.len(),
-            Group::File(x) => x.len(),
-            Group::Json(x) => x.len(),
-            Group::Toml(x) => x.len(),
-            Group::Yaml(x) => x.len(),
-            Group::Xml(x) => x.len(),
-            Group::Url(x) => x.len(),
-            Group::Http(x) => x.len(),
-            Group::TreeSitter(x) => x.len(),
-        }
+        with_group!(self, |x| { x.len() })
     }
 
     pub fn at(&self, index: usize) -> Res<Cell> {
-        match self {
-            Group::Elevation(x) => x.at(index),
-            Group::Field(cell) => {
-                if index == 0 {
-                    return cell.value().map(|v| Cell::from(v.to_owned_value()));
-                } else if index == 1 {
-                    return cell.label().map(|s| Cell::from(s.to_owned()));
-                } else if index == 2 {
-                    return cell.typ().map(|s| Cell::from(s.to_owned()));
-                } else if index == 3 {
-                    return cell
-                        .index()
-                        .map(|i| Cell::from(OwnedValue::Int(Int::U64(i as u64))));
-                }
-                Err(HErr::BadArgument(format!(
-                    "field index must be in 0..<4; was: {}",
-                    index
-                )))
-            }
-            Group::Mixed(x) => x
-                .get(index)
-                .map(|x| x.clone())
-                .ok_or_else(|| NotFound::NoResult(format!("{}", index)).into()),
-            Group::File(x) => Ok(Cell::File(x.at(index)?)),
-            Group::Json(x) => Ok(Cell::Json(x.at(index)?)),
-            Group::Toml(x) => Ok(Cell::Toml(x.at(index)?)),
-            Group::Yaml(x) => Ok(Cell::Yaml(x.at(index)?)),
-            Group::Xml(x) => Ok(Cell::Xml(x.at(index)?)),
-            Group::Url(x) => Ok(Cell::Url(x.at(index)?)),
-            Group::Http(x) => Ok(Cell::Http(x.at(index)?)),
-            Group::TreeSitter(x) => Ok(Cell::TreeSitter(x.at(index)?)),
-        }
+        with_group!(self, |x| { Ok(Cell::from(x.at(index)?)) })
     }
 
     pub fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
         let key = key.into();
         match self {
             Group::Elevation(elevation_group) => elevation_group.get(key),
-            Group::Field(_) => {
-                if let Selector::Str(key) = key {
-                    if key == "value" {
-                        return self.at(0);
-                    } else if key == "label" {
-                        return self.at(1);
-                    } else if key == "type" {
-                        return self.at(2);
-                    } else if key == "index" {
-                        return self.at(3);
-                    }
-                }
-                Err(HErr::BadArgument(format!(
-                    "field keys must be one of [value, label, type, index]; was: {}",
-                    key
-                )))
-            }
-            Group::Mixed(v) => {
-                for x in v {
-                    if Selector::Str(x.label()?) == key {
-                        return Ok(x.clone());
-                    }
-                }
-                NotFound::NoResult(format!("")).into()
-            }
+            Group::Field(field) => Ok(Cell::Field(field.clone())),
+            // Group::Mixed(v) => {
+            //     for x in v {
+            //         if Selector::Str(x.label()?) == key {
+            //             return Ok(x.clone());
+            //         }
+            //     }
+            //     NotFound::NoResult(format!("")).into()
+            // }
+            Group::OwnedValue(x) => Ok(Cell::OwnedValue(x.get(key)?)),
             Group::File(x) => Ok(Cell::File(x.get(key)?)),
             Group::Json(x) => Ok(Cell::Json(x.get(key)?)),
             Group::Toml(x) => Ok(Cell::Toml(x.get(key)?)),
@@ -358,6 +228,12 @@ impl Group {
         }
     }
 }
+
+// impl From<intra::VoidGroup<facade::Domain>> for Group {
+//     fn from(_: VoidGroup<Domain>) -> Self {
+//         Group::Void(VoidGroup::from(()))
+//     }
+// }
 
 impl IntoIterator for Group {
     type Item = Res<Cell>;

@@ -5,18 +5,24 @@ use crate::*;
 #[test]
 fn test_nested() -> Res<()> {
     set_verbose(true);
-    let mytext = "This is my yaml string";
-    let yaml_string = format!("mytext: {}", mytext);
-    let xml_string = format!("<xml><root>{}</root>", yaml_string);
-    let json_string = format!("{{\"one\": [ \"{}\" ] }}", xml_string);
+    let yxj = r#"{"one": ["<xml><root>mytext: This is my yaml string</root>"]}"#;
 
-    let cell = Cell::from(json_string)
+    let cell = Cell::from(OwnedValue::from(yxj.to_string()))
+        .path("^json/one/[0]#value^xml")?
+        .first()?;
+    assert_eq!(
+        cell.value()?,
+        Value::Str("xml") // Value::Str("mytext: This is my yaml string")
+    );
+    println!("ok");
+
+    let cell = Cell::from(OwnedValue::from(yxj.to_string()))
         .path("^json/one/[0]#value^xml/root/[0]#value^yaml/mytext#value")?
         .first()?;
 
     pprint(&cell, 0, 0);
 
-    assert_eq!(cell.value()?, Value::Str(mytext));
+    assert_eq!(cell.value()?, Value::Str("This is my yaml string"));
 
     Ok(())
 }

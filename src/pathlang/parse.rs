@@ -1,12 +1,13 @@
 use crate::{base::*, guard_ok, pathlang::parseurl::*, pathlang::path::*};
 use nom::character::complete::space0;
+use nom::error::VerboseErrorKind;
 use nom::{
     branch::alt,
     bytes::complete::{escaped, tag},
     character::complete::{digit1, none_of, one_of},
-    combinator::{all_consuming, not, opt, recognize},
+    combinator::{all_consuming, opt, recognize},
     error::{context, VerboseError},
-    multi::{many0, many0_count, many1},
+    multi::{many0, many1},
     sequence::{delimited, terminated, tuple},
     IResult,
 };
@@ -94,11 +95,7 @@ fn value(input: &str) -> NomRes<&str, Value> {
 }
 
 fn value_string(input: &str) -> NomRes<&str, Value> {
-    context(
-        "value_string",
-        alt((parse_quoted_single, parse_quoted_double)),
-    )(input)
-    .map(|(next_input, res)| (next_input, Value::Str(res)))
+    context("value_string", string)(input).map(|(next_input, res)| (next_input, Value::Str(res)))
 }
 
 fn value_uint(input: &str) -> NomRes<&str, Value> {
@@ -108,6 +105,11 @@ fn value_uint(input: &str) -> NomRes<&str, Value> {
             Err(_) => Err(nom::Err::Error(VerboseError { errors: vec![] })),
         })
         .map(|(next_input, num)| (next_input, Value::Int(Int::U64(num))))
+}
+
+fn string(input: &str) -> NomRes<&str, &str> {
+    context("string", alt((parse_quoted_single, parse_quoted_double)))(input)
+        .map(|(next_input, res)| (next_input, res))
 }
 
 fn parse_quoted_single(input: &str) -> NomRes<&str, &str> {
@@ -120,17 +122,6 @@ fn parse_quoted_double(input: &str) -> NomRes<&str, &str> {
     let esc = escaped(none_of("\\\""), '\\', tag("\""));
     let esc_or_empty = alt((esc, tag("")));
     delimited(tag("\""), esc_or_empty, tag("\""))(input)
-}
-
-fn string(input: &str) -> NomRes<&str, &str> {
-    context(
-        "string",
-        alt((
-            delimited(tag("'"), many0_count(not(tag("'"))), tag("'")),
-            delimited(tag("\""), many0_count(not(tag("\""))), tag("\"")),
-        )),
-    )(input)
-    .map(|(next_input, res)| (next_input, &input[0..res]))
 }
 
 fn path_items(input: &str) -> NomRes<&str, Path> {
@@ -165,7 +156,16 @@ fn path_item(input: &str) -> NomRes<&str, PathItem> {
                 index: res.5,
                 filters: res.7,
             };
-            Ok((next_input, pi))
+            if pi.relation == Relation::Field && !pi.filters.is_empty() {
+                Err(nom::Err::Error(VerboseError {
+                    errors: vec![(
+                        next_input,
+                        VerboseErrorKind::Context("field relation cannot have filters"),
+                    )],
+                }))
+            } else {
+                Ok((next_input, pi))
+            }
         }
     })
 }

@@ -11,11 +11,16 @@ use std::{fs::File, path::Path};
 pub struct Domain {
     preroot: Orc<Vec<Node>>,
 }
+
 impl InDomain for Domain {
     type Cell = Cell;
     type Group = Group;
 
-    fn root(self: &Rc<Self>) -> Res<Self::Cell> {
+    fn interpretation(&self) -> &str {
+        "json"
+    }
+
+    fn root(&self) -> Res<Self::Cell> {
         Ok(Cell {
             group: Group {
                 domain: self.clone(),
@@ -46,7 +51,7 @@ pub struct Cell {
 
 #[derive(Clone, Debug)]
 pub struct Group {
-    domain: Rc<Domain>,
+    domain: Domain,
     nodes: NodeGroup,
 }
 
@@ -99,7 +104,7 @@ fn owned_value_to_node(v: OwnedValue) -> Res<Node> {
 impl InCell for Cell {
     type Domain = Domain;
 
-    fn domain(&self) -> &Rc<Self::Domain> {
+    fn domain(&self) -> &Self::Domain {
         &self.group.domain
     }
 
@@ -174,10 +179,10 @@ impl InCell for Cell {
         NotFound::NoGroup(format!("")).into()
     }
 
-    fn set(&mut self, v: OwnedValue) -> Res<()> {
+    fn set_value(&mut self, v: OwnedValue) -> Res<()> {
         match self.group.nodes {
             NodeGroup::Array(ref mut ra) => {
-                let a = guard_some!(Orc::get_mut(ra, 2), {
+                let a = guard_some!(unsafe { Orc::get_mut(ra, 2) }, {
                     return HErr::ExclusivityRequired("cannot set value".into()).into();
                 });
                 let x = guard_some!(a.get_mut(self.pos), {
@@ -187,7 +192,7 @@ impl InCell for Cell {
             }
 
             NodeGroup::Object(ref mut ro) => {
-                let o = guard_some!(Orc::get_mut(ro, 2), {
+                let o = guard_some!(unsafe { Orc::get_mut(ro, 2) }, {
                     return HErr::ExclusivityRequired("cannot set value".into()).into();
                 });
                 let x = guard_some!(o.at_mut(self.pos), {
@@ -204,13 +209,13 @@ impl InCell for Cell {
     fn delete(&mut self) -> Res<()> {
         match self.group.nodes {
             NodeGroup::Array(ref mut a) => {
-                let v = guard_some!(Orc::get_mut(a, 2), {
+                let v = guard_some!(unsafe { Orc::get_mut(a, 2) }, {
                     return HErr::ExclusivityRequired("cannot delete".into()).into();
                 });
                 v.remove(self.pos);
             }
             NodeGroup::Object(ref mut o) => {
-                let v = guard_some!(Orc::get_mut(o, 2), {
+                let v = guard_some!(unsafe { Orc::get_mut(o, 2) }, {
                     return HErr::ExclusivityRequired("cannot delete".into()).into();
                 });
                 v.remove(self.pos);

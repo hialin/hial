@@ -1,5 +1,6 @@
 use crate::{
     base::*,
+    interpretations::*,
     pathlang::{eval::EvalIter, parseurl::*},
 };
 use std::fmt::{Display, Formatter};
@@ -155,9 +156,19 @@ fn fmt_path_item(path_item: &PathItem, f: &mut Formatter<'_>) -> std::fmt::Resul
 impl<'a> CellRepresentation<'a> {
     pub fn eval(&self) -> Res<Cell> {
         match self {
-            CellRepresentation::Url(url) => Cell::from(url.to_string()).elevate()?.get("url"),
-            CellRepresentation::File(file) => Cell::from(file.to_string()).elevate()?.get("file"),
-            CellRepresentation::String(str) => Ok(Cell::from(str.to_string())),
+            CellRepresentation::Url(u) => {
+                let urlcell = url::from_string(&u.to_string())?;
+                Cell::Url(urlcell).elevate()?.get("url")
+            }
+            CellRepresentation::File(f) => {
+                let path = std::path::Path::new(f).to_path_buf();
+                Cell::File(file::from_path(path)?.root()?)
+                    .elevate()?
+                    .get("file")
+            }
+            CellRepresentation::String(str) => {
+                Ok(Cell::from(ownedvalue::Cell::from(str.to_string())))
+            }
         }
     }
 }

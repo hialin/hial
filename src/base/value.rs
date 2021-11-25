@@ -220,6 +220,12 @@ where
     }
 }
 
+impl From<String> for OwnedValue {
+    fn from(s: String) -> Self {
+        OwnedValue::String(s)
+    }
+}
+
 impl<'a> From<&'a OwnedValue> for Value<'a> {
     fn from(ov: &'a OwnedValue) -> Self {
         match ov {

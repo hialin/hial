@@ -13,7 +13,11 @@ impl InDomain for Domain {
     type Cell = Cell;
     type Group = Group;
 
-    fn root(self: &Rc<Self>) -> Res<Self::Cell> {
+    fn interpretation(&self) -> &str {
+        self.language
+    }
+
+    fn root(&self) -> Res<Self::Cell> {
         let cnode = node_to_cnode(self.tree.walk(), &self.source);
 
         let group = Group {
@@ -26,7 +30,7 @@ impl InDomain for Domain {
 
 #[derive(Clone, Debug)]
 pub struct Group {
-    domain: Rc<Domain>,
+    domain: Domain,
     // since the tree is in a Rc, the treecursor is valid on self's lifetime
     nodes: Rc<Vec<CNode>>,
 }
@@ -179,7 +183,7 @@ fn reshape_subs(value: &mut String, typ: &str, subs: &mut Vec<CNode>, source: &s
 impl InCell for Cell {
     type Domain = Domain;
 
-    fn domain(&self) -> &Rc<Self::Domain> {
+    fn domain(&self) -> &Domain {
         &self.group.domain
     }
 

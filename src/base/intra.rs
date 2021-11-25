@@ -1,24 +1,46 @@
 use super::*;
-use std::fmt::Debug;
-use std::ops::Deref;
-use std::rc::Rc;
+use std::marker::PhantomData;
+use std::{fmt::Debug, path::Path};
+
+#[derive(Clone, Debug)]
+pub enum DataSource<'s> {
+    File(&'s Path),
+    String(&'s str),
+}
+
+#[derive(Debug)]
+pub enum DataDestination<'s> {
+    File(&'s Path),
+    String(&'s mut String),
+}
 
 pub trait InDomain: Clone + Debug {
     type Cell: InCell;
     type Group: InGroup;
     // type Trace: InTrace;
 
-    fn root(self: &Rc<Self>) -> Res<Self::Cell>;
+    fn interpretation(&self) -> &str;
+
+    // fn accepts(source_interpretation: &str, source: DataSource) -> Res<bool>;
+    fn new_from(source_interpretation: &str, source: DataSource) -> Res<Self> {
+        todo!()
+    }
+
+    fn write_to(&self, destination: DataDestination) {
+        todo!()
+    }
+
+    fn root(&self) -> Res<Self::Cell>;
     // fn cell(&self, trace: &Self::Trace) -> Self::Cell;
 
-    //fn origin(self: &Rc<Self>) -> Res<Path>;
-    // fn save_to_origin(self: &Rc<Self>) -> Res<()>;
-    // fn save_to(self: &Rc<Self>, target: Rc<InDomain>) -> Res<()>;
+    //fn origin(&self) -> Res<Path>;
+    // fn save_to_origin(&self) -> Res<()>;
+    // fn save_to(&self, target: &InDomain>) -> Res<()>;
 }
 
 pub trait InTrace: Clone + Debug {}
 
-pub trait InRef<'v>: Debug + Deref<Target = Value<'v>> {}
+// pub trait InRef<'v>: Debug + Deref<Target = Value<'v>> {}
 
 // - dereference of a value must be a safe op in Rust, can be less safe in C
 // - all cells must be invalidated when the domain is freed
@@ -37,7 +59,7 @@ pub trait InRef<'v>: Debug + Deref<Target = Value<'v>> {}
 pub trait InCell: Clone + Debug {
     type Domain: InDomain;
 
-    fn domain(&self) -> &Rc<Self::Domain>;
+    fn domain(&self) -> &Self::Domain;
 
     fn typ(&self) -> Res<&str>;
     fn index(&self) -> Res<usize>;
@@ -47,12 +69,23 @@ pub trait InCell: Clone + Debug {
     fn sub(&self) -> Res<<Self::Domain as InDomain>::Group>;
     fn attr(&self) -> Res<<Self::Domain as InDomain>::Group>;
 
-    fn set(&mut self, value: OwnedValue) -> Res<()> {
+    fn set_value(&mut self, value: OwnedValue) -> Res<()> {
+        todo!();
+    }
+    fn set_label(&mut self, value: OwnedValue) -> Res<()> {
         todo!();
     }
     fn delete(&mut self) -> Res<()> {
         todo!();
     }
+
+    fn as_data_source(&self) -> Option<Res<DataSource>> {
+        todo!()
+    }
+
+    // fn as_data_destination(&mut self) -> Option<Res<DataDestination>> {
+    //     todo!()
+    // }
 }
 
 pub trait InGroup: Clone + Debug {
@@ -76,3 +109,30 @@ pub trait InGroup: Clone + Debug {
 #[derive(Clone, Debug)]
 pub struct DummyTrace {}
 impl InTrace for DummyTrace {}
+
+#[derive(Clone, Debug)]
+pub struct VoidGroup<D>(PhantomData<D>);
+impl<D> From<D> for VoidGroup<D> {
+    fn from(_: D) -> Self {
+        VoidGroup(PhantomData)
+    }
+}
+impl<D: InDomain> InGroup for VoidGroup<D> {
+    type Domain = D;
+
+    fn label_type(&self) -> LabelType {
+        LabelType::default()
+    }
+
+    fn len(&self) -> usize {
+        0
+    }
+
+    fn at(&self, index: usize) -> Res<D::Cell> {
+        NotFound::NoResult(format!("")).into()
+    }
+
+    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<D::Cell> {
+        NotFound::NoResult(format!("")).into()
+    }
+}

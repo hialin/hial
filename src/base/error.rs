@@ -8,6 +8,7 @@ pub enum HErr {
     BadArgument(String),
     BadPath(String),
     IO(std::io::ErrorKind, String),
+    IncompatibleSource(String),
     ExclusivityRequired(String), // cannot change data because there are other readers
     Json(String),
     Toml(String),

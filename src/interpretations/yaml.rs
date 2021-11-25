@@ -11,7 +11,11 @@ impl InDomain for Domain {
     type Cell = Cell;
     type Group = Group;
 
-    fn root(self: &Rc<Self>) -> Res<Self::Cell> {
+    fn interpretation(&self) -> &str {
+        "yaml"
+    }
+
+    fn root(&self) -> Res<Cell> {
         Ok(Cell {
             group: Group {
                 domain: self.clone(),
@@ -30,7 +34,7 @@ pub struct Cell {
 
 #[derive(Clone, Debug)]
 pub struct Group {
-    domain: Rc<Domain>,
+    domain: Domain,
     nodes: NodeGroup,
 }
 
@@ -81,7 +85,7 @@ pub fn from_string(source: &str) -> Res<Cell> {
 impl InCell for Cell {
     type Domain = Domain;
 
-    fn domain(&self) -> &Rc<Self::Domain> {
+    fn domain(&self) -> &Domain {
         &self.group.domain
     }
 
