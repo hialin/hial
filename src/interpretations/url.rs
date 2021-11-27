@@ -43,11 +43,11 @@ impl InCell for Cell {
     }
 
     fn index(&self) -> Res<usize> {
-        NotFound::NoIndex().into()
+        NotFound::NoIndex.into()
     }
 
     fn label(&self) -> Res<&str> {
-        NotFound::NoLabel().into()
+        NotFound::NoLabel.into()
     }
 
     fn value(&self) -> Res<Value> {

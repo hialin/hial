@@ -36,7 +36,6 @@ pub_enumerated_dynamic_type! {
 
 pub_enumerated_dynamic_type! {
     enum Group {
-        // Void(VoidGroup<VoidDomain<>>),
         Elevation(ElevationGroup),
         Field(Field),
         // Mixed(Vec<Cell>),
@@ -207,15 +206,8 @@ impl Group {
         let key = key.into();
         match self {
             Group::Elevation(elevation_group) => elevation_group.get(key),
-            Group::Field(field) => Ok(Cell::Field(field.clone())),
-            // Group::Mixed(v) => {
-            //     for x in v {
-            //         if Selector::Str(x.label()?) == key {
-            //             return Ok(x.clone());
-            //         }
-            //     }
-            //     NotFound::NoResult(format!("")).into()
-            // }
+            Group::Field(x) => Ok(Cell::from(x.get(key)?)),
+
             Group::OwnedValue(x) => Ok(Cell::OwnedValue(x.get(key)?)),
             Group::File(x) => Ok(Cell::File(x.get(key)?)),
             Group::Json(x) => Ok(Cell::Json(x.get(key)?)),
@@ -228,12 +220,6 @@ impl Group {
         }
     }
 }
-
-// impl From<intra::VoidGroup<facade::Domain>> for Group {
-//     fn from(_: VoidGroup<Domain>) -> Self {
-//         Group::Void(VoidGroup::from(()))
-//     }
-// }
 
 impl IntoIterator for Group {
     type Item = Res<Cell>;

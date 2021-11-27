@@ -102,7 +102,7 @@ impl InCell for Cell {
 
     fn label(&self) -> Res<&str> {
         match self.group.nodes {
-            NodeGroup::Array(ref a) => NotFound::NoLabel().into(),
+            NodeGroup::Array(ref a) => NotFound::NoLabel.into(),
             NodeGroup::Table(ref t) => match t.at(self.pos) {
                 Some(x) => Ok(x.0),
                 None => HErr::internal("").into(),
@@ -134,7 +134,7 @@ impl InCell for Cell {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Table(o.clone()),
                 }),
-                _ => HErr::internal("").into(),
+                _ => NotFound::NoGroup("".into()).into(),
             },
             NodeGroup::Table(ref table) => match table.at(self.pos) {
                 Some((_, Node::Array(a))) => Ok(Group {
@@ -145,7 +145,7 @@ impl InCell for Cell {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Table(o.clone()),
                 }),
-                _ => HErr::internal("").into(),
+                _ => NotFound::NoGroup("".into()).into(),
             },
         }
     }
@@ -191,7 +191,7 @@ impl InGroup for Group {
 
     fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
         match &self.nodes {
-            NodeGroup::Array(a) => NotFound::NoLabel().into(),
+            NodeGroup::Array(a) => NotFound::NoLabel.into(),
             NodeGroup::Table(t) => match key.into() {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
                 Selector::Str(k) => match t.get(k) {

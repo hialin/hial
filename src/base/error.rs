@@ -22,8 +22,8 @@ pub enum HErr {
 
 #[derive(Clone, Debug)]
 pub enum NotFound {
-    NoLabel(), // the cell has no label
-    NoIndex(), // the cell has no index
+    NoLabel, // the cell has no label
+    NoIndex, // the cell has no index
     NoGroup(String),
     NoResult(String),
     NoInterpretation(String),

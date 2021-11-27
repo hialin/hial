@@ -63,7 +63,7 @@ pub enum Node {
 
 impl From<ScanError> for HErr {
     fn from(e: ScanError) -> HErr {
-        HErr::Json(format!("{}", e))
+        HErr::Yaml(format!("{}", e))
     }
 }
 
@@ -108,7 +108,7 @@ impl InCell for Cell {
 
     fn label(&self) -> Res<&str> {
         match self.group.nodes {
-            NodeGroup::Array(ref a) => NotFound::NoLabel().into(),
+            NodeGroup::Array(ref a) => NotFound::NoLabel.into(),
             NodeGroup::Object(ref o) => match o.at(self.pos) {
                 Some(x) => Ok(x.0),
                 None => HErr::internal("").into(),
@@ -205,7 +205,7 @@ impl InGroup for Group {
 
     fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
         match &self.nodes {
-            NodeGroup::Array(a) => NotFound::NoLabel().into(),
+            NodeGroup::Array(a) => NotFound::NoLabel.into(),
             NodeGroup::Object(o) => match key.into() {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
                 Selector::Str(k) => match o.get(k) {

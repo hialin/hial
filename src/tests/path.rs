@@ -162,7 +162,7 @@ fn path_double_kleene_simple() -> Res<()> {
 
 #[test]
 fn path_double_kleene() -> Res<()> {
-    const TREE_2: &str = r#"
+    const TREE: &str = r#"
             a:
               x: xa
               b:
@@ -175,7 +175,7 @@ fn path_double_kleene() -> Res<()> {
         "#;
 
     set_verbose(true);
-    let root = Cell::from(TREE_2.to_string()).be("yaml")?;
+    let root = Cell::from(TREE.to_string()).be("yaml")?;
 
     //  doublestar should match on multiple levels
     let eval = str_eval(root.clone(), "/**/x")?;
@@ -196,7 +196,7 @@ fn path_double_kleene() -> Res<()> {
 
 #[test]
 fn path_double_kleene_top_filter() -> Res<()> {
-    const TREE_2: &str = r#"
+    const TREE: &str = r#"
             a:
               x: xa
               b:
@@ -209,7 +209,7 @@ fn path_double_kleene_top_filter() -> Res<()> {
         "#;
 
     set_verbose(true);
-    let root = Cell::from(TREE_2.to_string()).be("yaml")?;
+    let root = Cell::from(TREE.to_string()).be("yaml")?;
 
     let eval = str_eval(root.clone(), pr("/*[#label=='a']/**[=='xa']"))?;
     assert_eq!(eval, ["x:xa"]);
@@ -221,7 +221,7 @@ fn path_double_kleene_top_filter() -> Res<()> {
 
 #[test]
 fn path_double_kleene_deep_filter() -> Res<()> {
-    const TREE_2: &str = r#"
+    const TREE: &str = r#"
             a:
               x: xa
               b:
@@ -233,7 +233,7 @@ fn path_double_kleene_deep_filter() -> Res<()> {
             n: nval
         "#;
 
-    let root = Cell::from(TREE_2.to_string()).be("yaml")?;
+    let root = Cell::from(TREE.to_string()).be("yaml")?;
     let eval = str_eval(root.clone(), "/**/*[#label=='x']")?;
     assert_eq!(eval, ["x:xa", "x:xb", "x:xc"]);
     let eval = str_eval(root.clone(), "/a/**[#label!='x']/y")?;
@@ -245,7 +245,7 @@ fn path_double_kleene_deep_filter() -> Res<()> {
 
 #[test]
 fn path_double_kleene_all() -> Res<()> {
-    const TREE_2: &str = r#"
+    const TREE: &str = r#"
             a:
               x: xa
               b:
@@ -257,7 +257,7 @@ fn path_double_kleene_all() -> Res<()> {
             n: nval
         "#;
 
-    let root = Cell::from(TREE_2.to_string()).be("yaml")?;
+    let root = Cell::from(TREE.to_string()).be("yaml")?;
 
     let eval = str_eval(root.clone(), "/**")?;
     assert_eq!(
@@ -273,19 +273,19 @@ fn path_double_kleene_all() -> Res<()> {
 
 #[test]
 fn path_double_kleene_repeat() -> Res<()> {
-    const TREE_3: &str = r#"
+    const TREE: &str = r#"
             a:
               x: xa
               b:
                 x: xb
                 b:
-                  x: xc
-                  b: bval
+                    x: xc
+                    b: bval
             m: mval
             n: nval
         "#;
     set_verbose(true);
-    let root = Cell::from(TREE_3.to_string()).be("yaml")?;
+    let root = Cell::from(TREE.to_string()).be("yaml")?;
 
     // crate::pprint::pprint(&root, 0, 0);
     // println!("\npath: {}\n", "/**/b/b");

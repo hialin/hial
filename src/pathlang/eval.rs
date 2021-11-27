@@ -7,6 +7,14 @@ use crate::{
 };
 use std::collections::HashSet;
 
+macro_rules! debug {
+    (
+        $body:block
+    ) => {
+        $body
+    };
+}
+
 #[derive(Clone, Debug)]
 pub struct EvalIter<'s> {
     path: Vec<PathItem<'s>>,
@@ -21,6 +29,7 @@ pub struct CellNode {
 
 impl<'s> EvalIter<'s> {
     pub(crate) fn new(start: Cell, path: Path<'s>) -> EvalIter<'s> {
+        debug!({ println!("\n~~ ~~ ~~ ~~ ~~ ~~ ~~ ~~\n==> path is: {}\n", path) });
         let mut path_indices = HashSet::from([0]);
         if Self::is_doublestar_match(&start, 0, &path.0) {
             path_indices.insert(1);
@@ -58,17 +67,23 @@ impl<'s> EvalIter<'s> {
     }
 
     fn pump(&mut self) -> Option<Res<Cell>> {
-        // println!("----");
-        // print!("stack:");
-        // for cn in &self.stack {
-        //     print!(
-        //         "    {}:{} : {:?}",
-        //         cn.cell.as_ref().unwrap().label().unwrap_or(""),
-        //         cn.cell.as_ref().unwrap().value().unwrap(),
-        //         cn.path_indices
-        //     );
-        // }
-        // println!();
+        debug!({
+            println!("----");
+            print!("stack:");
+            for cn in &self.stack {
+                print!(
+                    "    {}:{} : {:?}",
+                    cn.cell.as_ref().unwrap().label().unwrap_or(""),
+                    cn.cell
+                        .as_ref()
+                        .unwrap()
+                        .value()
+                        .unwrap_or(Value::Str("💥")),
+                    cn.path_indices
+                );
+            }
+            println!();
+        });
 
         let CellNode {
             cell,
@@ -81,23 +96,27 @@ impl<'s> EvalIter<'s> {
             return None;
         });
 
-        // println!(
-        //     "pump:     {}:{} : {:?}",
-        //     cell.label().unwrap_or(""),
-        //     cell.value().unwrap(),
-        //     path_indices
-        // );
+        debug!({
+            println!(
+                "pump:     {}:{} : {:?}",
+                cell.label().unwrap_or(""),
+                cell.value().unwrap_or(Value::Str("💥")),
+                path_indices
+            );
+        });
 
         if path_indices.iter().any(|i| *i >= self.path.len()) {
             path_indices.retain(|i| *i < self.path.len());
-            // println!(
-            //     "found result {}:{};    push back: {}:{} : {:?}",
-            //     cell.label().unwrap_or(""),
-            //     cell.value().unwrap(),
-            //     cell.label().unwrap_or(""),
-            //     cell.value().unwrap(),
-            //     path_indices
-            // );
+            debug!({
+                println!(
+                    "found result {}:{};    push back: {}:{} : {:?}",
+                    cell.label().unwrap_or(""),
+                    cell.value().unwrap_or(Value::Str("💥")),
+                    cell.label().unwrap_or(""),
+                    cell.value().unwrap_or(Value::Str("💥")),
+                    path_indices
+                );
+            });
             self.stack.push(CellNode {
                 cell: Ok(cell.clone()),
                 path_indices,
@@ -177,12 +196,14 @@ impl<'s> EvalIter<'s> {
                     continue;
                 }
 
-                // println!(
-                //     "push interpretation: {}:{} : {:?}",
-                //     subcell.label().unwrap_or(""),
-                //     subcell.value().unwrap(),
-                //     path_index + 1
-                // );
+                debug!({
+                    println!(
+                        "push interpretation: {}:{} : {:?}",
+                        subcell.label().unwrap_or(""),
+                        subcell.value().unwrap_or(Value::Str("💥")),
+                        path_index + 1
+                    );
+                });
                 stack.push(CellNode {
                     cell: Ok(subcell),
                     path_indices: HashSet::from([path_index + 1]),
@@ -212,12 +233,14 @@ impl<'s> EvalIter<'s> {
                     continue;
                 }
                 if Self::accept_subcell(subcell.clone(), path_item) {
-                    // println!(
-                    //     "match: {}:{} for {}",
-                    //     subcell.label().unwrap_or(""),
-                    //     subcell.value().unwrap(),
-                    //     path_item
-                    // );
+                    debug!({
+                        println!(
+                            "match: {}:{} for {}",
+                            subcell.label().unwrap_or(""),
+                            subcell.value().unwrap_or(Value::Str("💥")),
+                            path_item
+                        );
+                    });
                     if double_stars {
                         accepted_path_indices.insert(*path_index);
                     }
@@ -226,21 +249,25 @@ impl<'s> EvalIter<'s> {
                         accepted_path_indices.insert(*path_index + 2);
                     }
                 } else {
-                    // println!(
-                    //     "no match {}:{} for {}",
-                    //     subcell.label().unwrap_or(""),
-                    //     subcell.value().unwrap(),
-                    //     path_item
-                    // );
+                    debug!({
+                        println!(
+                            "no match {}:{} for {}",
+                            subcell.label().unwrap_or(""),
+                            subcell.value().unwrap_or(Value::Str("💥")),
+                            path_item
+                        );
+                    });
                 }
             }
             if !accepted_path_indices.is_empty() {
-                // println!(
-                //     "push by star relation: {}:{} : {:?}",
-                //     subcell.label().unwrap_or(""),
-                //     subcell.value().unwrap(),
-                //     accepted_path_indices
-                // );
+                debug!({
+                    println!(
+                        "push by star relation: {}:{} : {:?}",
+                        subcell.label().unwrap_or(""),
+                        subcell.value().unwrap_or(Value::Str("💥")),
+                        accepted_path_indices
+                    );
+                });
                 stack.push(CellNode {
                     cell: Ok(subcell),
                     path_indices: accepted_path_indices,
@@ -284,12 +311,14 @@ impl<'s> EvalIter<'s> {
                 }
             }
             if !accepted_path_indices.is_empty() {
-                // println!(
-                //     "push by non-star relation: {}:{} : {:?}",
-                //     subcell.label().unwrap_or(""),
-                //     subcell.value().unwrap(),
-                //     accepted_path_indices
-                // );
+                debug!({
+                    println!(
+                        "push by non-star relation: {}:{} : {:?}",
+                        subcell.label().unwrap_or(""),
+                        subcell.value().unwrap_or(Value::Str("💥")),
+                        accepted_path_indices
+                    );
+                });
                 stack.push(CellNode {
                     cell: Ok(subcell),
                     path_indices: accepted_path_indices,
@@ -315,12 +344,14 @@ impl<'s> EvalIter<'s> {
                     continue;
                 });
 
-                // println!(
-                //     "push by field: {}:{} : {:?}",
-                //     subcell.label().unwrap_or(""),
-                //     subcell.value().unwrap(),
-                //     path_index + 1
-                // );
+                debug!({
+                    println!(
+                        "push by field: {}:{} : {:?}",
+                        subcell.label().unwrap_or(""),
+                        subcell.value().unwrap_or(Value::Str("💥")),
+                        path_index + 1
+                    );
+                });
                 stack.push(CellNode {
                     cell: Ok(subcell),
                     path_indices: HashSet::from([path_index + 1]),
@@ -395,7 +426,9 @@ impl<'s> EvalIter<'s> {
     }
 
     fn cell_matches_selector(cell: &Cell, sel: &Selector) -> bool {
-        // println!("cell_matches_selector: selector {:?}; cell {:?}", sel, cell);
+        debug!({
+            println!("cell_matches_selector: selector {:?}; cell {:?}", sel, cell);
+        });
         if *sel == Selector::Star || *sel == Selector::DoubleStar {
             return true;
         } else {

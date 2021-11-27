@@ -27,12 +27,7 @@ impl Field {
     }
 
     pub fn label(&self) -> Res<&str> {
-        match self.1 {
-            FieldType::Value => Ok("value"),
-            FieldType::Label => Ok("label"),
-            FieldType::Type => Ok("type"),
-            FieldType::Index => Ok("index"),
-        }
+        NotFound::NoLabel.into()
     }
 
     pub fn value(&self) -> Res<Value> {
@@ -106,12 +101,16 @@ impl Field {
         let key = key.into();
         if let Selector::Str(key) = key {
             if key == "value" {
+                self.0.value()?;
                 return Ok(Field(self.0.clone(), FieldType::Value));
             } else if key == "label" {
+                self.0.label()?;
                 return Ok(Field(self.0.clone(), FieldType::Label));
             } else if key == "type" {
+                self.0.typ()?;
                 return Ok(Field(self.0.clone(), FieldType::Type));
             } else if key == "index" {
+                self.0.index()?;
                 return Ok(Field(self.0.clone(), FieldType::Index));
             }
         }

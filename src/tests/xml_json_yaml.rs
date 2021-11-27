@@ -1,4 +1,5 @@
 use crate::base::*;
+use crate::pprint;
 
 #[test]
 fn test_files() -> Res<()> {
@@ -95,5 +96,39 @@ fn test_xml() -> Res<()> {
     assert_eq!(doc.sub()?.at(1)?.label()?, "double");
     assert_eq!(doc.sub()?.at(2)?.value()?, Value::Str("double"));
     assert_eq!(doc.sub()?.get("triple")?.value()?, Value::Str("triple"));
+    Ok(())
+}
+
+#[test]
+fn test_toml() -> Res<()> {
+    let toml = r#"
+        # This is a TOML document
+        
+        title = "TOML Example"
+        
+        [owner]
+        name = "Tom Preston-Werner"
+        dob = 1979-05-27T07:32:00-08:00
+        
+        [database]
+        enabled = true
+        ports = [ 8000, 8001, 8002 ]
+        data = [ ["delta", "phi"], [3.14] ]
+        temp_targets = { cpu = 79.5, case = 72.0 }
+        
+        [servers]
+        
+        [servers.alpha]
+        ip = "10.0.0.1"
+        role = "frontend"
+        
+        [servers.beta]
+        ip = "10.0.0.2"
+        role = "backend"
+    "#;
+    let toml = Cell::from(toml.to_string()).be("toml")?;
+    pprint::pprint(&toml, 0, 0);
+    let value = toml.sub()?.get("database")?.sub()?.get("enabled")?;
+    assert_eq!(value.value()?, Value::Bool(true));
     Ok(())
 }

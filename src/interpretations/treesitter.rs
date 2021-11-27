@@ -199,7 +199,7 @@ impl InCell for Cell {
         if let Some(label) = self.group.nodes[self.pos].name {
             Ok(label)
         } else {
-            NotFound::NoLabel().into()
+            NotFound::NoLabel.into()
         }
     }
 

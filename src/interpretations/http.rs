@@ -126,7 +126,7 @@ impl InCell for Cell {
 
     fn label(&self) -> Res<&str> {
         match (&self.group.kind, self.pos) {
-            (GroupKind::Root, _) => NotFound::NoLabel().into(),
+            (GroupKind::Root, _) => NotFound::NoLabel.into(),
             (GroupKind::Attr, 0) => Ok("status"),
             (GroupKind::Attr, 1) => Ok("headers"),
             (GroupKind::Status, 0) => Ok("code"),

@@ -272,16 +272,17 @@ impl ElevationGroup {
         if interp == old_interp {
             return Ok(self.0.clone());
         }
-        println!("get elevation from {} to {}", old_interp, key);
         if let Some(e) = get_elevation_map_for(old_interp) {
             if let Some(func_tuple) = e.get(interp) {
-                func_tuple.2(self.0.clone())
-            } else {
-                NotFound::NoResult(format!("")).into()
+                println!("elevate {} to {}", old_interp, key);
+                return func_tuple.2(self.0.clone());
             }
-        } else {
-            return NotFound::NoInterpretation(format!("no elevation map for this interpretation"))
-                .into();
         }
+        if key == "value" {
+            println!("elevate default {} to value", old_interp);
+            return Ok(Cell::from(self.0.value()?.to_owned_value()));
+        }
+        println!("no elevation from {} to {}", old_interp, interp);
+        NotFound::NoInterpretation(format!("no elevation from {} to {}", old_interp, interp)).into()
     }
 }
