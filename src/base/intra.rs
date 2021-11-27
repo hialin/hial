@@ -136,3 +136,9 @@ impl<D: InDomain> InGroup for VoidGroup<D> {
         NotFound::NoResult(format!("")).into()
     }
 }
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct LabelType {
+    pub is_indexed: bool,
+    pub unique_labels: bool,
+}

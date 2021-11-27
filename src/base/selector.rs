@@ -85,9 +85,3 @@ impl PartialEq<Selector<'_>> for OwnedValue {
         }
     }
 }
-
-#[derive(Copy, Clone, Debug, Default)]
-pub struct LabelType {
-    pub is_indexed: bool,
-    pub unique_labels: bool,
-}
