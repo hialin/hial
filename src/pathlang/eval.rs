@@ -11,7 +11,7 @@ macro_rules! debug {
     (
         $body:block
     ) => {
-        $body
+        // $body
     };
 }
 
@@ -427,7 +427,7 @@ impl<'s> EvalIter<'s> {
 
     fn cell_matches_selector(cell: &Cell, sel: &Selector) -> bool {
         debug!({
-            println!("cell_matches_selector: selector {:?}; cell {:?}", sel, cell);
+            // println!("cell_matches_selector: selector {:?}; cell {:?}", sel, cell);
         });
         if *sel == Selector::Star || *sel == Selector::DoubleStar {
             return true;

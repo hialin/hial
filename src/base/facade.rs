@@ -1,10 +1,10 @@
 use crate::{
-    base::*, interpretations::*, pathlang::eval::EvalIter, pathlang::Path,
-    pub_enumerated_dynamic_type,
+    base::*, enumerated_dynamic_type, interpretations::*, pathlang::eval::EvalIter, pathlang::Path,
 };
 
-pub_enumerated_dynamic_type! {
-    enum Domain {
+enumerated_dynamic_type! {
+    #[derive(Clone, Debug)]
+    pub enum Domain {
         OwnedValue(ownedvalue::Domain),
         File(file::Domain),
         Json(json::Domain),
@@ -18,8 +18,9 @@ pub_enumerated_dynamic_type! {
     with_domain
 }
 
-pub_enumerated_dynamic_type! {
-    enum Cell {
+enumerated_dynamic_type! {
+    #[derive(Clone, Debug)]
+    pub enum Cell {
         Field(Field),
         OwnedValue(ownedvalue::Cell),
         File(file::Cell),
@@ -34,8 +35,9 @@ pub_enumerated_dynamic_type! {
     with_cell
 }
 
-pub_enumerated_dynamic_type! {
-    enum Group {
+enumerated_dynamic_type! {
+    #[derive(Clone, Debug)]
+    pub enum Group {
         Elevation(ElevationGroup),
         Field(Field),
         // Mixed(Vec<Cell>),

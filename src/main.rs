@@ -29,32 +29,6 @@ fn main() -> Res<()> {
             for cell in path.eval(root) {
                 anyfound = true;
                 match cell {
-                    Ok(cell) => pprint(&cell, 1, 0),
-                    Err(err) => eprintln!("{:?}", err),
-                }
-            }
-            if !anyfound {
-                verbose!("No matches.")
-            }
-        }
-        Command::Explore(command) => {
-            verbose!("Command: explore {}", &command.path);
-            let (cell_repr, path) = match Path::parse_with_starter(&command.path) {
-                Ok(x) => x,
-                Err(HErr::BadPath(msg)) => {
-                    eprintln!("Bad path: {}", msg);
-                    return Ok(());
-                }
-                Err(err) => return Err(err),
-            };
-            verbose!("Root: {}", cell_repr);
-            verbose!("Path: {}", path);
-            let root = cell_repr.eval()?;
-
-            let mut anyfound = false;
-            for cell in path.eval(root) {
-                anyfound = true;
-                match cell {
                     Ok(cell) => pprint(&cell, command.depth, command.breadth),
                     Err(err) => eprintln!("{:?}", err),
                 }
@@ -81,17 +55,11 @@ struct Args {
 enum Command {
     None,
     Print(PrintCommand),
-    Explore(ExploreCommand),
     PerfTest(PerfTestCommand),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PrintCommand {
-    path: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ExploreCommand {
     path: String,
     depth: usize,
     breadth: usize,
@@ -112,16 +80,6 @@ fn parse_args() -> Res<Args> {
         )
         .subcommand(
             SubCommand::with_name("print")
-                .about("prints the result")
-                .arg(
-                    Arg::with_name("path")
-                        .help("hial path to evaluate and print the result of")
-                        .required(true)
-                        .index(1),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("explore")
                 .about("shows the tree of the path result")
                 .arg(
                     Arg::with_name("path")
@@ -167,16 +125,13 @@ fn parse_args() -> Res<Args> {
 
     if let Some(command) = matches.subcommand_matches("print") {
         let path = command.value_of("path").unwrap_or("").to_string();
-        args.command = Command::Print(PrintCommand { path });
-    } else if let Some(command) = matches.subcommand_matches("explore") {
-        let path = command.value_of("path").unwrap_or("").to_string();
         let depth = guard_ok!(command.value_of("depth").unwrap_or("0").parse(), _x => {
             return HErr::BadArgument("cannot parse `depth` argument as integer".into()).into()
         });
         let breadth = guard_ok!(command.value_of("breadth").unwrap_or("0").parse(), _x => {
             return HErr::BadArgument("cannot parse `breadth` argument as integer".into()).into()
         });
-        args.command = Command::Explore(ExploreCommand {
+        args.command = Command::Print(PrintCommand {
             path,
             depth,
             breadth,

@@ -1,8 +1,10 @@
 // enumerated dynamic type
 
 #[macro_export]
-macro_rules! pub_enumerated_dynamic_type {
+macro_rules! enumerated_dynamic_type {
     (
+        $(#[ $attr:meta ])?
+        $pub:vis
         enum
         $enumname:ident
         {
@@ -12,8 +14,8 @@ macro_rules! pub_enumerated_dynamic_type {
 
     ) => {
 
-        #[derive(Clone, Debug)]
-        pub enum $enumname {
+        $(#[$attr])?
+        $pub enum $enumname {
             $($subtypename($subtypetype),)+
         }
 

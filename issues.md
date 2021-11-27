@@ -32,6 +32,10 @@
 
 ### Todos, Issues, Problems
 
+- todo: tree guide lines
+- todo: colors: interp, type, label, value
+- todo: option to hide attrs?
+
 - todo: add domain and trace traits, with full support in implementations
 - todo: write support: json, rust, fs
 - todo: c interop and a small c test
@@ -53,7 +57,7 @@
 - todo: diffs
 - todo: git interpretation
 
-- todo: make ^http^rust work, allow http to function as string (auto conversions)
+- todo: make ^http^rust work, allow http to function as string (auto conversions?)
 
 - unclear: file value should be the file name or file contents?
 
