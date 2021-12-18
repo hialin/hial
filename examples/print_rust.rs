@@ -27,16 +27,20 @@ fn test_rustapi() -> Res<()> {
         let stack = stack?;
         pprint(&stack, 0, 0);
         let stack_sub = stack.sub()?;
-        if stack_sub.get("system_stack")?.value()? == Value::Bool(true) {
+        if stack_sub.get("system_stack")?.value()?.get()? == Value::Bool(true) {
             continue;
         }
 
-        let yaml = stack_sub.get("dockerCompose")?.value()?.to_owned_value();
+        let yaml = stack_sub
+            .get("dockerCompose")?
+            .value()?
+            .get()?
+            .to_owned_value();
         let yaml = Cell::from(yaml).be("yaml")?;
         pprint(&yaml, 0, 0);
         let service_node = yaml.sub()?.get("services")?.sub()?.at(0)?;
-        let name = service_node.label()?;
-        let mut filename = format!("{}.yaml", name);
+        let nameref = service_node.label()?;
+        let mut filename = format!("{}.yaml", nameref.get()?);
         while folder.get(&filename).is_ok() {
             filename = format!("{}.yaml", filename);
         }
@@ -56,12 +60,13 @@ fn test_rustapi_with_path() -> Res<()> {
     let stacks = folder.path("/productiondump.json^json/stacks")?.first()?;
     for stack in stacks.sub()? {
         let stack = stack?;
-        if stack.path("/system_stack")?.first()?.value()? == "true" {
+        if stack.path("/system_stack")?.first()?.value()?.get()? == "true" {
             continue;
         }
         let service = stack.path("/dockerCompose^string^yaml/services")?.first()?;
         println!("service found");
-        let name = service.value()?;
+        let nameref = service.value()?;
+        let name = nameref.get()?;
         let mut filename = format!("{}.yaml", name);
         while folder.sub()?.get(&filename).is_ok() {
             filename = format!("{}.yaml", filename);

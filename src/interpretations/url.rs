@@ -21,6 +21,9 @@ impl InDomain for Domain {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Cell(Domain);
 
+#[derive(Debug)]
+pub struct ValueRef(Domain);
+
 pub fn from_string(s: &str) -> Res<Cell> {
     Domain(Rc::new(Url::parse(s)?)).root()
 }
@@ -31,8 +34,15 @@ impl Cell {
     }
 }
 
+impl InValueRef for ValueRef {
+    fn get(&self) -> Res<Value> {
+        Ok(Value::Str(self.0 .0.as_str()))
+    }
+}
+
 impl InCell for Cell {
     type Domain = Domain;
+    type ValueRef = ValueRef;
 
     fn domain(&self) -> &Domain {
         &self.0
@@ -46,12 +56,12 @@ impl InCell for Cell {
         NotFound::NoIndex.into()
     }
 
-    fn label(&self) -> Res<&str> {
+    fn label(&self) -> Res<ValueRef> {
         NotFound::NoLabel.into()
     }
 
-    fn value(&self) -> Res<Value> {
-        Ok(Value::Str(self.0 .0.as_str()))
+    fn value(&self) -> Res<ValueRef> {
+        Ok(ValueRef(self.0.clone()))
     }
 
     fn sub(&self) -> Res<VoidGroup<Domain>> {

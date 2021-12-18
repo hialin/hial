@@ -41,6 +41,13 @@ pub struct Cell {
     pos: usize,
 }
 
+#[derive(Debug)]
+pub struct ValueRef {
+    group: Group,
+    pos: usize,
+    pub is_label: bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct CNode {
     typ: &'static str,
@@ -180,8 +187,28 @@ fn reshape_subs(value: &mut String, typ: &str, subs: &mut Vec<CNode>, source: &s
     }
 }
 
+impl InValueRef for ValueRef {
+    fn get(&self) -> Res<Value> {
+        if self.is_label {
+            if let Some(label) = self.group.nodes[self.pos].name {
+                Ok(Value::Str(label))
+            } else {
+                NotFound::NoLabel.into()
+            }
+        } else {
+            let cnode = &self.group.nodes[self.pos];
+            if cnode.value.is_empty() {
+                Ok(Value::None)
+            } else {
+                Ok(Value::Str(&cnode.value))
+            }
+        }
+    }
+}
+
 impl InCell for Cell {
     type Domain = Domain;
+    type ValueRef = ValueRef;
 
     fn domain(&self) -> &Domain {
         &self.group.domain
@@ -195,21 +222,20 @@ impl InCell for Cell {
         Ok(self.pos)
     }
 
-    fn label(&self) -> Res<&str> {
-        if let Some(label) = self.group.nodes[self.pos].name {
-            Ok(label)
-        } else {
-            NotFound::NoLabel.into()
-        }
+    fn label(&self) -> Res<ValueRef> {
+        Ok(ValueRef {
+            group: self.group.clone(),
+            pos: self.pos,
+            is_label: true,
+        })
     }
 
-    fn value(&self) -> Res<Value> {
-        let cnode = &self.group.nodes[self.pos];
-        if cnode.value.is_empty() {
-            Ok(Value::None)
-        } else {
-            Ok(Value::Str(&cnode.value))
-        }
+    fn value(&self) -> Res<ValueRef> {
+        Ok(ValueRef {
+            group: self.group.clone(),
+            pos: self.pos,
+            is_label: false,
+        })
     }
 
     fn sub(&self) -> Res<Group> {

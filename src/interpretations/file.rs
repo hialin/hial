@@ -31,6 +31,13 @@ pub struct Group {
     attribute_group_file_pos: u32,
 }
 
+#[derive(Debug)]
+pub struct ValueRef {
+    group: Group,
+    pos: u32,
+    is_label: bool,
+}
+
 #[derive(Clone, Debug)]
 struct FileEntry {
     path: PathBuf,
@@ -81,8 +88,45 @@ impl InDomain for Domain {
     }
 }
 
+impl InValueRef for ValueRef {
+    fn get(&self) -> Res<Value> {
+        if self.is_label {
+            if self.group.attribute_group_file_pos == u32::MAX {
+                let fileentry = guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
+                let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
+                Ok(Value::Str(md.name.as_str()))
+            } else {
+                if self.pos == 0 {
+                    Ok(Value::Str("size"))
+                } else {
+                    HErr::internal("").into()
+                }
+            }
+        } else {
+            let fpos = if self.group.attribute_group_file_pos == u32::MAX {
+                self.pos
+            } else {
+                self.group.attribute_group_file_pos
+            };
+            let fileentry =
+                guard_ok!(&self.group.files[fpos as usize], err => {return Err(err.clone())});
+            let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
+            if self.group.attribute_group_file_pos == u32::MAX {
+                Ok(Value::Str(md.name.as_str()))
+            } else {
+                if self.pos == 0 {
+                    Ok(Value::Int(Int::U64(md.filesize)))
+                } else {
+                    HErr::internal("").into()
+                }
+            }
+        }
+    }
+}
+
 impl InCell for Cell {
     type Domain = Domain;
+    type ValueRef = ValueRef;
 
     fn domain(&self) -> &Self::Domain {
         &self.group.domain
@@ -107,39 +151,20 @@ impl InCell for Cell {
         Ok(self.pos as usize)
     }
 
-    fn label(&self) -> Res<&str> {
-        if self.group.attribute_group_file_pos == u32::MAX {
-            let fileentry =
-                guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
-            let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
-            Ok(md.name.as_str())
-        } else {
-            if self.pos == 0 {
-                Ok("size")
-            } else {
-                HErr::internal("").into()
-            }
-        }
+    fn label(&self) -> Res<ValueRef> {
+        Ok(ValueRef {
+            group: self.group.clone(),
+            pos: self.pos,
+            is_label: true,
+        })
     }
 
-    fn value(&self) -> Res<Value> {
-        let fpos = if self.group.attribute_group_file_pos == u32::MAX {
-            self.pos
-        } else {
-            self.group.attribute_group_file_pos
-        };
-        let fileentry =
-            guard_ok!(&self.group.files[fpos as usize], err => {return Err(err.clone())});
-        let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
-        if self.group.attribute_group_file_pos == u32::MAX {
-            Ok(Value::Str(md.name.as_str()))
-        } else {
-            if self.pos == 0 {
-                Ok(Value::Int(Int::U64(md.filesize)))
-            } else {
-                HErr::internal("").into()
-            }
-        }
+    fn value(&self) -> Res<ValueRef> {
+        Ok(ValueRef {
+            group: self.group.clone(),
+            pos: self.pos,
+            is_label: false,
+        })
     }
 
     fn sub(&self) -> Res<Group> {

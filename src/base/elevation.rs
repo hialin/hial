@@ -2,7 +2,7 @@ use crate::{
     base::*, guard_ok, guard_some, interpretations::*, utils::vecmap::VecMap, verbose_error,
 };
 use lazy_static::lazy_static;
-use std::path::Path;
+use std::{borrow::Cow, path::PathBuf};
 
 type ConstructorFn = fn(DataSource) -> Res<Cell>;
 type ElevateFn = fn(Cell) -> Res<Cell>;
@@ -53,48 +53,38 @@ fn get_elevation_map_for(interpretation: &str) -> Option<VecMapOfElevateFn> {
 }
 
 fn value_elevation_map() -> VecMap<&'static str, ElevateFn> {
-    fn get_string_value(cell: &Cell) -> Res<&str> {
-        if let Value::Str(s) = cell.value()? {
-            return Ok(s);
-        }
-        HErr::internal("elevation: not a string").into()
+    macro_rules! add_str_elevation {
+        ($ret:ident, $interp:literal, |$argname:ident| $body:block) => {
+            $ret.put($interp, |cell: Cell| -> Res<Cell> {
+                let vref = cell.value()?;
+                if let Value::Str($argname) = vref.get()? {
+                    return $body;
+                }
+                HErr::internal("elevation: not a string").into()
+            });
+        };
     }
     let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
-    ret.put("url", |cell: Cell| {
-        Ok(Cell::from(url::from_string(get_string_value(&cell)?)?))
-    });
+    add_str_elevation!(ret, "url", |s| { Ok(Cell::from(url::from_string(s)?)) });
     ret.put("file", |cell: Cell| -> Res<Cell> {
         let datasource = guard_some!(cell.as_data_source(), {
             return HErr::internal("no data source").into();
         })?;
         let ds = if let DataSource::String(s) = datasource {
-            DataSource::File(Path::new(s))
+            DataSource::File(Cow::from(PathBuf::from(s.as_ref())))
         } else {
             datasource
         };
         let domain = file::Domain::new_from(cell.domain().interpretation(), ds)?;
         Ok(Cell::from(domain.root()?))
     });
-    ret.put("json", |cell: Cell| -> Res<Cell> {
-        Ok(Cell::from(json::from_string(get_string_value(&cell)?)?))
-    });
-    ret.put("toml", |cell: Cell| -> Res<Cell> {
-        Ok(Cell::from(toml::from_string(get_string_value(&cell)?)?))
-    });
-    ret.put("yaml", |cell: Cell| -> Res<Cell> {
-        Ok(Cell::from(yaml::from_string(get_string_value(&cell)?)?))
-    });
-    ret.put("xml", |cell: Cell| -> Res<Cell> {
-        Ok(Cell::from(xml::from_string(get_string_value(&cell)?)?))
-    });
-    ret.put("http", |cell: Cell| -> Res<Cell> {
-        Ok(Cell::from(http::from_string(get_string_value(&cell)?)?))
-    });
-    ret.put("rust", |cell: Cell| -> Res<Cell> {
-        Ok(Cell::from(treesitter::from_string(
-            get_string_value(&cell)?.to_string(),
-            "rust",
-        )?))
+    add_str_elevation!(ret, "json", |s| { Ok(Cell::from(json::from_string(s)?)) });
+    add_str_elevation!(ret, "toml", |s| { Ok(Cell::from(toml::from_string(s)?)) });
+    add_str_elevation!(ret, "yaml", |s| { Ok(Cell::from(yaml::from_string(s)?)) });
+    add_str_elevation!(ret, "xml", |s| { Ok(Cell::from(xml::from_string(s)?)) });
+    add_str_elevation!(ret, "http", |s| { Ok(Cell::from(http::from_string(s)?)) });
+    add_str_elevation!(ret, "rust", |s| {
+        Ok(Cell::from(treesitter::from_string(s.to_string(), "rust")?))
     });
     ret
 }
@@ -186,27 +176,30 @@ fn rust_elevation_map() -> VecMap<&'static str, ElevateFn> {
     ret
 }
 
-fn standard_interpretation(cell: &Cell) -> Option<&str> {
+pub(crate) fn standard_interpretation(cell: &Cell) -> Option<&str> {
     if cell.domain().interpretation() == "file" && cell.typ().ok()? == "file" {
-        let name = cell.label().ok()?;
-        if name.ends_with(".c") {
-            return Some("c");
-        } else if name.ends_with(".javascript") {
-            return Some("javascript");
-        } else if name.ends_with(".json") {
-            return Some("json");
-        } else if name.ends_with(".rs") {
-            return Some("rust");
-        } else if name.ends_with(".toml") {
-            return Some("toml");
-        } else if name.ends_with(".xml") {
-            return Some("xml");
-        } else if name.ends_with(".yaml") || name.ends_with(".yml") {
-            return Some("yaml");
+        let nameref = cell.label().ok()?;
+        if let Ok(Value::Str(name)) = nameref.get() {
+            if name.ends_with(".c") {
+                return Some("c");
+            } else if name.ends_with(".javascript") {
+                return Some("javascript");
+            } else if name.ends_with(".json") {
+                return Some("json");
+            } else if name.ends_with(".rs") {
+                return Some("rust");
+            } else if name.ends_with(".toml") {
+                return Some("toml");
+            } else if name.ends_with(".xml") {
+                return Some("xml");
+            } else if name.ends_with(".yaml") || name.ends_with(".yml") {
+                return Some("yaml");
+            }
         }
     }
     if cell.domain().interpretation() == "value" {
-        if let Ok(Value::Str(s)) = cell.value() {
+        let vref = cell.value().ok()?;
+        if let Ok(Value::Str(s)) = vref.get() {
             if s.starts_with("http://") || s.starts_with("https://") {
                 return Some("http");
             } else if s.starts_with(".") || s.starts_with("/") {
@@ -219,9 +212,6 @@ fn standard_interpretation(cell: &Cell) -> Option<&str> {
 
 #[derive(Debug, Clone)]
 pub struct ElevationGroup(pub Cell);
-
-#[derive(Debug, Clone)]
-pub struct Mixed(pub Cell);
 
 impl ElevationGroup {
     pub fn label_type(&self) -> LabelType {
@@ -280,7 +270,8 @@ impl ElevationGroup {
         }
         if key == "value" {
             println!("elevate default {} to value", old_interp);
-            return Ok(Cell::from(self.0.value()?.to_owned_value()));
+            let vref = self.0.value()?;
+            return Ok(Cell::from(vref.get()?.to_owned_value()));
         }
         println!("no elevation from {} to {}", old_interp, interp);
         NotFound::NoInterpretation(format!("no elevation from {} to {}", old_interp, interp)).into()

@@ -32,6 +32,12 @@ pub struct Cell {
     group: Group,
     pos: usize,
 }
+#[derive(Debug)]
+pub struct ValueRef {
+    group: Group,
+    pos: usize,
+    pub is_label: bool,
+}
 
 #[derive(Clone, Debug)]
 pub struct Group {
@@ -76,8 +82,34 @@ pub fn from_string(source: &str) -> Res<Cell> {
     domain.root()
 }
 
+impl InValueRef for ValueRef {
+    fn get(&self) -> Res<Value> {
+        if self.is_label {
+            match self.group.nodes {
+                NodeGroup::Array(ref a) => NotFound::NoLabel.into(),
+                NodeGroup::Table(ref t) => match t.at(self.pos) {
+                    Some(x) => Ok(Value::Str(x.0)),
+                    None => HErr::internal("").into(),
+                },
+            }
+        } else {
+            match self.group.nodes {
+                NodeGroup::Array(ref a) => match a.get(self.pos) {
+                    Some(x) => Ok(get_value(x)),
+                    None => HErr::internal("").into(),
+                },
+                NodeGroup::Table(ref t) => match t.at(self.pos) {
+                    Some(x) => Ok(get_value(&x.1)),
+                    None => HErr::internal("").into(),
+                },
+            }
+        }
+    }
+}
+
 impl InCell for Cell {
     type Domain = Domain;
+    type ValueRef = ValueRef;
 
     fn domain(&self) -> &Self::Domain {
         &self.group.domain
@@ -100,27 +132,20 @@ impl InCell for Cell {
         Ok(self.pos)
     }
 
-    fn label(&self) -> Res<&str> {
-        match self.group.nodes {
-            NodeGroup::Array(ref a) => NotFound::NoLabel.into(),
-            NodeGroup::Table(ref t) => match t.at(self.pos) {
-                Some(x) => Ok(x.0),
-                None => HErr::internal("").into(),
-            },
-        }
+    fn label(&self) -> Res<ValueRef> {
+        Ok(ValueRef {
+            group: self.group.clone(),
+            pos: self.pos,
+            is_label: true,
+        })
     }
 
-    fn value(&self) -> Res<Value> {
-        match self.group.nodes {
-            NodeGroup::Array(ref a) => match a.get(self.pos) {
-                Some(x) => Ok(get_value(x)),
-                None => HErr::internal("").into(),
-            },
-            NodeGroup::Table(ref t) => match t.at(self.pos) {
-                Some(x) => Ok(get_value(&x.1)),
-                None => HErr::internal("").into(),
-            },
-        }
+    fn value(&self) -> Res<ValueRef> {
+        Ok(ValueRef {
+            group: self.group.clone(),
+            pos: self.pos,
+            is_label: false,
+        })
     }
 
     fn sub(&self) -> Res<Group> {

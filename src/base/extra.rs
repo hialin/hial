@@ -18,6 +18,10 @@ enumerated_dynamic_type! {
     with_domain
 }
 
+// todo: separate interpretation and ex-terpretation types
+// pub enum InnerCell {OwnedValue, File, ...}
+// pub enum Cell {Field, InnerCell}
+
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
     pub enum Cell {
@@ -33,6 +37,23 @@ enumerated_dynamic_type! {
         TreeSitter(treesitter::Cell),
     }
     with_cell
+}
+
+enumerated_dynamic_type! {
+    #[derive(Debug)]
+    pub enum ValueRef {
+        Field(field::ValueRef),
+        OwnedValue(ownedvalue::ValueRef),
+        File(file::ValueRef),
+        Json(json::ValueRef),
+        Toml(toml::ValueRef),
+        Yaml(yaml::ValueRef),
+        Xml(xml::ValueRef),
+        Url(url::ValueRef),
+        Http(http::ValueRef),
+        TreeSitter(treesitter::ValueRef),
+    }
+    with_valueref
 }
 
 enumerated_dynamic_type! {
@@ -87,6 +108,16 @@ impl From<String> for Cell {
     }
 }
 
+impl ValueRef {
+    pub fn get(&self) -> Res<Value> {
+        with_valueref!(self, |x| { x.get() })
+    }
+
+    pub fn with<T>(&self, f: impl Fn(Res<Value>) -> T) -> T {
+        f(self.get())
+    }
+}
+
 impl Cell {
     pub fn typ(&self) -> Res<&str> {
         with_cell!(self, |x| { Ok(x.typ()?) })
@@ -96,12 +127,12 @@ impl Cell {
         with_cell!(self, |x| { Ok(x.index()?) })
     }
 
-    pub fn label(&self) -> Res<&str> {
-        with_cell!(self, |x| { Ok(x.label()?) })
+    pub fn label(&self) -> Res<ValueRef> {
+        with_cell!(self, |x| { Ok(ValueRef::from(x.label()?)) })
     }
 
-    pub fn value(&self) -> Res<Value> {
-        with_cell!(self, |x| { Ok(x.value()?) })
+    pub fn value(&self) -> Res<ValueRef> {
+        with_cell!(self, |x| { Ok(ValueRef::from(x.value()?)) })
     }
 
     pub fn sub(&self) -> Res<Group> {
@@ -113,39 +144,7 @@ impl Cell {
     }
 
     pub fn standard_interpretation(&self) -> Option<&str> {
-        match self {
-            Cell::OwnedValue(ov) => {
-                if let Ok(Value::Str(s)) = ov.value() {
-                    if s.starts_with("http://") || s.starts_with("https://") {
-                        return Some("http");
-                    } else if s.starts_with(".") || s.starts_with("/") {
-                        return Some("file");
-                    }
-                }
-            }
-            Cell::File(file) => {
-                if file.typ().ok()? == "file" {
-                    let name = file.label().ok()?;
-                    if name.ends_with(".c") {
-                        return Some("c");
-                    } else if name.ends_with(".javascript") {
-                        return Some("javascript");
-                    } else if name.ends_with(".json") {
-                        return Some("json");
-                    } else if name.ends_with(".rs") {
-                        return Some("rust");
-                    } else if name.ends_with(".toml") {
-                        return Some("toml");
-                    } else if name.ends_with(".xml") {
-                        return Some("xml");
-                    } else if name.ends_with(".yaml") || name.ends_with(".yml") {
-                        return Some("yaml");
-                    }
-                }
-            }
-            _ => {}
-        }
-        None
+        elevation::standard_interpretation(self)
     }
 
     pub fn elevate(self) -> Res<Group> {

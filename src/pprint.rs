@@ -103,11 +103,19 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
     make_indent(indent, buffer)?;
     write!(buffer, "{}", prefix)?;
 
-    let key = cell.label();
-    let value = cell.value();
+    let keyref = cell.label();
+    let valueref = cell.value();
+    let key = match keyref {
+        Ok(ref kref) => kref.get(),
+        Err(e) => Err(e),
+    };
+    let value = match valueref {
+        Ok(ref vref) => vref.get(),
+        Err(e) => Err(e),
+    };
     match key {
         Ok(k) => {
-            if Some(&Value::Str(k)) != value.as_ref().ok() {
+            if Some(&k) != value.as_ref().ok() {
                 write!(buffer, "{}: ", k)
             } else {
                 write!(buffer, "")

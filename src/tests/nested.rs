@@ -11,7 +11,10 @@ fn test_nested() -> Res<()> {
         .path("^json/one/[0]^value^xml/root/[0]")?
         .first()?;
     pprint(&cell, 0, 0);
-    assert_eq!(cell.value()?, Value::Str("mytext: This is my yaml string"));
+    assert_eq!(
+        cell.value()?.get()?,
+        Value::Str("mytext: This is my yaml string")
+    );
 
     let cell = Cell::from(OwnedValue::from(yxj.to_string()))
         .path("^json/one/[0]^value^xml/root/[0]^value^yaml/mytext#value")?
@@ -19,7 +22,7 @@ fn test_nested() -> Res<()> {
 
     pprint(&cell, 0, 0);
 
-    assert_eq!(cell.value()?, Value::Str("This is my yaml string"));
+    assert_eq!(cell.value()?.get()?, Value::Str("This is my yaml string"));
 
     Ok(())
 }

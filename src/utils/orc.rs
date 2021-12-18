@@ -1,119 +1,120 @@
-use std::cell::Cell;
-use std::fmt;
-use std::marker::PhantomData;
-use std::ops::Deref;
-use std::ptr::NonNull;
+use std::{cell::Cell, fmt, ops::Deref, ptr::NonNull};
 
-// Overridable/owned rc
-pub struct Orc<T> {
-    ptr: NonNull<OrcBox<T>>,
-    phantom: PhantomData<OrcBox<T>>,
-}
+// owned rc
+pub struct Orc<T>(NonNull<RcBox<T>>);
 
-struct OrcBox<T> {
-    pub(self) references: Cell<isize>,
+// used rc
+pub struct Urc<T>(NonNull<RcBox<T>>);
+
+struct RcBox<T> {
+    pub(self) owners: Cell<isize>,
+    pub(self) users: Cell<isize>,
     pub(self) value: T,
-}
-
-impl<T> Deref for Orc<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { &self.inner().value }
-    }
 }
 
 impl<T> Orc<T> {
     pub fn new(value: T) -> Orc<T> {
-        let box_value = Box::new(OrcBox {
-            references: Cell::new(1),
-            value,
-        });
-        Orc {
-            ptr: NonNull::from(Box::leak(box_value)),
-            phantom: PhantomData,
+        Orc(RcBox::new(value))
+    }
+
+    pub fn urc(&self) -> Urc<T> {
+        unsafe {
+            self.0.as_ref().inc_urc();
         }
-    }
-
-    pub unsafe fn get_mut(x: &mut Self, max_allowed_references: usize) -> Option<&mut T> {
-        let x = x.inner_mut();
-        if x.references.get() > max_allowed_references as isize {
-            None
-        } else {
-            Some(&mut x.value)
-        }
-    }
-
-    pub fn count(x: &Self) -> isize {
-        let x = unsafe { x.inner() };
-        x.references.get()
-    }
-
-    #[inline(always)]
-    unsafe fn inner(&self) -> &OrcBox<T> {
-        self.ptr.as_ref()
-    }
-
-    #[inline(always)]
-    unsafe fn inner_mut(&mut self) -> &mut OrcBox<T> {
-        self.ptr.as_mut()
-    }
-
-    #[inline(always)]
-    fn add_reference(&self) -> isize {
-        let mut references = unsafe { self.inner() }.references.get();
-        // has at least one from constructor
-        if references > 0 {
-            references += 1;
-            unsafe { self.inner() }.references.set(references);
-        }
-        references
-    }
-
-    #[inline(always)]
-    fn remove_reference(&self) -> isize {
-        let mut references = unsafe { self.inner() }.references.get();
-        if references > 0 {
-            references -= 1;
-            unsafe { self.inner() }.references.set(references);
-        }
-        references
-    }
-
-    fn to_manual(&self) {
-        unsafe { self.inner() }.references.set(-1);
-    }
-
-    fn free(&self) {
-        if unsafe { self.inner() }.references.get() == -1 {
-            unsafe { Box::from_raw(self.ptr.as_ptr()) };
-        }
+        Urc(self.0)
     }
 }
 
 impl<T> Clone for Orc<T> {
     #[inline]
     fn clone(&self) -> Orc<T> {
-        self.add_reference();
-        Orc {
-            ptr: self.ptr,
-            phantom: PhantomData,
+        unsafe {
+            self.0.as_ref().inc_orc();
         }
+        Orc(self.0)
     }
 }
 
 impl<T: fmt::Debug> fmt::Debug for Orc<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&**self, f)
+        unsafe { write!(f, "Orc({:?})", &self.0.as_ref().value) }
     }
 }
 
 impl<T> Drop for Orc<T> {
     fn drop(&mut self) {
-        let references = self.remove_reference();
-        if references == 0 {
-            unsafe { Box::from_raw(self.ptr.as_ptr()) };
-            // the boxed value is dropped and memory released here
+        unsafe {
+            self.0.as_mut().dec_orc();
+            if self.0.as_ref().can_be_dropped() {
+                Box::from_raw(self.0.as_ptr());
+                // let it leak
+            }
         }
+    }
+}
+
+impl<T> Urc<T> {
+    pub fn get_mut(&mut self) -> Option<&mut T> {
+        unsafe {
+            if self.0.as_ref().users.get() == 1 {
+                Some(&mut self.0.as_mut().value)
+            } else {
+                None
+            }
+        }
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for Urc<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        unsafe { write!(f, "Urc({:?})", &self.0.as_ref().value) }
+    }
+}
+
+impl<T> Drop for Urc<T> {
+    fn drop(&mut self) {
+        unsafe {
+            self.0.as_mut().dec_urc();
+            if self.0.as_ref().can_be_dropped() {
+                Box::from_raw(self.0.as_ptr());
+                // let it drop
+            }
+        }
+    }
+}
+
+impl<T> Deref for Urc<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &self.0.as_ref().value }
+    }
+}
+
+impl<T> RcBox<T> {
+    fn new(value: T) -> NonNull<RcBox<T>> {
+        let ptr = Box::new(RcBox {
+            owners: Cell::new(1),
+            users: Cell::new(0),
+            value,
+        });
+        NonNull::from(Box::leak(ptr))
+    }
+
+    fn inc_orc(&self) {
+        self.owners.set(self.owners.get() + 1);
+    }
+    fn inc_urc(&self) {
+        self.users.set(self.users.get() + 1);
+    }
+    fn dec_orc(&mut self) {
+        self.owners.set(self.owners.get() - 1);
+    }
+    fn dec_urc(&mut self) {
+        self.users.set(self.users.get() - 1);
+    }
+
+    fn can_be_dropped(&self) -> bool {
+        self.owners.get() == 0 && self.users.get() == 0
     }
 }

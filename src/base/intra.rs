@@ -1,11 +1,12 @@
 use super::*;
+use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::{fmt::Debug, path::Path};
 
 #[derive(Clone, Debug)]
 pub enum DataSource<'s> {
-    File(&'s Path),
-    String(&'s str),
+    File(Cow<'s, Path>),
+    String(Cow<'s, str>),
 }
 
 #[derive(Debug)]
@@ -58,13 +59,14 @@ pub trait InTrace: Clone + Debug {}
 
 pub trait InCell: Clone + Debug {
     type Domain: InDomain;
+    type ValueRef: InValueRef;
 
     fn domain(&self) -> &Self::Domain;
 
     fn typ(&self) -> Res<&str>;
     fn index(&self) -> Res<usize>;
-    fn label(&self) -> Res<&str>;
-    fn value(&self) -> Res<Value>;
+    fn label(&self) -> Res<Self::ValueRef>;
+    fn value(&self) -> Res<Self::ValueRef>;
 
     fn sub(&self) -> Res<<Self::Domain as InDomain>::Group>;
     fn attr(&self) -> Res<<Self::Domain as InDomain>::Group>;
@@ -86,6 +88,14 @@ pub trait InCell: Clone + Debug {
     // fn as_data_destination(&mut self) -> Option<Res<DataDestination>> {
     //     todo!()
     // }
+}
+
+pub trait InValueRef: Debug {
+    fn get(&self) -> Res<Value>;
+
+    fn with<T>(&self, f: impl Fn(Res<Value>) -> T) -> T {
+        f(self.get())
+    }
 }
 
 pub trait InGroup: Clone + Debug {

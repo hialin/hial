@@ -1,6 +1,6 @@
+use crate::utils::orc::{Orc, Urc};
 use crate::{base::*, utils::vecmap::VecMap};
 use reqwest::{blocking::Client, Error as ReqwestError};
-use std::rc::Rc;
 
 // ^http .value = bytes
 //       @status
@@ -9,7 +9,7 @@ use std::rc::Rc;
 //       @headers/...
 
 #[derive(Clone, Debug)]
-pub struct Domain(Rc<Response>);
+pub struct Domain(Orc<Response>);
 
 #[derive(Debug)]
 pub struct Response {
@@ -23,6 +23,14 @@ pub struct Response {
 pub struct Cell {
     group: Group,
     pos: usize,
+}
+
+#[derive(Debug)]
+pub struct ValueRef {
+    kind: GroupKind,
+    response: Urc<Response>,
+    pos: usize,
+    is_label: bool,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -64,7 +72,7 @@ pub fn from_string(url: &str) -> Res<Cell> {
     if status >= 400 {
         eprintln!("Error: http call failed: {} = {} {}", url, status, reason);
     }
-    let domain = Domain(Rc::new(Response {
+    let domain = Domain(Orc::new(Response {
         status,
         reason,
         headers,
@@ -74,8 +82,9 @@ pub fn from_string(url: &str) -> Res<Cell> {
 }
 
 pub fn to_string(cell: &Cell) -> Res<String> {
-    let bytes = &*cell.group.response.0.body;
-    let string = String::from_utf8(bytes.into());
+    let ur = &*cell.group.response.0.urc();
+    let bytes = &ur.body;
+    let string = String::from_utf8(bytes.to_vec());
     match string {
         Ok(s) => Ok(s),
         Err(err) => Err(HErr::Http(format!("not utf8 string: {}", err))),
@@ -101,8 +110,51 @@ impl InDomain for Domain {
     }
 }
 
+impl InValueRef for ValueRef {
+    fn get(&self) -> Res<Value> {
+        if self.is_label {
+            match (&self.kind, self.pos) {
+                (GroupKind::Root, _) => NotFound::NoLabel.into(),
+                (GroupKind::Attr, 0) => Ok(Value::Str("status")),
+                (GroupKind::Attr, 1) => Ok(Value::Str("headers")),
+                (GroupKind::Status, 0) => Ok(Value::Str("code")),
+                (GroupKind::Status, 1) => Ok(Value::Str("reason")),
+                (GroupKind::Headers, _) => {
+                    if let Some((k, _)) = self.response.headers.at(self.pos) {
+                        return Ok(Value::Str(k));
+                    }
+                    HErr::internal(format!("bad pos in headers: {}", self.pos)).into()
+                }
+                _ => HErr::internal(format!("bad kind/pos: {:?}/{}", self.kind, self.pos)).into(),
+            }
+        } else {
+            match (&self.kind, self.pos) {
+                (GroupKind::Root, 0) => Ok(Value::Bytes(&self.response.body)),
+                (GroupKind::Attr, 0) => Ok(Value::None),
+                (GroupKind::Attr, 1) => Ok(Value::None),
+                (GroupKind::Status, 0) => Ok(Value::Int(Int::I32(self.response.status as i32))),
+                (GroupKind::Status, 1) => Ok(if self.response.reason.is_empty() {
+                    Value::None
+                } else {
+                    Value::Str(&self.response.reason)
+                }),
+                (GroupKind::Headers, _) => {
+                    let header_values = if let Some(hv) = self.response.headers.at(self.pos) {
+                        hv.1
+                    } else {
+                        return Err(HErr::Http(format!("logic error")));
+                    };
+                    Ok(Value::Str(header_values[0].as_str()))
+                }
+                _ => Err(HErr::Http(format!("logic error"))),
+            }
+        }
+    }
+}
+
 impl InCell for Cell {
     type Domain = Domain;
+    type ValueRef = ValueRef;
 
     fn domain(&self) -> &Self::Domain {
         &self.group.response
@@ -124,44 +176,22 @@ impl InCell for Cell {
         Ok(self.pos)
     }
 
-    fn label(&self) -> Res<&str> {
-        match (&self.group.kind, self.pos) {
-            (GroupKind::Root, _) => NotFound::NoLabel.into(),
-            (GroupKind::Attr, 0) => Ok("status"),
-            (GroupKind::Attr, 1) => Ok("headers"),
-            (GroupKind::Status, 0) => Ok("code"),
-            (GroupKind::Status, 1) => Ok("reason"),
-            (GroupKind::Headers, _) => {
-                if let Some((k, _)) = self.group.response.0.headers.at(self.pos) {
-                    return Ok(k);
-                }
-                HErr::internal(format!("bad pos in headers: {}", self.pos)).into()
-            }
-            _ => HErr::internal(format!("bad kind/pos: {:?}/{}", self.group.kind, self.pos)).into(),
-        }
+    fn label(&self) -> Res<ValueRef> {
+        Ok(ValueRef {
+            response: self.group.response.0.urc(),
+            kind: self.group.kind,
+            pos: self.pos,
+            is_label: true,
+        })
     }
 
-    fn value(&self) -> Res<Value> {
-        match (&self.group.kind, self.pos) {
-            (GroupKind::Root, 0) => Ok(Value::Bytes(&self.group.response.0.body)),
-            (GroupKind::Attr, 0) => Ok(Value::None),
-            (GroupKind::Attr, 1) => Ok(Value::None),
-            (GroupKind::Status, 0) => Ok(Value::Int(Int::I32(self.group.response.0.status as i32))),
-            (GroupKind::Status, 1) => Ok(if self.group.response.0.reason.is_empty() {
-                Value::None
-            } else {
-                Value::Str(&self.group.response.0.reason)
-            }),
-            (GroupKind::Headers, _) => {
-                let header_values = if let Some(hv) = self.group.response.0.headers.at(self.pos) {
-                    hv.1
-                } else {
-                    return Err(HErr::Http(format!("logic error")));
-                };
-                Ok(Value::Str(header_values[0].as_str()))
-            }
-            _ => Err(HErr::Http(format!("logic error"))),
-        }
+    fn value(&self) -> Res<ValueRef> {
+        Ok(ValueRef {
+            response: self.group.response.0.urc(),
+            kind: self.group.kind,
+            pos: self.pos,
+            is_label: false,
+        })
     }
 
     fn sub(&self) -> Res<Group> {
@@ -205,7 +235,7 @@ impl InGroup for Group {
             GroupKind::Root => 0,
             GroupKind::Attr => 2,
             GroupKind::Status => 2,
-            GroupKind::Headers => self.response.0.headers.len(),
+            GroupKind::Headers => self.response.0.urc().headers.len(),
         }
     }
 
@@ -219,7 +249,7 @@ impl InGroup for Group {
                 group: self.clone(),
                 pos: index,
             }),
-            (GroupKind::Headers, i) if i < self.response.0.headers.len() => Ok(Cell {
+            (GroupKind::Headers, i) if i < self.response.0.urc().headers.len() => Ok(Cell {
                 group: self.clone(),
                 pos: index,
             }),
@@ -249,7 +279,7 @@ impl InGroup for Group {
             (GroupKind::Headers, sel) => match sel {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
                 Selector::Str(k) => {
-                    if let Some((i, _, _)) = self.response.0.headers.get(k) {
+                    if let Some((i, _, _)) = self.response.0.urc().headers.get(k) {
                         Ok(Cell {
                             group: self.clone(),
                             pos: i,

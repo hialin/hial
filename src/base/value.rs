@@ -1,3 +1,4 @@
+use crate::guard_variant;
 use core::{
     cmp::Ordering,
     fmt::{self, Display},
@@ -249,5 +250,9 @@ impl Value<'_> {
             Value::Str(x) => OwnedValue::String(x.to_string()),
             Value::Bytes(x) => OwnedValue::Bytes(Vec::from(*x)),
         }
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        guard_variant!(self, Value::Str)
     }
 }
