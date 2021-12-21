@@ -1,7 +1,8 @@
-use super::utils::*;
 use crate::base::*;
-use crate::pathlang::path::{Expression, Filter, Path, PathItem, Relation};
+use crate::pathlang::path::{Expression, Filter, Path, PathItem};
 use crate::set_verbose;
+
+use super::utils::*;
 
 #[test]
 fn path_items() -> Res<()> {
@@ -245,6 +246,7 @@ fn path_double_kleene_deep_filter() -> Res<()> {
 
 #[test]
 fn path_double_kleene_all() -> Res<()> {
+    set_verbose(true);
     const TREE: &str = r#"
             a:
               x: xa
@@ -259,14 +261,14 @@ fn path_double_kleene_all() -> Res<()> {
 
     let root = Cell::from(TREE.to_string()).be("yaml")?;
 
+    let eval = str_eval(root.clone(), "/**#label")?;
+    assert_eq!(eval, [":a", ":x", ":b", ":x", ":c", ":x", ":y", ":m", ":n"]);
+
     let eval = str_eval(root.clone(), "/**")?;
     assert_eq!(
         eval,
         [":ø", "a:ø", "x:xa", "b:ø", "x:xb", "c:ø", "x:xc", "y:yc", "m:mval", "n:nval"]
     );
-
-    let eval = str_eval(root.clone(), "/**#label")?;
-    assert_eq!(eval, [":a", ":x", ":b", ":x", ":c", ":x", ":y", ":m", ":n"]);
 
     Ok(())
 }

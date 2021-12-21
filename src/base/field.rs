@@ -1,6 +1,7 @@
+use std::borrow::Cow;
+
 use crate::base::*;
 use crate::guard_ok;
-use std::borrow::Cow;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -71,6 +72,15 @@ impl Field {
 
     pub fn attr(&self) -> Res<Field> {
         NotFound::NoGroup(format!("@")).into()
+    }
+
+    pub fn get_path(&self) -> Res<Cow<str>> {
+        match self.1 {
+            FieldType::Value => Ok(Cow::from("#value")),
+            FieldType::Label => Ok(Cow::from("#label")),
+            FieldType::Type => Ok(Cow::from("#type")),
+            FieldType::Index => Ok(Cow::from("#index")),
+        }
     }
 
     pub fn as_data_source(&self) -> Option<Res<DataSource>> {

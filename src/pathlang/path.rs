@@ -1,9 +1,10 @@
+use std::fmt::{Display, Formatter};
+
 use crate::{
     base::*,
     interpretations::*,
     pathlang::{eval::EvalIter, parseurl::*},
 };
-use std::fmt::{Display, Formatter};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Path<'a>(pub(crate) Vec<PathItem<'a>>);
@@ -23,15 +24,6 @@ pub struct PathItem<'a> {
     pub(crate) filters: Vec<Filter<'a>>,       // [@size>0] or [.name.endswith('.rs')]
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-#[repr(u8)]
-pub enum Relation {
-    Attr = '@' as u8,
-    Sub = '/' as u8,
-    Interpretation = '^' as u8,
-    Field = '#' as u8,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct Filter<'a> {
     pub(crate) expr: Expression<'a>,
@@ -42,31 +34,6 @@ pub struct Expression<'a> {
     pub(crate) left: Path<'a>,
     pub(crate) op: Option<&'a str>,
     pub(crate) right: Option<Value<'a>>,
-}
-
-impl Display for Relation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u8 as char)
-    }
-}
-
-impl TryFrom<char> for Relation {
-    type Error = ();
-
-    fn try_from(value: char) -> Result<Self, Self::Error> {
-        let value = value as u8;
-        if value == Relation::Attr as u8 {
-            Ok(Relation::Attr)
-        } else if value == Relation::Sub as u8 {
-            Ok(Relation::Sub)
-        } else if value == Relation::Interpretation as u8 {
-            Ok(Relation::Interpretation)
-        } else if value == Relation::Field as u8 {
-            Ok(Relation::Field)
-        } else {
-            Err(())
-        }
-    }
 }
 
 impl Display for Path<'_> {
@@ -158,17 +125,26 @@ impl<'a> CellRepresentation<'a> {
         match self {
             CellRepresentation::Url(u) => {
                 let urlcell = url::from_string(&u.to_string())?;
-                Cell::Url(urlcell).elevate()?.get("url")
+                Cell {
+                    this: EnCell::Dyn(DynCell::Url(urlcell)),
+                    prev: None,
+                }
+                .elevate()?
+                .get("url")
             }
             CellRepresentation::File(f) => {
                 let path = std::path::Path::new(f).to_path_buf();
-                Cell::File(file::from_path(path)?.root()?)
-                    .elevate()?
-                    .get("file")
+                Cell {
+                    this: EnCell::Dyn(DynCell::File(file::from_path(path)?.root()?)),
+                    prev: None,
+                }
+                .elevate()?
+                .get("file")
             }
-            CellRepresentation::String(str) => {
-                Ok(Cell::from(ownedvalue::Cell::from(str.to_string())))
-            }
+            CellRepresentation::String(str) => Ok(Cell {
+                this: EnCell::Dyn(DynCell::from(ownedvalue::Cell::from(str.to_string()))),
+                prev: None,
+            }),
         }
     }
 }

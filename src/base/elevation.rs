@@ -1,8 +1,10 @@
+use std::{borrow::Cow, path::PathBuf};
+
+use lazy_static::lazy_static;
+
 use crate::{
     base::*, guard_ok, guard_some, interpretations::*, utils::vecmap::VecMap, verbose_error,
 };
-use lazy_static::lazy_static;
-use std::{borrow::Cow, path::PathBuf};
 
 type ConstructorFn = fn(DataSource) -> Res<Cell>;
 type ElevateFn = fn(Cell) -> Res<Cell>;
@@ -54,10 +56,10 @@ fn get_elevation_map_for(interpretation: &str) -> Option<VecMapOfElevateFn> {
 
 fn value_elevation_map() -> VecMap<&'static str, ElevateFn> {
     macro_rules! add_str_elevation {
-        ($ret:ident, $interp:literal, |$argname:ident| $body:block) => {
-            $ret.put($interp, |cell: Cell| -> Res<Cell> {
-                let vref = cell.value()?;
-                if let Value::Str($argname) = vref.get()? {
+        ($ret:ident, $interp:literal, |$cellname:ident, $strname:ident| $body:block) => {
+            $ret.put($interp, |$cellname: Cell| -> Res<Cell> {
+                let vref = $cellname.value()?;
+                if let Value::Str($strname) = vref.get()? {
                     return $body;
                 }
                 HErr::internal("elevation: not a string").into()
@@ -65,7 +67,12 @@ fn value_elevation_map() -> VecMap<&'static str, ElevateFn> {
         };
     }
     let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
-    add_str_elevation!(ret, "url", |s| { Ok(Cell::from(url::from_string(s)?)) });
+    add_str_elevation!(ret, "url", |cell, s| {
+        Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(url::from_string(s)?)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        })
+    });
     ret.put("file", |cell: Cell| -> Res<Cell> {
         let datasource = guard_some!(cell.as_data_source(), {
             return HErr::internal("no data source").into();
@@ -76,22 +83,60 @@ fn value_elevation_map() -> VecMap<&'static str, ElevateFn> {
             datasource
         };
         let domain = file::Domain::new_from(cell.domain().interpretation(), ds)?;
-        Ok(Cell::from(domain.root()?))
+        Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(domain.root()?)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        })
     });
-    add_str_elevation!(ret, "json", |s| { Ok(Cell::from(json::from_string(s)?)) });
-    add_str_elevation!(ret, "toml", |s| { Ok(Cell::from(toml::from_string(s)?)) });
-    add_str_elevation!(ret, "yaml", |s| { Ok(Cell::from(yaml::from_string(s)?)) });
-    add_str_elevation!(ret, "xml", |s| { Ok(Cell::from(xml::from_string(s)?)) });
-    add_str_elevation!(ret, "http", |s| { Ok(Cell::from(http::from_string(s)?)) });
-    add_str_elevation!(ret, "rust", |s| {
-        Ok(Cell::from(treesitter::from_string(s.to_string(), "rust")?))
+    add_str_elevation!(ret, "json", |cell, s| {
+        Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(json::from_string(s)?)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        })
+    });
+    add_str_elevation!(ret, "toml", |cell, s| {
+        Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(toml::from_string(s)?)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        })
+    });
+    add_str_elevation!(ret, "yaml", |cell, s| {
+        Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(yaml::from_string(s)?)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        })
+    });
+    add_str_elevation!(ret, "xml", |cell, s| {
+        Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(xml::from_string(s)?)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        })
+    });
+    add_str_elevation!(ret, "http", |cell, s| {
+        Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(http::from_string(s)?)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        })
+    });
+    add_str_elevation!(ret, "rust", |cell, s| {
+        Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(treesitter::from_string(
+                s.to_string(),
+                "rust",
+            )?)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        })
     });
     ret
 }
 
 fn file_elevation_map() -> VecMap<&'static str, ElevateFn> {
     fn get_path(cell: &Cell) -> Res<&std::path::Path> {
-        if let Cell::File(ref file) = cell {
+        if let Cell {
+            this: EnCell::Dyn(DynCell::File(ref file)),
+            ..
+        } = cell
+        {
             return file::get_path(file);
         }
         HErr::internal("elevation: not a file").into()
@@ -100,34 +145,53 @@ fn file_elevation_map() -> VecMap<&'static str, ElevateFn> {
     ret.put("json", |cell: Cell| {
         let path = get_path(&cell)?;
         let json = json::from_path(path)?;
-        return Ok(Cell::from(json));
+        return Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(json)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        });
     });
     ret.put("toml", |cell: Cell| {
         let path = get_path(&cell)?;
         let toml = toml::from_path(path)?;
-        return Ok(Cell::from(toml));
+        return Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(toml)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        });
     });
     ret.put("yaml", |cell: Cell| {
         let path = get_path(&cell)?;
         let yaml = yaml::from_path(path)?;
-        return Ok(Cell::from(yaml));
+        return Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(yaml)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        });
     });
     ret.put("xml", |cell: Cell| {
         let path = get_path(&cell)?;
         let xml = xml::from_path(path)?;
-        return Ok(Cell::from(xml));
+        return Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(xml)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        });
     });
     ret.put("rust", |cell: Cell| {
         let path = get_path(&cell)?;
         let rust = treesitter::from_path(path, "rust")?;
-        return Ok(Cell::from(rust));
+        return Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(rust)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        });
     });
     ret
 }
 
 fn url_elevation_map() -> VecMap<&'static str, ElevateFn> {
     fn get_url(cell: &Cell) -> Res<&str> {
-        if let Cell::Url(url) = cell {
+        if let Cell {
+            this: EnCell::Dyn(DynCell::Url(ref url)),
+            ..
+        } = cell
+        {
             return Ok(url.as_str());
         }
         HErr::internal("elevation: not a url").into()
@@ -135,14 +199,21 @@ fn url_elevation_map() -> VecMap<&'static str, ElevateFn> {
     let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
     ret.put("http", |cell: Cell| {
         let http = http::from_string(get_url(&cell)?)?;
-        return Ok(Cell::from(http));
+        return Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(http)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        });
     });
     ret
 }
 
 fn http_elevation_map() -> VecMap<&'static str, ElevateFn> {
     fn http_as_string(cell: &Cell) -> Res<String> {
-        if let Cell::Http(ref h) = cell {
+        if let Cell {
+            this: EnCell::Dyn(DynCell::Http(ref h)),
+            ..
+        } = cell
+        {
             return http::to_string(h);
         }
         HErr::internal("elevation: not a http cell").into()
@@ -153,11 +224,17 @@ fn http_elevation_map() -> VecMap<&'static str, ElevateFn> {
     // });
     ret.put("json", |cell: Cell| {
         let string = http_as_string(&cell)?;
-        return Ok(Cell::from(json::from_string(&string)?));
+        return Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(json::from_string(&string)?)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        });
     });
     ret.put("xml", |cell: Cell| {
         let string = http_as_string(&cell)?;
-        return Ok(Cell::from(xml::from_string(&string)?));
+        return Ok(Cell {
+            this: EnCell::Dyn(DynCell::from(xml::from_string(&string)?)),
+            prev: Some((Box::new(cell), Relation::Interpretation)),
+        });
     });
     ret
 }
@@ -165,10 +242,17 @@ fn http_elevation_map() -> VecMap<&'static str, ElevateFn> {
 fn rust_elevation_map() -> VecMap<&'static str, ElevateFn> {
     let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
     ret.put("string", |cell: Cell| {
-        if let Cell::TreeSitter(ts) = cell {
+        if let Cell {
+            this: EnCell::Dyn(DynCell::TreeSitter(ref ts)),
+            ..
+        } = cell
+        {
             let s = treesitter::get_underlying_string(&ts)?;
             let ovcell = ownedvalue::Cell::from(s.to_string());
-            Ok(Cell::from(ovcell))
+            Ok(Cell {
+                this: EnCell::Dyn(DynCell::from(ovcell)),
+                prev: Some((Box::new(cell), Relation::Interpretation)),
+            })
         } else {
             HErr::internal("rust to string elevation").into()
         }

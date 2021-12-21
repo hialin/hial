@@ -20,12 +20,6 @@ mod utils;
 #[cfg(test)]
 mod tests;
 
-// pub use base::common::Selector;
-// pub use base::error::{HErr, Res};
-// pub use base::intra::*;
-// pub use base::rust_api;
-// pub use base::value::{Int, OwnedValue, Value};
-
 pub static mut VERBOSE: bool = false;
 
 #[macro_export]
