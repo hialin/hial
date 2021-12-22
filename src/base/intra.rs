@@ -28,10 +28,6 @@ pub trait InDomain: Clone + Debug {
         todo!()
     }
 
-    fn write_to(&self, destination: DataDestination) {
-        todo!()
-    }
-
     fn root(&self) -> Res<Self::Cell>;
     // fn cell(&self, trace: &Self::Trace) -> Self::Cell;
 
@@ -82,7 +78,12 @@ pub trait InCell: Clone + Debug {
         todo!();
     }
 
+    // todo remove this and replace it with raw_write_to
     fn as_data_source(&self) -> Option<Res<DataSource>> {
+        todo!()
+    }
+
+    fn raw_write_to(&self, destination: DataDestination) {
         todo!()
     }
 

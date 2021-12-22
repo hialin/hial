@@ -13,14 +13,13 @@ pub enum FieldType {
 }
 
 #[derive(Clone, Debug)]
-pub struct Field(pub(crate) Box<Cell>, pub(crate) FieldType); // todo remove this boxing
+pub(crate) struct Field(pub(crate) DynCell, pub(crate) FieldType);
 
 #[derive(Debug)]
-pub enum ValueRef {
+pub(crate) enum ValueRef {
     // todo remove this boxing
     ValueRef(Box<extra::ValueRef>),
-    // todo remove this boxing
-    Field(Box<Cell>, FieldType),
+    Field(DynCell, FieldType),
     Label(FieldType),
 }
 
@@ -71,7 +70,7 @@ impl Field {
         } else if self.1 == FieldType::Label {
             ValueRef::ValueRef(Box::new(self.0.label()))
         } else {
-            ValueRef::Field(Box::new(self.0.as_ref().clone()), self.1)
+            ValueRef::Field(self.0.clone(), self.1)
         }
     }
 
@@ -167,8 +166,5 @@ impl Field {
             FieldType::Type => todo!(),
             FieldType::Index => todo!(),
         }
-    }
-    pub fn set_label(&mut self, ov: OwnedValue) -> Res<()> {
-        todo!()
     }
 }

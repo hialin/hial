@@ -28,6 +28,7 @@ macro_rules! enumerated_dynamic_type {
         )+
 
         #[allow(unused_macros)]
+        #[macro_export]
         macro_rules! $macroname {
             ($on:expr, |$argname:ident| $body:block) => {
                 match $on {

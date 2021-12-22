@@ -70,7 +70,6 @@ impl InDomain for Domain {
         }
     }
 
-    fn write_to(&self, destination: DataDestination) {}
     fn root(&self) -> Res<Self::Cell> {
         let files = guard_some!(self.0.file_map.get(self.0.root_path.as_path()), {
             return HErr::internal("").into();

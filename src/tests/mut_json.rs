@@ -60,7 +60,7 @@ fn mutate_and_write_json() -> Res<()> {
     assert_eq!(json.path(path1)?.first()?.value().get()?, newvalue);
     assert_eq!(json.path(path2)?.first()?.value().get()?, Value::None);
 
-    json.domain().save_to_origin()?;
+    json.domain().flush_changes()?;
     assert_eq!(
         json_original.value().get()?.to_string(),
         r#"{

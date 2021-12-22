@@ -7,9 +7,13 @@ pub enum HErr {
     NotFound(NotFound),
     BadArgument(String),
     BadPath(String),
+    BadContext(String),
     IO(std::io::ErrorKind, String),
     IncompatibleSource(String),
-    ExclusivityRequired(String), // cannot change data because there are other readers
+
+    // cannot change data because there are other readers
+    ExclusivityRequired(String),
+
     Json(String),
     Toml(String),
     Yaml(String),

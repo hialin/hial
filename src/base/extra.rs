@@ -18,13 +18,9 @@ enumerated_dynamic_type! {
     with_domain
 }
 
-// todo: separate interpretation and ex-terpretation types
-// pub enum InnerCell {OwnedValue, File, ...}
-// pub enum Cell {Field, InnerCell}
-
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
-    pub enum DynCell {
+    pub(crate) enum DynCell {
         OwnedValue(ownedvalue::Cell),
         File(file::Cell),
         Json(json::Cell),
@@ -39,14 +35,14 @@ enumerated_dynamic_type! {
 }
 
 #[derive(Clone, Debug)]
-pub enum EnCell {
+pub(crate) enum EnCell {
     Field(Field),
     Dyn(DynCell),
 }
 
 enumerated_dynamic_type! {
     #[derive(Debug)]
-    pub enum ValueRef {
+    enum DynValueRef {
         Field(field::ValueRef),
         OwnedValue(ownedvalue::ValueRef),
         File(file::ValueRef),
@@ -61,9 +57,12 @@ enumerated_dynamic_type! {
     with_valueref
 }
 
+#[derive(Debug)]
+pub struct ValueRef(DynValueRef);
+
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
-    pub enum DynGroup {
+    pub(crate) enum DynGroup {
         OwnedValue(VoidGroup<ownedvalue::Domain>),
         File(file::Group),
         Json(json::Group),
@@ -78,7 +77,7 @@ enumerated_dynamic_type! {
 }
 
 #[derive(Clone, Debug)]
-pub enum EnGroup {
+pub(crate) enum EnGroup {
     Elevation(ElevationGroup),
     Field(Field),
     // Mixed(Vec<Cell>),
@@ -107,7 +106,7 @@ impl Domain {
         })
     }
 
-    pub fn save_to_origin(&self) -> Res<()> {
+    pub fn flush_changes(&self) -> Res<()> {
         todo!()
     }
 
@@ -145,7 +144,7 @@ impl From<String> for Cell {
 
 impl ValueRef {
     pub fn get(&self) -> Res<Value> {
-        with_valueref!(self, |x| { x.get() })
+        with_valueref!(&self.0, |x| { x.get() })
     }
 
     pub fn with<T>(&self, f: impl Fn(Res<Value>) -> T) -> T {
@@ -153,46 +152,86 @@ impl ValueRef {
     }
 }
 
+impl ValueRef {
+    fn from<T: Into<DynValueRef>>(x: T) -> ValueRef {
+        ValueRef(x.into())
+    }
+}
+
+impl DynCell {
+    pub(crate) fn domain(&self) -> Domain {
+        with_dyn_cell!(self, |x| { Domain::from(x.domain().clone()) })
+    }
+
+    pub(crate) fn typ(&self) -> Res<&str> {
+        with_dyn_cell!(self, |x| { Ok(x.typ()?) })
+    }
+    pub(crate) fn index(&self) -> Res<usize> {
+        with_dyn_cell!(self, |x| { Ok(x.index()?) })
+    }
+    pub(crate) fn label(&self) -> ValueRef {
+        with_dyn_cell!(self, |x| { ValueRef::from(x.label()) })
+    }
+    pub(crate) fn value(&self) -> ValueRef {
+        with_dyn_cell!(self, |x| { ValueRef::from(x.value()) })
+    }
+
+    pub(crate) fn sub(&self) -> Res<DynGroup> {
+        with_dyn_cell!(self, |x| { Ok(DynGroup::from(x.sub()?)) })
+    }
+    pub(crate) fn attr(&self) -> Res<DynGroup> {
+        with_dyn_cell!(self, |x| { Ok(DynGroup::from(x.attr()?)) })
+    }
+
+    pub(crate) fn set_value(&mut self, value: OwnedValue) -> Res<()> {
+        with_dyn_cell!(self, |x| { x.set_value(value) })
+    }
+    pub(crate) fn set_label(&mut self, value: OwnedValue) -> Res<()> {
+        with_dyn_cell!(self, |x| { x.set_label(value) })
+    }
+}
+
 impl Cell {
+    pub fn domain(&self) -> Domain {
+        match &self.this {
+            EnCell::Dyn(dyn_cell) => dyn_cell.domain(),
+            EnCell::Field(field_cell) => field_cell.domain(),
+        }
+    }
+
     pub fn typ(&self) -> Res<&str> {
         match &self.this {
-            EnCell::Dyn(dyn_cell) => with_dyn_cell!(dyn_cell, |x| { Ok(x.typ()?) }),
+            EnCell::Dyn(dyn_cell) => dyn_cell.typ(),
             EnCell::Field(field_cell) => field_cell.typ(),
         }
     }
 
     pub fn index(&self) -> Res<usize> {
         match &self.this {
-            EnCell::Dyn(dyn_cell) => with_dyn_cell!(dyn_cell, |x| { Ok(x.index()?) }),
+            EnCell::Dyn(dyn_cell) => dyn_cell.index(),
             EnCell::Field(field_cell) => field_cell.index(),
         }
     }
 
     pub fn label(&self) -> ValueRef {
         match &self.this {
-            EnCell::Dyn(dyn_cell) => {
-                with_dyn_cell!(dyn_cell, |x| { ValueRef::from(x.label()) })
-            }
+            EnCell::Dyn(dyn_cell) => dyn_cell.label(),
             EnCell::Field(field_cell) => ValueRef::from(field_cell.label()),
         }
     }
 
     pub fn value(&self) -> ValueRef {
         match &self.this {
-            EnCell::Dyn(dyn_cell) => {
-                with_dyn_cell!(dyn_cell, |x| { ValueRef::from(x.value()) })
-            }
+            EnCell::Dyn(dyn_cell) => dyn_cell.value(),
             EnCell::Field(field_cell) => ValueRef::from(field_cell.value()),
         }
     }
 
     pub fn sub(&self) -> Res<Group> {
         match &self.this {
-            EnCell::Dyn(dyn_cell) => with_dyn_cell!(dyn_cell, |x| {
-                Ok(Group {
-                    this: EnGroup::Dyn(DynGroup::from(x.sub()?)),
-                    prev: Some((Box::new(self.clone()), Relation::Sub)),
-                })
+            EnCell::Dyn(dyn_cell) => Ok(Group {
+                this: EnGroup::Dyn(dyn_cell.sub()?),
+                prev: Some((Box::new(self.clone()), Relation::Sub)),
             }),
             EnCell::Field(field_cell) => NotFound::NoGroup(format!("/")).into(),
         }
@@ -200,11 +239,9 @@ impl Cell {
 
     pub fn attr(&self) -> Res<Group> {
         match &self.this {
-            EnCell::Dyn(dyn_cell) => with_dyn_cell!(dyn_cell, |x| {
-                Ok(Group {
-                    this: EnGroup::Dyn(DynGroup::from(x.attr()?)),
-                    prev: Some((Box::new(self.clone()), Relation::Attr)),
-                })
+            EnCell::Dyn(dyn_cell) => Ok(Group {
+                this: EnGroup::Dyn(dyn_cell.attr()?),
+                prev: Some((Box::new(self.clone()), Relation::Sub)),
             }),
             EnCell::Field(field_cell) => NotFound::NoGroup(format!("@")).into(),
         }
@@ -222,10 +259,13 @@ impl Cell {
     }
 
     pub fn field(&self) -> Res<Group> {
-        Ok(Group {
-            this: EnGroup::Field(Field(Box::new(self.clone()), FieldType::Value)),
-            prev: Some((Box::new(self.clone()), Relation::Field)),
-        })
+        match &self.this {
+            EnCell::Field(_) => HErr::BadContext(format!("cannot take a field of a field")).into(),
+            EnCell::Dyn(dyn_cell) => Ok(Group {
+                this: EnGroup::Field(Field(dyn_cell.clone(), FieldType::Value)),
+                prev: Some((Box::new(self.clone()), Relation::Field)),
+            }),
+        }
     }
 
     pub fn be(self, interpretation: &str) -> Res<Cell> {
@@ -315,24 +355,6 @@ impl Cell {
                 with_dyn_cell!(dyn_cell, |x| { x.set_value(ov) })
             }
             EnCell::Field(field_cell) => field_cell.set_value(ov),
-        }
-    }
-
-    pub fn set_label(&mut self, ov: OwnedValue) -> Res<()> {
-        match &mut self.this {
-            EnCell::Dyn(dyn_cell) => {
-                with_dyn_cell!(dyn_cell, |x| { x.set_label(ov) })
-            }
-            EnCell::Field(field_cell) => field_cell.set_label(ov),
-        }
-    }
-
-    pub fn domain(&self) -> Domain {
-        match &self.this {
-            EnCell::Dyn(dyn_cell) => {
-                with_dyn_cell!(dyn_cell, |x| { Domain::from(x.domain().clone()) })
-            }
-            EnCell::Field(field_cell) => field_cell.domain(),
         }
     }
 
