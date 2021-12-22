@@ -294,7 +294,10 @@ fn path_double_kleene_labels() -> Res<()> {
 
     crate::pprint::pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/**#label")?;
-    assert_eq!(eval, [":a", ":x", ":b", ":x", ":c", ":x", ":y", ":m", ":n"]);
+    assert_eq!(
+        eval,
+        [":a", ":x", ":b", ":x", ":c", ":x", ":y", ":z", ":m", ":n"]
+    );
 
     Ok(())
 }

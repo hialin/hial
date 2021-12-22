@@ -32,15 +32,14 @@
 
 ### Todos, Issues, Problems
 
+- todo: write support: json, rust, fs
+- todo: c interop and a small c test
+
 - cell must implement partialeq, eq
 
 - todo: tree guide lines
 - todo: colors: interp, type, label, value
 - todo: option to hide attrs?
-
-- todo: add domain and trace traits, with full support in implementations
-- todo: write support: json, rust, fs
-- todo: c interop and a small c test
 
 - todo: python interop and a larger python example
 - todo: review examples, check accessors, operators

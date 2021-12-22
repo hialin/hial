@@ -53,11 +53,11 @@ impl<'s> EvalIter<'s> {
 
     fn is_doublestar_match(cell: &Cell, path_index: usize, path: &Vec<PathItem<'s>>) -> bool {
         debug!({
-            println!(
-                "is_doublestar_match: {} index {}",
-                cell.debug_string(),
-                path_index
-            )
+            // println!(
+            //     "is_doublestar_match: {} index {}",
+            //     cell.debug_string(),
+            //     path_index
+            // )
         });
         if let Some(path_item) = path.get(path_index) {
             if let Some(Selector::DoubleStar) = path_item.selector {
@@ -135,7 +135,8 @@ impl<'s> EvalIter<'s> {
             }
         }
 
-        for relation in [Relation::Field, Relation::Attr, Relation::Sub] {
+        // output order is reverse: field first, attr second, subs last
+        for relation in [Relation::Sub, Relation::Attr, Relation::Field] {
             if has_relation(relation, &self.path) {
                 let (star, doublestar) = Self::has_stars(relation, &path_indices, &self.path);
                 match Self::subgroup(relation, &cell) {
@@ -401,14 +402,14 @@ impl<'s> EvalIter<'s> {
             match EvalIter::eval_bool_expression(subcell.clone(), &filter.expr) {
                 Err(e) => {
                     debug!({
-                        println!("verbose eval filter match ERROR");
+                        // println!("verbose eval filter match ERROR");
                     });
                     verbose_error(e);
                     return false;
                 }
                 Ok(false) => {
                     debug!({
-                        println!("verbose eval filter match FALSE");
+                        // println!("verbose eval filter match FALSE");
                     });
                     return false;
                 }
@@ -416,7 +417,7 @@ impl<'s> EvalIter<'s> {
             }
         }
         debug!({
-            println!("eval filter match test is TRUE: {}", subcell.debug_string());
+            // println!("eval filter match test is TRUE: {}", subcell.debug_string());
         });
         true
     }

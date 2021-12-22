@@ -141,10 +141,10 @@ impl Field {
         let key = key.into();
         if let Selector::Str(key) = key {
             if key == "value" {
-                self.0.value()?;
+                self.0.value()?.get()?;
                 return Ok(Field(self.0.clone(), FieldType::Value));
             } else if key == "label" {
-                self.0.label()?;
+                self.0.label()?.get()?;
                 return Ok(Field(self.0.clone(), FieldType::Label));
             } else if key == "type" {
                 self.0.typ()?;
