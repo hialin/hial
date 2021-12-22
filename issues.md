@@ -32,6 +32,8 @@
 
 ### Todos, Issues, Problems
 
+- cell must implement partialeq, eq
+
 - todo: tree guide lines
 - todo: colors: interp, type, label, value
 - todo: option to hide attrs?

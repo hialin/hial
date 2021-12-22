@@ -17,8 +17,11 @@ pub struct Field(pub(crate) Box<Cell>, pub(crate) FieldType); // todo remove thi
 
 #[derive(Debug)]
 pub enum ValueRef {
-    ValueRef(Box<extra::ValueRef>), // todo remove this boxing
+    // todo remove this boxing
+    ValueRef(Box<extra::ValueRef>),
+    // todo remove this boxing
     Field(Box<Cell>, FieldType),
+    Label(FieldType),
 }
 
 impl ValueRef {
@@ -30,6 +33,12 @@ impl ValueRef {
                 FieldType::Label => HErr::internal("unexpected label").into(),
                 FieldType::Type => Ok(Value::Str(cell.typ()?)),
                 FieldType::Index => Ok(Value::Int(Int::U64(cell.index()? as u64))),
+            },
+            ValueRef::Label(fieldtype) => match fieldtype {
+                FieldType::Value => Ok(Value::Str("value")),
+                FieldType::Label => Ok(Value::Str("label")),
+                FieldType::Type => Ok(Value::Str("type")),
+                FieldType::Index => Ok(Value::Str("index")),
             },
         }
     }
@@ -53,7 +62,7 @@ impl Field {
     }
 
     pub fn label(&self) -> Res<ValueRef> {
-        NotFound::NoLabel.into()
+        Ok(ValueRef::Label(self.1))
     }
 
     pub fn value(&self) -> Res<ValueRef> {
@@ -72,15 +81,6 @@ impl Field {
 
     pub fn attr(&self) -> Res<Field> {
         NotFound::NoGroup(format!("@")).into()
-    }
-
-    pub fn get_path(&self) -> Res<Cow<str>> {
-        match self.1 {
-            FieldType::Value => Ok(Cow::from("#value")),
-            FieldType::Label => Ok(Cow::from("#label")),
-            FieldType::Type => Ok(Cow::from("#type")),
-            FieldType::Index => Ok(Cow::from("#index")),
-        }
     }
 
     pub fn as_data_source(&self) -> Option<Res<DataSource>> {

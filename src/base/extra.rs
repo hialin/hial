@@ -224,7 +224,7 @@ impl Cell {
     pub fn field(&self) -> Res<Group> {
         Ok(Group {
             this: EnGroup::Field(Field(Box::new(self.clone()), FieldType::Value)),
-            prev: Some((Box::new(self.clone()), Relation::Interpretation)),
+            prev: Some((Box::new(self.clone()), Relation::Field)),
         })
     }
 
@@ -240,32 +240,92 @@ impl Cell {
     }
 
     pub fn get_path(&self) -> Res<String> {
-        let mut v = vec![];
-        let mut a = &self.prev;
-        while let Some((ref cell, ref rel)) = a {
-            v.push(((*cell).clone(), rel));
-            a = &cell.prev;
-        }
-
         use std::fmt::Write;
-        let mut s = String::new();
-
-        for a in v.iter().rev() {
-            let (cell, rel) = a;
-            match cell.label() {
-                Ok(labelref) => {
-                    write!(s, "<{:?}>", labelref.get())
-                        .unwrap_or_else(|err| eprintln!("str write error {}", err));
-                }
+        let err_fn = |err| eprintln!("💥 str write error {}", err);
+        let write_label_fn =
+            |s: &mut String, cell: &Cell, is_interpretation: bool| match cell.label() {
+                Ok(lref) => match lref.get() {
+                    Ok(l) => write!(s, "{}", l).unwrap_or_else(err_fn),
+                    Err(HErr::NotFound(_)) => {
+                        if is_interpretation {
+                            write!(s, "{}", cell.domain().interpretation()).unwrap_or_else(err_fn)
+                        } else if let Ok(index) = cell.index() {
+                            write!(s, "[{}]", index).unwrap_or_else(err_fn)
+                        } else {
+                            write!(s, "<?>").unwrap_or_else(err_fn)
+                        }
+                    }
+                    Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
+                },
                 Err(HErr::NotFound(_)) => {
-                    write!(s, "<?>").unwrap_or_else(|err| eprintln!("str write error {}", err));
+                    if is_interpretation {
+                        write!(s, "{}", cell.domain().interpretation()).unwrap_or_else(err_fn)
+                    } else if let Ok(index) = cell.index() {
+                        write!(s, "[{}]", index).unwrap_or_else(err_fn)
+                    } else {
+                        write!(s, "<?>").unwrap_or_else(err_fn)
+                    }
                 }
                 Err(e) => {
-                    write!(s, "<{:?}>", e)
-                        .unwrap_or_else(|err| eprintln!("str write error {}", err));
+                    write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn);
                 }
+            };
+        let write_value_fn = |s: &mut String, cell: &Cell| match cell.value() {
+            Ok(vref) => match vref.get() {
+                Ok(value) => {
+                    if cell.domain().interpretation() == "value" {
+                        let mut v = format!("{}", value).replace("\n", "\\n");
+                        if v.len() > 4 {
+                            v.truncate(4);
+                            v += "...";
+                        }
+                        write!(s, "\"{}\"", v).unwrap_or_else(err_fn);
+                    } else {
+                        write!(s, "{}", value).unwrap_or_else(err_fn);
+                    }
+                }
+                Err(HErr::NotFound(_)) => write!(s, "<?>").unwrap_or_else(err_fn),
+                Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
+            },
+            Err(HErr::NotFound(_)) => {
+                write!(s, "<?>").unwrap_or_else(err_fn);
             }
-            write!(s, "{}", rel).unwrap_or_else(|err| eprintln!("str write error {}", err));
+            Err(e) => {
+                write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn);
+            }
+        };
+
+        let mut v = vec![];
+        {
+            let mut a = self.prev.as_ref();
+            while let Some((cell, rel)) = a {
+                v.push((cell.clone(), *rel));
+                a = cell.prev.as_ref();
+            }
+        }
+
+        let mut s = String::new();
+        {
+            let mut prev_relation = None;
+            for a in v.iter().rev() {
+                let (cell, rel) = a;
+                if prev_relation.is_none() {
+                    write_value_fn(&mut s, cell);
+                } else {
+                    write_label_fn(
+                        &mut s,
+                        cell,
+                        prev_relation == Some(Relation::Interpretation),
+                    );
+                }
+                write!(s, "{}", rel).unwrap_or_else(err_fn);
+                prev_relation = Some(*rel);
+            }
+            write_label_fn(
+                &mut s,
+                self,
+                prev_relation == Some(Relation::Interpretation),
+            );
         }
         Ok(s)
     }
@@ -318,7 +378,11 @@ impl Cell {
         let mut s = String::new();
         match self.label() {
             Ok(lref) => match lref.get() {
-                Ok(l) => write!(s, "{}", l).unwrap_or_else(err_fn),
+                Ok(l) => {
+                    if !matches!(self.this, EnCell::Field(_)) {
+                        write!(s, "{}", l).unwrap_or_else(err_fn)
+                    }
+                }
                 Err(HErr::NotFound(_)) => {}
                 Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
             },

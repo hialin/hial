@@ -12,7 +12,7 @@ macro_rules! debug {
     (
         $body:block
     ) => {
-        $body
+        // $body
     };
 }
 
@@ -135,7 +135,7 @@ impl<'s> EvalIter<'s> {
             }
         }
 
-        for relation in [Relation::Attr, Relation::Sub] {
+        for relation in [Relation::Field, Relation::Attr, Relation::Sub] {
             if has_relation(relation, &self.path) {
                 let (star, doublestar) = Self::has_stars(relation, &path_indices, &self.path);
                 match Self::subgroup(relation, &cell) {
@@ -164,12 +164,12 @@ impl<'s> EvalIter<'s> {
             }
         }
 
-        if has_relation(Relation::Field, &self.path) {
-            match Self::subgroup(Relation::Field, &cell) {
-                Err(err) => verbose_error(err),
-                Ok(group) => Self::push_field(&group, &path_indices, &self.path, &mut self.stack),
-            }
-        }
+        // if has_relation(Relation::Field, &self.path) {
+        //     match Self::subgroup(Relation::Field, &cell) {
+        //         Err(err) => verbose_error(err),
+        //         Ok(group) => Self::push_field(&group, &path_indices, &self.path, &mut self.stack),
+        //     }
+        // }
 
         None
     }
@@ -313,37 +313,37 @@ impl<'s> EvalIter<'s> {
         }
     }
 
-    fn push_field(
-        group: &Group,
-        path_indices: &HashSet<usize>,
-        path: &Vec<PathItem<'s>>,
-        stack: &mut Vec<CellNode>,
-    ) {
-        for path_index in path_indices {
-            let path_item = &path[*path_index];
-            if path_item.relation != Relation::Field {
-                continue;
-            }
-            if let Some(field) = path_item.selector {
-                let subcell = guard_ok!(group.get(field), err => {
-                    verbose_error(err);
-                    continue;
-                });
-
-                debug!({
-                    println!(
-                        "push by field: {} : {:?}",
-                        subcell.debug_string(),
-                        path_index + 1
-                    );
-                });
-                stack.push(CellNode {
-                    cell: Ok(subcell),
-                    path_indices: HashSet::from([path_index + 1]),
-                });
-            }
-        }
-    }
+    // fn push_field(
+    //     group: &Group,
+    //     path_indices: &HashSet<usize>,
+    //     path: &Vec<PathItem<'s>>,
+    //     stack: &mut Vec<CellNode>,
+    // ) {
+    //     for path_index in path_indices {
+    //         let path_item = &path[*path_index];
+    //         if path_item.relation != Relation::Field {
+    //             continue;
+    //         }
+    //         if let Some(field) = path_item.selector {
+    //             let subcell = guard_ok!(group.get(field), err => {
+    //                 verbose_error(err);
+    //                 continue;
+    //             });
+    //
+    //             debug!({
+    //                 println!(
+    //                     "push by field: {} : {:?}",
+    //                     subcell.debug_string(),
+    //                     path_index + 1
+    //                 );
+    //             });
+    //             stack.push(CellNode {
+    //                 cell: Ok(subcell),
+    //                 path_indices: HashSet::from([path_index + 1]),
+    //             });
+    //         }
+    //     }
+    // }
 
     fn subgroup(relation: Relation, cell: &Cell) -> Res<Group> {
         match relation {

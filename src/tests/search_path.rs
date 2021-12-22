@@ -255,20 +255,46 @@ fn path_double_kleene_all() -> Res<()> {
                 c:
                     x: xc
                     y: yc
+                    z: [r, s]
             m: mval
             n: nval
         "#;
 
     let root = Cell::from(TREE.to_string()).be("yaml")?;
 
-    let eval = str_eval(root.clone(), "/**#label")?;
-    assert_eq!(eval, [":a", ":x", ":b", ":x", ":c", ":x", ":y", ":m", ":n"]);
-
     let eval = str_eval(root.clone(), "/**")?;
     assert_eq!(
         eval,
-        [":ø", "a:ø", "x:xa", "b:ø", "x:xb", "c:ø", "x:xc", "y:yc", "m:mval", "n:nval"]
+        [
+            ":ø", "a:ø", "x:xa", "b:ø", "x:xb", "c:ø", "x:xc", "y:yc", "z:ø", ":r", ":s", "m:mval",
+            "n:nval"
+        ]
     );
+
+    Ok(())
+}
+
+#[test]
+fn path_double_kleene_labels() -> Res<()> {
+    set_verbose(true);
+    const TREE: &str = r#"
+            a:
+              x: xa
+              b:
+                x: xb
+                c:
+                    x: xc
+                    y: yc
+                    z: [r, s]
+            m: mval
+            n: nval
+        "#;
+
+    let root = Cell::from(TREE.to_string()).be("yaml")?;
+
+    crate::pprint::pprint(&root, 0, 0);
+    let eval = str_eval(root.clone(), "/**#label")?;
+    assert_eq!(eval, [":a", ":x", ":b", ":x", ":c", ":x", ":y", ":m", ":n"]);
 
     Ok(())
 }
