@@ -1,6 +1,7 @@
+use reqwest::{blocking::Client, Error as ReqwestError};
+
 use crate::utils::orc::{Orc, Urc};
 use crate::{base::*, utils::vecmap::VecMap};
-use reqwest::{blocking::Client, Error as ReqwestError};
 
 // ^http .value = bytes
 //       @status
@@ -176,22 +177,22 @@ impl InCell for Cell {
         Ok(self.pos)
     }
 
-    fn label(&self) -> Res<ValueRef> {
-        Ok(ValueRef {
+    fn label(&self) -> ValueRef {
+        ValueRef {
             response: self.group.response.0.urc(),
             kind: self.group.kind,
             pos: self.pos,
             is_label: true,
-        })
+        }
     }
 
-    fn value(&self) -> Res<ValueRef> {
-        Ok(ValueRef {
+    fn value(&self) -> ValueRef {
+        ValueRef {
             response: self.group.response.0.urc(),
             kind: self.group.kind,
             pos: self.pos,
             is_label: false,
-        })
+        }
     }
 
     fn sub(&self) -> Res<Group> {

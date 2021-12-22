@@ -61,17 +61,17 @@ impl Field {
         Ok(self.1 as u8 as usize)
     }
 
-    pub fn label(&self) -> Res<ValueRef> {
-        Ok(ValueRef::Label(self.1))
+    pub fn label(&self) -> ValueRef {
+        ValueRef::Label(self.1)
     }
 
-    pub fn value(&self) -> Res<ValueRef> {
+    pub fn value(&self) -> ValueRef {
         if self.1 == FieldType::Value {
-            Ok(ValueRef::ValueRef(Box::new(self.0.value()?)))
+            ValueRef::ValueRef(Box::new(self.0.value()))
         } else if self.1 == FieldType::Label {
-            Ok(ValueRef::ValueRef(Box::new(self.0.label()?)))
+            ValueRef::ValueRef(Box::new(self.0.label()))
         } else {
-            Ok(ValueRef::Field(Box::new(self.0.as_ref().clone()), self.1))
+            ValueRef::Field(Box::new(self.0.as_ref().clone()), self.1)
         }
     }
 
@@ -86,16 +86,16 @@ impl Field {
     pub fn as_data_source(&self) -> Option<Res<DataSource>> {
         match self.1 {
             FieldType::Value => {
-                let value = guard_ok!(self.0.value(), err => {return Some(Err(err))});
-                if let Ok(Value::Str(s)) = value.get() {
+                let valueref = self.0.value();
+                if let Ok(Value::Str(s)) = valueref.get() {
                     Some(Ok(DataSource::String(Cow::from(s.to_string()))))
                 } else {
                     None
                 }
             }
             FieldType::Label => {
-                let value = guard_ok!(self.0.label(), err => {return Some(Err(err))});
-                if let Ok(Value::Str(s)) = value.get() {
+                let labelref = self.0.label();
+                if let Ok(Value::Str(s)) = labelref.get() {
                     Some(Ok(DataSource::String(Cow::from(s.to_string()))))
                 } else {
                     None
@@ -141,10 +141,10 @@ impl Field {
         let key = key.into();
         if let Selector::Str(key) = key {
             if key == "value" {
-                self.0.value()?.get()?;
+                self.0.value().get()?;
                 return Ok(Field(self.0.clone(), FieldType::Value));
             } else if key == "label" {
-                self.0.label()?.get()?;
+                self.0.label().get()?;
                 return Ok(Field(self.0.clone(), FieldType::Label));
             } else if key == "type" {
                 self.0.typ()?;

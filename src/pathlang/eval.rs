@@ -429,12 +429,8 @@ impl<'s> EvalIter<'s> {
         if *sel == Selector::Star || *sel == Selector::DoubleStar {
             return true;
         } else {
-            let labelrefres = cell.label();
-            let label = match labelrefres {
-                Ok(ref lr) => lr.get(),
-                Err(e) => Err(e),
-            };
-            match label {
+            let labelref = cell.label();
+            match labelref.get() {
                 Ok(ref k) => {
                     if sel == k {
                         return true;
@@ -455,10 +451,7 @@ impl<'s> EvalIter<'s> {
             });
             if let Some(op) = expr.op {
                 if let Some(right) = expr.right {
-                    let lvalueref = guard_ok!(cell.value(), err => {
-                        verbose_error(err);
-                        continue;
-                    });
+                    let lvalueref = cell.value();
                     let lvalue = guard_ok!(lvalueref.get(), err => {
                         verbose_error(err);
                         continue;

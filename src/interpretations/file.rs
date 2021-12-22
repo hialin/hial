@@ -1,4 +1,3 @@
-use crate::{base::*, guard_ok, guard_some};
 use std::collections::HashMap;
 use std::{
     cmp::Ordering,
@@ -7,6 +6,8 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
 };
+
+use crate::{base::*, guard_ok, guard_some};
 
 #[derive(Clone, Debug)]
 pub struct Domain(Rc<DomainData>);
@@ -151,20 +152,20 @@ impl InCell for Cell {
         Ok(self.pos as usize)
     }
 
-    fn label(&self) -> Res<ValueRef> {
-        Ok(ValueRef {
+    fn label(&self) -> ValueRef {
+        ValueRef {
             group: self.group.clone(),
             pos: self.pos,
             is_label: true,
-        })
+        }
     }
 
-    fn value(&self) -> Res<ValueRef> {
-        Ok(ValueRef {
+    fn value(&self) -> ValueRef {
+        ValueRef {
             group: self.group.clone(),
             pos: self.pos,
             is_label: false,
-        })
+        }
     }
 
     fn sub(&self) -> Res<Group> {

@@ -1,6 +1,8 @@
-use crate::{base::*, tree_sitter_language, *};
 use std::{ops::Range, path::Path, rc::Rc};
+
 use tree_sitter::{Parser, Tree, TreeCursor};
+
+use crate::{base::*, tree_sitter_language, *};
 
 #[derive(Clone, Debug)]
 pub struct Domain {
@@ -222,20 +224,20 @@ impl InCell for Cell {
         Ok(self.pos)
     }
 
-    fn label(&self) -> Res<ValueRef> {
-        Ok(ValueRef {
+    fn label(&self) -> ValueRef {
+        ValueRef {
             group: self.group.clone(),
             pos: self.pos,
             is_label: true,
-        })
+        }
     }
 
-    fn value(&self) -> Res<ValueRef> {
-        Ok(ValueRef {
+    fn value(&self) -> ValueRef {
+        ValueRef {
             group: self.group.clone(),
             pos: self.pos,
             is_label: false,
-        })
+        }
     }
 
     fn sub(&self) -> Res<Group> {

@@ -7,8 +7,8 @@ fn test_files() -> Res<()> {
         .be("file")?
         .sub()?
         .get("examples")?;
-    assert_eq!(examples.label()?.get()?, "examples");
-    assert_eq!(examples.value()?.get()?, "examples");
+    assert_eq!(examples.label().get()?, "examples");
+    assert_eq!(examples.value().get()?, "examples");
     Ok(())
 }
 
@@ -41,9 +41,9 @@ fn test_json() -> Res<()> {
     let power1 = host1.sub()?.get("labels")?.sub()?.get("power")?;
     let power2 = host2.sub()?.get("labels")?.sub()?.get("power")?;
     let group2 = host2.sub()?.get("labels")?.sub()?.get("group2")?;
-    assert_eq!(power1.value()?.get()?, Value::Str("weak"));
-    assert_eq!(power2.value()?.get()?, Value::Str("strong"));
-    assert_eq!(group2.value()?.get()?, Value::Bool(true));
+    assert_eq!(power1.value().get()?, Value::Str("weak"));
+    assert_eq!(power2.value().get()?, Value::Str("strong"));
+    assert_eq!(group2.value().get()?, Value::Bool(true));
     Ok(())
 }
 
@@ -69,9 +69,9 @@ fn test_yaml() -> Res<()> {
     let power1 = host1.sub()?.get("labels")?.sub()?.get("power")?;
     let power2 = host2.sub()?.get("labels")?.sub()?.get("power")?;
     let group2 = host2.sub()?.get("labels")?.sub()?.get("group2")?;
-    assert_eq!(power1.value()?.get()?, Value::Str("weak"));
-    assert_eq!(power2.value()?.get()?, Value::Str("strong"));
-    assert_eq!(group2.value()?.get()?, Value::Bool(true));
+    assert_eq!(power1.value().get()?, Value::Str("weak"));
+    assert_eq!(power2.value().get()?, Value::Str("strong"));
+    assert_eq!(group2.value().get()?, Value::Bool(true));
     Ok(())
 }
 
@@ -92,11 +92,11 @@ fn test_xml() -> Res<()> {
     let decl = xml.sub()?.at(0)?;
     let doc = xml.sub()?.at(2)?;
     assert_eq!(doc.sub()?.len(), 4);
-    assert_eq!(doc.sub()?.get("first")?.label()?.get()?, "first");
-    assert_eq!(doc.sub()?.at(1)?.label()?.get()?, "double");
-    assert_eq!(doc.sub()?.at(2)?.value()?.get()?, Value::Str("double"));
+    assert_eq!(doc.sub()?.get("first")?.label().get()?, "first");
+    assert_eq!(doc.sub()?.at(1)?.label().get()?, "double");
+    assert_eq!(doc.sub()?.at(2)?.value().get()?, Value::Str("double"));
     assert_eq!(
-        doc.sub()?.get("triple")?.value()?.get()?,
+        doc.sub()?.get("triple")?.value().get()?,
         Value::Str("triple")
     );
     Ok(())
@@ -132,6 +132,6 @@ fn test_toml() -> Res<()> {
     let toml = Cell::from(toml.to_string()).be("toml")?;
     pprint::pprint(&toml, 0, 0);
     let value = toml.sub()?.get("database")?.sub()?.get("enabled")?;
-    assert_eq!(value.value()?.get()?, Value::Bool(true));
+    assert_eq!(value.value().get()?, Value::Bool(true));
     Ok(())
 }

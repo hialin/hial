@@ -1,14 +1,17 @@
-// use crate::vecmap::*;
-use crate::{base::*, guard_some, verbose};
-use quick_xml::{events::Event, Error as XmlError, Reader};
 use std::io::BufRead;
 use std::path::Path;
 use std::rc::Rc;
+
+use quick_xml::{events::Event, Error as XmlError, Reader};
+
+// use crate::vecmap::*;
+use crate::{base::*, guard_some, verbose};
 
 #[derive(Clone, Debug)]
 pub struct Domain {
     preroot: NodeList,
 }
+
 impl InDomain for Domain {
     type Cell = Cell;
     type Group = Group;
@@ -312,19 +315,19 @@ impl InCell for Cell {
         Ok(self.pos)
     }
 
-    fn label(&self) -> Res<ValueRef> {
-        Ok(ValueRef {
+    fn label(&self) -> ValueRef {
+        ValueRef {
             group: self.group.clone(),
             pos: self.pos,
             is_label: false,
-        })
+        }
     }
-    fn value(&self) -> Res<ValueRef> {
-        Ok(ValueRef {
+    fn value(&self) -> ValueRef {
+        ValueRef {
             group: self.group.clone(),
             pos: self.pos,
             is_label: false,
-        })
+        }
     }
 
     fn sub(&self) -> Res<Group> {
@@ -389,12 +392,8 @@ impl InGroup for Group {
         let key = key.into();
         for i in 0..self.len() {
             let cell = self.at(i)?;
-            let labelrefres = cell.label();
-            let label = match labelrefres {
-                Ok(ref lr) => lr.get(),
-                Err(e) => Err(e),
-            };
-            match label {
+            let labelref = cell.label();
+            match labelref.get() {
                 Ok(k) if key == k => return Ok(cell),
                 _ => {}
             }

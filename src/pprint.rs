@@ -1,5 +1,6 @@
-use crate::base::*;
 use std::fmt::Error;
+
+use crate::base::*;
 
 pub fn pprint(cell: &Cell, depth: usize, breadth: usize) {
     let mut buffer = String::new();
@@ -105,14 +106,8 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
 
     let keyref = cell.label();
     let valueref = cell.value();
-    let key = match keyref {
-        Ok(ref kref) => kref.get(),
-        Err(e) => Err(e),
-    };
-    let value = match valueref {
-        Ok(ref vref) => vref.get(),
-        Err(e) => Err(e),
-    };
+    let key = keyref.get();
+    let value = valueref.get();
     match key {
         Ok(k) => {
             if Some(&k) != value.as_ref().ok() {

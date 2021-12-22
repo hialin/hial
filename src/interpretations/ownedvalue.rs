@@ -1,20 +1,14 @@
-use crate::base::*;
 use std::borrow::Cow;
 use std::rc::Rc;
 
+use crate::base::*;
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Domain(Rc<OwnedValue>);
+
 impl InDomain for Domain {
     type Cell = Cell;
     type Group = VoidGroup<Domain>;
-
-    // fn new_from(source_interpretation: &str, source: DataSource) -> Res<Rc<Self>> {
-    //     if let DataSource::File(path) = source {
-    //         from_path(path.to_path_buf())
-    //     } else {
-    //         Err(HErr::IncompatibleSource("".into()))
-    //     }
-    // }
 
     fn interpretation(&self) -> &str {
         "value"
@@ -29,7 +23,7 @@ impl InDomain for Domain {
 pub struct Cell(Domain);
 
 #[derive(Debug)]
-pub struct ValueRef(Domain);
+pub struct ValueRef(Domain, bool);
 
 impl From<OwnedValue> for Cell {
     fn from(ov: OwnedValue) -> Self {
@@ -51,8 +45,12 @@ impl From<String> for Cell {
 
 impl InValueRef for ValueRef {
     fn get(&self) -> Res<Value> {
-        let v: &OwnedValue = &self.0 .0;
-        Ok(v.into())
+        if self.1 {
+            NotFound::NoLabel.into()
+        } else {
+            let v: &OwnedValue = &self.0 .0;
+            Ok(v.into())
+        }
     }
 }
 
@@ -72,12 +70,12 @@ impl InCell for Cell {
         NotFound::NoIndex.into()
     }
 
-    fn label(&self) -> Res<ValueRef> {
-        NotFound::NoLabel.into()
+    fn label(&self) -> ValueRef {
+        ValueRef(self.0.clone(), true)
     }
 
-    fn value(&self) -> Res<ValueRef> {
-        Ok(ValueRef(self.0.clone()))
+    fn value(&self) -> ValueRef {
+        ValueRef(self.0.clone(), false)
     }
 
     fn sub(&self) -> Res<VoidGroup<Domain>> {

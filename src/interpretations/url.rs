@@ -1,10 +1,13 @@
-use crate::base::*;
-use reqwest::Url;
 use std::rc::Rc;
+
+use reqwest::Url;
 use url::ParseError;
+
+use crate::base::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Domain(Rc<Url>);
+
 impl InDomain for Domain {
     type Cell = Cell;
     type Group = VoidGroup<Domain>;
@@ -22,7 +25,7 @@ impl InDomain for Domain {
 pub struct Cell(Domain);
 
 #[derive(Debug)]
-pub struct ValueRef(Domain);
+pub struct ValueRef(Domain, bool);
 
 pub fn from_string(s: &str) -> Res<Cell> {
     Domain(Rc::new(Url::parse(s)?)).root()
@@ -36,7 +39,11 @@ impl Cell {
 
 impl InValueRef for ValueRef {
     fn get(&self) -> Res<Value> {
-        Ok(Value::Str(self.0 .0.as_str()))
+        if self.1 {
+            NotFound::NoLabel.into()
+        } else {
+            Ok(Value::Str(self.0 .0.as_str()))
+        }
     }
 }
 
@@ -56,12 +63,12 @@ impl InCell for Cell {
         NotFound::NoIndex.into()
     }
 
-    fn label(&self) -> Res<ValueRef> {
-        NotFound::NoLabel.into()
+    fn label(&self) -> ValueRef {
+        ValueRef(self.0.clone(), true)
     }
 
-    fn value(&self) -> Res<ValueRef> {
-        Ok(ValueRef(self.0.clone()))
+    fn value(&self) -> ValueRef {
+        ValueRef(self.0.clone(), false)
     }
 
     fn sub(&self) -> Res<VoidGroup<Domain>> {

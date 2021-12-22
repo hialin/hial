@@ -292,7 +292,7 @@ fn path_double_kleene_labels() -> Res<()> {
 
     let root = Cell::from(TREE.to_string()).be("yaml")?;
 
-    crate::pprint::pprint(&root, 0, 0);
+    // crate::pprint::pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/**#label")?;
     assert_eq!(
         eval,

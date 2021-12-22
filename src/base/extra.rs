@@ -168,21 +168,21 @@ impl Cell {
         }
     }
 
-    pub fn label(&self) -> Res<ValueRef> {
+    pub fn label(&self) -> ValueRef {
         match &self.this {
             EnCell::Dyn(dyn_cell) => {
-                with_dyn_cell!(dyn_cell, |x| { Ok(ValueRef::from(x.label()?)) })
+                with_dyn_cell!(dyn_cell, |x| { ValueRef::from(x.label()) })
             }
-            EnCell::Field(field_cell) => Ok(ValueRef::from(field_cell.label()?)),
+            EnCell::Field(field_cell) => ValueRef::from(field_cell.label()),
         }
     }
 
-    pub fn value(&self) -> Res<ValueRef> {
+    pub fn value(&self) -> ValueRef {
         match &self.this {
             EnCell::Dyn(dyn_cell) => {
-                with_dyn_cell!(dyn_cell, |x| { Ok(ValueRef::from(x.value()?)) })
+                with_dyn_cell!(dyn_cell, |x| { ValueRef::from(x.value()) })
             }
-            EnCell::Field(field_cell) => Ok(ValueRef::from(field_cell.value()?)),
+            EnCell::Field(field_cell) => ValueRef::from(field_cell.value()),
         }
     }
 
@@ -243,20 +243,8 @@ impl Cell {
         use std::fmt::Write;
         let err_fn = |err| eprintln!("💥 str write error {}", err);
         let write_label_fn =
-            |s: &mut String, cell: &Cell, is_interpretation: bool| match cell.label() {
-                Ok(lref) => match lref.get() {
-                    Ok(l) => write!(s, "{}", l).unwrap_or_else(err_fn),
-                    Err(HErr::NotFound(_)) => {
-                        if is_interpretation {
-                            write!(s, "{}", cell.domain().interpretation()).unwrap_or_else(err_fn)
-                        } else if let Ok(index) = cell.index() {
-                            write!(s, "[{}]", index).unwrap_or_else(err_fn)
-                        } else {
-                            write!(s, "<?>").unwrap_or_else(err_fn)
-                        }
-                    }
-                    Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
-                },
+            |s: &mut String, cell: &Cell, is_interpretation: bool| match cell.label().get() {
+                Ok(l) => write!(s, "{}", l).unwrap_or_else(err_fn),
                 Err(HErr::NotFound(_)) => {
                     if is_interpretation {
                         write!(s, "{}", cell.domain().interpretation()).unwrap_or_else(err_fn)
@@ -266,33 +254,24 @@ impl Cell {
                         write!(s, "<?>").unwrap_or_else(err_fn)
                     }
                 }
-                Err(e) => {
-                    write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn);
-                }
-            };
-        let write_value_fn = |s: &mut String, cell: &Cell| match cell.value() {
-            Ok(vref) => match vref.get() {
-                Ok(value) => {
-                    if cell.domain().interpretation() == "value" {
-                        let mut v = format!("{}", value).replace("\n", "\\n");
-                        if v.len() > 4 {
-                            v.truncate(4);
-                            v += "...";
-                        }
-                        write!(s, "\"{}\"", v).unwrap_or_else(err_fn);
-                    } else {
-                        write!(s, "{}", value).unwrap_or_else(err_fn);
-                    }
-                }
-                Err(HErr::NotFound(_)) => write!(s, "<?>").unwrap_or_else(err_fn),
                 Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
-            },
-            Err(HErr::NotFound(_)) => {
-                write!(s, "<?>").unwrap_or_else(err_fn);
+            };
+
+        let write_value_fn = |s: &mut String, cell: &Cell| match cell.value().get() {
+            Ok(value) => {
+                if cell.domain().interpretation() == "value" {
+                    let mut v = format!("{}", value).replace("\n", "\\n");
+                    if v.len() > 4 {
+                        v.truncate(4);
+                        v += "...";
+                    }
+                    write!(s, "\"{}\"", v).unwrap_or_else(err_fn);
+                } else {
+                    write!(s, "{}", value).unwrap_or_else(err_fn);
+                }
             }
-            Err(e) => {
-                write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn);
-            }
+            Err(HErr::NotFound(_)) => write!(s, "<?>").unwrap_or_else(err_fn),
+            Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
         };
 
         let mut v = vec![];
@@ -376,32 +355,20 @@ impl Cell {
         let vr = self.value();
         use std::fmt::Write;
         let mut s = String::new();
-        match self.label() {
-            Ok(lref) => match lref.get() {
-                Ok(l) => {
-                    if !matches!(self.this, EnCell::Field(_)) {
-                        write!(s, "{}", l).unwrap_or_else(err_fn)
-                    }
+        match self.label().get() {
+            Ok(l) => {
+                if !matches!(self.this, EnCell::Field(_)) {
+                    write!(s, "{}", l).unwrap_or_else(err_fn)
                 }
-                Err(HErr::NotFound(_)) => {}
-                Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
-            },
-            Err(HErr::NotFound(_)) => {}
-            Err(e) => {
-                write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn);
             }
+            Err(HErr::NotFound(_)) => {}
+            Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
         };
         write!(s, ":").unwrap_or_else(err_fn);
-        match self.value() {
-            Ok(vref) => match vref.get() {
-                Ok(v) => write!(s, "{}", v).unwrap_or_else(err_fn),
-                Err(HErr::NotFound(_)) => {}
-                Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
-            },
+        match self.value().get() {
+            Ok(v) => write!(s, "{}", v).unwrap_or_else(err_fn),
             Err(HErr::NotFound(_)) => {}
-            Err(e) => {
-                write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn);
-            }
+            Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
         };
         s
     }

@@ -58,7 +58,7 @@ fn value_elevation_map() -> VecMap<&'static str, ElevateFn> {
     macro_rules! add_str_elevation {
         ($ret:ident, $interp:literal, |$cellname:ident, $strname:ident| $body:block) => {
             $ret.put($interp, |$cellname: Cell| -> Res<Cell> {
-                let vref = $cellname.value()?;
+                let vref = $cellname.value();
                 if let Value::Str($strname) = vref.get()? {
                     return $body;
                 }
@@ -262,7 +262,7 @@ fn rust_elevation_map() -> VecMap<&'static str, ElevateFn> {
 
 pub(crate) fn standard_interpretation(cell: &Cell) -> Option<&str> {
     if cell.domain().interpretation() == "file" && cell.typ().ok()? == "file" {
-        let nameref = cell.label().ok()?;
+        let nameref = cell.label();
         if let Ok(Value::Str(name)) = nameref.get() {
             if name.ends_with(".c") {
                 return Some("c");
@@ -282,7 +282,7 @@ pub(crate) fn standard_interpretation(cell: &Cell) -> Option<&str> {
         }
     }
     if cell.domain().interpretation() == "value" {
-        let vref = cell.value().ok()?;
+        let vref = cell.value();
         if let Ok(Value::Str(s)) = vref.get() {
             if s.starts_with("http://") || s.starts_with("https://") {
                 return Some("http");
@@ -354,7 +354,7 @@ impl ElevationGroup {
         }
         if key == "value" {
             println!("elevate default {} to value", old_interp);
-            let vref = self.0.value()?;
+            let vref = self.0.value();
             return Ok(Cell::from(vref.get()?.to_owned_value()));
         }
         println!("no elevation from {} to {}", old_interp, interp);

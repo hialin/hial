@@ -1,12 +1,14 @@
+use std::rc::Rc;
+use std::{fs::File, path::Path};
+
+use serde_json::Value as SerdeValue;
+
 use crate::utils::orc::Urc;
 use crate::{
     base::*,
     guard_some,
     utils::{orc::*, vecmap::*},
 };
-use serde_json::Value as SerdeValue;
-use std::rc::Rc;
-use std::{fs::File, path::Path};
 
 #[derive(Clone, Debug)]
 pub struct Domain {
@@ -138,7 +140,7 @@ impl InValueRef for ValueRef {
                     return HErr::internal("bad pos").into();
                 }
             }
-            return HErr::internal("impossible").into();
+            return NotFound::NoLabel.into();
         } else {
             match self.group {
                 UrcNodeGroup::Array(ref a) => match a.get(self.pos) {
@@ -179,26 +181,26 @@ impl InCell for Cell {
         Ok(self.pos)
     }
 
-    fn label(&self) -> Res<ValueRef> {
-        match self.group.nodes {
-            NodeGroup::Array(ref a) => NotFound::NoLabel.into(),
-            NodeGroup::Object(ref o) => Ok(ValueRef {
-                group: UrcNodeGroup::Object(o.urc()),
-                pos: self.pos,
-                is_label: true,
-            }),
+    fn label(&self) -> ValueRef {
+        ValueRef {
+            group: match &self.group.nodes {
+                NodeGroup::Array(a) => UrcNodeGroup::Array(a.urc()),
+                NodeGroup::Object(o) => UrcNodeGroup::Object(o.urc()),
+            },
+            pos: self.pos,
+            is_label: true,
         }
     }
 
-    fn value(&self) -> Res<ValueRef> {
-        Ok(ValueRef {
+    fn value(&self) -> ValueRef {
+        ValueRef {
             group: match &self.group.nodes {
                 NodeGroup::Array(a) => UrcNodeGroup::Array(a.urc()),
                 NodeGroup::Object(o) => UrcNodeGroup::Object(o.urc()),
             },
             pos: self.pos,
             is_label: false,
-        })
+        }
     }
 
     fn sub(&self) -> Res<Group> {

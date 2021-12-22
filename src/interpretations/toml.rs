@@ -1,7 +1,9 @@
-use crate::{base::*, utils::vecmap::*};
 use std::{path::Path, rc::Rc};
+
 use toml;
 use toml::Value as TomlValue;
+
+use crate::{base::*, utils::vecmap::*};
 
 #[derive(Clone, Debug)]
 pub struct Domain {
@@ -132,20 +134,20 @@ impl InCell for Cell {
         Ok(self.pos)
     }
 
-    fn label(&self) -> Res<ValueRef> {
-        Ok(ValueRef {
+    fn label(&self) -> ValueRef {
+        ValueRef {
             group: self.group.clone(),
             pos: self.pos,
             is_label: true,
-        })
+        }
     }
 
-    fn value(&self) -> Res<ValueRef> {
-        Ok(ValueRef {
+    fn value(&self) -> ValueRef {
+        ValueRef {
             group: self.group.clone(),
             pos: self.pos,
             is_label: false,
-        })
+        }
     }
 
     fn sub(&self) -> Res<Group> {

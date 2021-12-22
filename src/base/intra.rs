@@ -66,8 +66,8 @@ pub trait InCell: Clone + Debug {
 
     fn typ(&self) -> Res<&str>;
     fn index(&self) -> Res<usize>;
-    fn label(&self) -> Res<Self::ValueRef>;
-    fn value(&self) -> Res<Self::ValueRef>;
+    fn label(&self) -> Self::ValueRef;
+    fn value(&self) -> Self::ValueRef;
 
     fn sub(&self) -> Res<<Self::Domain as InDomain>::Group>;
     fn attr(&self) -> Res<<Self::Domain as InDomain>::Group>;
