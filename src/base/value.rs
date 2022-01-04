@@ -1,10 +1,11 @@
-use crate::guard_variant;
 use core::{
     cmp::Ordering,
     fmt::{self, Display},
     hash::{Hash, Hasher},
 };
 use std::borrow::Borrow;
+
+use crate::guard_variant;
 
 pub const DISPLAY_VALUE_NONE: &str = "ø"; // ø❍•⸰·
 
@@ -236,6 +237,19 @@ impl<'a> From<&'a OwnedValue> for Value<'a> {
             OwnedValue::Float(x) => Value::Float(*x),
             OwnedValue::String(x) => Value::Str(&x),
             OwnedValue::Bytes(x) => Value::Bytes(&x),
+        }
+    }
+}
+
+impl OwnedValue {
+    pub fn as_value(&self) -> Value {
+        match self {
+            OwnedValue::None => Value::None,
+            OwnedValue::Bool(x) => Value::Bool(*x),
+            OwnedValue::Int(x) => Value::Int(*x),
+            OwnedValue::Float(x) => Value::Float(*x),
+            OwnedValue::String(x) => Value::Str(x.as_str()),
+            OwnedValue::Bytes(x) => Value::Bytes(x.as_ref()),
         }
     }
 }

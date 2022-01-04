@@ -1,7 +1,6 @@
-use std::borrow::Cow;
+use std::ops::Deref;
 
 use crate::base::*;
-use crate::guard_ok;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -13,7 +12,12 @@ pub enum FieldType {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Field(pub(crate) DynCell, pub(crate) FieldType);
+// todo remove box
+pub(crate) struct Field(
+    pub(crate) DynCell,
+    pub(crate) FieldType,
+    pub(crate) Box<Domain>,
+);
 
 #[derive(Debug)]
 pub(crate) enum ValueRef {
@@ -49,7 +53,7 @@ impl ValueRef {
 
 impl Field {
     pub fn domain(&self) -> Domain {
-        self.0.domain()
+        self.2.deref().clone()
     }
 
     pub fn typ(&self) -> Res<&str> {
@@ -82,34 +86,12 @@ impl Field {
         NotFound::NoGroup(format!("@")).into()
     }
 
-    pub fn as_data_source(&self) -> Option<Res<DataSource>> {
-        match self.1 {
-            FieldType::Value => {
-                let valueref = self.0.value();
-                if let Ok(Value::Str(s)) = valueref.get() {
-                    Some(Ok(DataSource::String(Cow::from(s.to_string()))))
-                } else {
-                    None
-                }
-            }
-            FieldType::Label => {
-                let labelref = self.0.label();
-                if let Ok(Value::Str(s)) = labelref.get() {
-                    Some(Ok(DataSource::String(Cow::from(s.to_string()))))
-                } else {
-                    None
-                }
-            }
-            FieldType::Type => {
-                let value = guard_ok!(self.0.typ(), err => {return Some(Err(err))});
-                Some(Ok(DataSource::String(Cow::from(value))))
-            }
-            FieldType::Index => None,
-        }
+    pub fn raw(&self) -> Res<RawDataContainer> {
+        NotFound::NoResult("".into()).into()
     }
 
-    pub fn as_data_destination(&mut self) -> Option<Res<DataDestination>> {
-        todo!()
+    pub fn set_raw(&self, raw: RawDataContainer) -> Res<()> {
+        HErr::BadContext("cannot set raw data for fields".into()).into()
     }
 
     pub fn label_type(&self) -> LabelType {
@@ -125,10 +107,10 @@ impl Field {
 
     pub fn at(&self, index: usize) -> Res<Field> {
         match index {
-            0 => Ok(Field(self.0.clone(), FieldType::Value)),
-            1 => Ok(Field(self.0.clone(), FieldType::Label)),
-            2 => Ok(Field(self.0.clone(), FieldType::Type)),
-            3 => Ok(Field(self.0.clone(), FieldType::Index)),
+            0 => Ok(Field(self.0.clone(), FieldType::Value, self.2.clone())),
+            1 => Ok(Field(self.0.clone(), FieldType::Label, self.2.clone())),
+            2 => Ok(Field(self.0.clone(), FieldType::Type, self.2.clone())),
+            3 => Ok(Field(self.0.clone(), FieldType::Index, self.2.clone())),
             _ => Err(HErr::BadArgument(format!(
                 "field index must be in 0..<4; was: {}",
                 index
@@ -141,16 +123,16 @@ impl Field {
         if let Selector::Str(key) = key {
             if key == "value" {
                 self.0.value().get()?;
-                return Ok(Field(self.0.clone(), FieldType::Value));
+                return Ok(Field(self.0.clone(), FieldType::Value, self.2.clone()));
             } else if key == "label" {
                 self.0.label().get()?;
-                return Ok(Field(self.0.clone(), FieldType::Label));
+                return Ok(Field(self.0.clone(), FieldType::Label, self.2.clone()));
             } else if key == "type" {
                 self.0.typ()?;
-                return Ok(Field(self.0.clone(), FieldType::Type));
+                return Ok(Field(self.0.clone(), FieldType::Type, self.2.clone()));
             } else if key == "index" {
                 self.0.index()?;
-                return Ok(Field(self.0.clone(), FieldType::Index));
+                return Ok(Field(self.0.clone(), FieldType::Index, self.2.clone()));
             }
         }
         Err(HErr::BadArgument(format!(

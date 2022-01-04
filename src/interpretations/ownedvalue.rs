@@ -1,10 +1,8 @@
-use std::borrow::Cow;
-use std::rc::Rc;
-
 use crate::base::*;
+use crate::utils::orc::{Orc, Urc};
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Domain(Rc<OwnedValue>);
+#[derive(Clone, Debug)]
+pub struct Domain(Orc<OwnedValue>);
 
 impl InDomain for Domain {
     type Cell = Cell;
@@ -19,27 +17,27 @@ impl InDomain for Domain {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug)]
 pub struct Cell(Domain);
 
 #[derive(Debug)]
-pub struct ValueRef(Domain, bool);
+pub struct ValueRef(Urc<OwnedValue>, bool);
 
 impl From<OwnedValue> for Cell {
     fn from(ov: OwnedValue) -> Self {
-        Cell(Domain(Rc::new(ov)))
+        Cell(Domain(Orc::new(ov)))
     }
 }
 
 impl From<Value<'_>> for Cell {
     fn from(v: Value) -> Self {
-        Cell(Domain(Rc::new(v.to_owned_value())))
+        Cell(Domain(Orc::new(v.to_owned_value())))
     }
 }
 
 impl From<String> for Cell {
     fn from(s: String) -> Self {
-        Cell(Domain(Rc::new(OwnedValue::String(s))))
+        Cell(Domain(Orc::new(OwnedValue::String(s))))
     }
 }
 
@@ -48,8 +46,7 @@ impl InValueRef for ValueRef {
         if self.1 {
             NotFound::NoLabel.into()
         } else {
-            let v: &OwnedValue = &self.0 .0;
-            Ok(v.into())
+            Ok(self.0.as_value())
         }
     }
 }
@@ -71,11 +68,11 @@ impl InCell for Cell {
     }
 
     fn label(&self) -> ValueRef {
-        ValueRef(self.0.clone(), true)
+        ValueRef(self.0 .0.urc(), true)
     }
 
     fn value(&self) -> ValueRef {
-        ValueRef(self.0.clone(), false)
+        ValueRef(self.0 .0.urc(), false)
     }
 
     fn sub(&self) -> Res<VoidGroup<Domain>> {
@@ -86,11 +83,31 @@ impl InCell for Cell {
         NotFound::NoGroup(format!("@")).into()
     }
 
-    fn as_data_source(&self) -> Option<Res<DataSource>> {
-        if let OwnedValue::String(ref s) = *(self.0 .0) {
-            Some(Ok(DataSource::String(Cow::from(s))))
+    fn raw(&self) -> Res<RawDataContainer> {
+        let vref = self.0 .0.urc();
+        if let Value::Str(s) = vref.as_value() {
+            Ok(RawDataContainer::String(s.to_owned()))
         } else {
-            None
+            NotFound::NoResult("".into()).into()
+        }
+    }
+
+    fn set_raw(&self, raw: RawDataContainer) -> Res<()> {
+        let mut vref = self.0 .0.urc();
+        if let Some(v) = vref.get_mut() {
+            match raw {
+                RawDataContainer::String(s) => *v = OwnedValue::from(s),
+                RawDataContainer::File(pathbuf) => {
+                    let s = std::fs::read_to_string(pathbuf)?;
+                    *v = OwnedValue::from(s)
+                }
+            }
+            Ok(())
+        } else {
+            Err(HErr::ExclusivityRequired {
+                path: "".into(),
+                op: "set_raw",
+            })
         }
     }
 }

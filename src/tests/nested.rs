@@ -8,7 +8,7 @@ fn test_nested() -> Res<()> {
     let yxj = r#"{"one": ["<?xml?><root>mytext: This is my yaml string</root>"]}"#;
 
     let cell = Cell::from(OwnedValue::from(yxj.to_string()))
-        .path("^json/one/[0]^value^xml/root/[0]")?
+        .search("^json/one/[0]^value^xml/root/[0]")?
         .first()?;
     pprint(&cell, 0, 0);
     assert_eq!(
@@ -17,7 +17,7 @@ fn test_nested() -> Res<()> {
     );
 
     let cell = Cell::from(OwnedValue::from(yxj.to_string()))
-        .path("^json/one/[0]^value^xml/root/[0]^value^yaml/mytext#value")?
+        .search("^json/one/[0]^value^xml/root/[0]^value^yaml/mytext#value")?
         .first()?;
 
     pprint(&cell, 0, 0);

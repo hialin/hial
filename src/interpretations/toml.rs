@@ -69,19 +69,18 @@ impl From<toml::de::Error> for HErr {
     }
 }
 
-pub fn from_path(path: &Path) -> Res<Cell> {
+pub fn from_path(path: &Path) -> Res<Domain> {
     let source = std::fs::read_to_string(&path)?;
     from_string(&source)
 }
 
-pub fn from_string(source: &str) -> Res<Cell> {
+pub fn from_string(source: &str) -> Res<Domain> {
     let toml: TomlValue = toml::from_str(source)?;
     let root_node = node_from_toml(toml);
     let preroot = Rc::new(vec![root_node]);
-    let domain = Rc::new(Domain {
+    Ok(Domain {
         preroot: NodeGroup::Array(preroot),
-    });
-    domain.root()
+    })
 }
 
 impl InValueRef for ValueRef {

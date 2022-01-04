@@ -27,8 +27,8 @@ pub struct Cell(Domain);
 #[derive(Debug)]
 pub struct ValueRef(Domain, bool);
 
-pub fn from_string(s: &str) -> Res<Cell> {
-    Domain(Rc::new(Url::parse(s)?)).root()
+pub fn from_string(s: &str) -> Res<Domain> {
+    Ok(Domain(Rc::new(Url::parse(s)?)))
 }
 
 impl Cell {

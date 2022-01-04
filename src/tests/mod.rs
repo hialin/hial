@@ -1,4 +1,5 @@
 mod file;
+mod multihops;
 mod mut_json;
 mod nested;
 mod search_path;

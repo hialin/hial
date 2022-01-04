@@ -76,19 +76,18 @@ impl From<ScanError> for HErr {
     }
 }
 
-pub fn from_path(path: &Path) -> Res<Cell> {
+pub fn from_path(path: &Path) -> Res<Domain> {
     let mut source = String::new();
     File::open(path)?.read_to_string(&mut source)?;
     from_string(&source)
 }
 
-pub fn from_string(source: &str) -> Res<Cell> {
+pub fn from_string(source: &str) -> Res<Domain> {
     let yaml_docs = YamlLoader::load_from_str(source)?;
     let root_group_res: Res<Vec<Node>> = yaml_docs.iter().map(node_from_yaml).collect();
-    let domain = Rc::new(Domain {
+    Ok(Domain {
         preroot: NodeGroup::Array(Rc::new(root_group_res?)),
-    });
-    domain.root()
+    })
 }
 
 impl InValueRef for ValueRef {

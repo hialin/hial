@@ -1,19 +1,14 @@
-use std::borrow::Cow;
+use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::{fmt::Debug, path::Path};
+use std::path::PathBuf;
 
 use crate::base::*;
 
+// data container alternatives for serialized forms
 #[derive(Clone, Debug)]
-pub enum DataSource<'s> {
-    File(Cow<'s, Path>),
-    String(Cow<'s, str>),
-}
-
-#[derive(Debug)]
-pub enum DataDestination<'s> {
-    File(&'s Path),
-    String(&'s mut String),
+pub enum RawDataContainer {
+    File(PathBuf),
+    String(String),
 }
 
 pub trait InDomain: Clone + Debug {
@@ -24,7 +19,7 @@ pub trait InDomain: Clone + Debug {
     fn interpretation(&self) -> &str;
 
     // fn accepts(source_interpretation: &str, source: DataSource) -> Res<bool>;
-    fn new_from(source_interpretation: &str, source: DataSource) -> Res<Self> {
+    fn new_from(source_interpretation: &str, source: RawDataContainer) -> Res<Self> {
         todo!()
     }
 
@@ -37,22 +32,6 @@ pub trait InDomain: Clone + Debug {
 }
 
 pub trait InTrace: Clone + Debug {}
-
-// pub trait InRef<'v>: Debug + Deref<Target = Value<'v>> {}
-
-// - dereference of a value must be a safe op in Rust, can be less safe in C
-// - all cells must be invalidated when the domain is freed
-// - creating a cell should not allocate: cells must not be counted (gc languages)
-
-// implementation options for value dereference with mutable values:
-// 1. cell returns Ref object -- cannot add it in trait due to associated lifetime limitations
-// 2. cell returns direct value -- how do we replace it then?
-
-// remove/move cells:
-// 1. invalidate all affected cells         -> ok, but then you need a trace to get back to them
-// 2. changes are stored in a new subtree   -> NO, because then you won't be able to read the new value if you're on a cloned cell
-// 3. invalidate only the removed cells     -> yes, but how?
-// 4. operation is refused if more than one cell points to the data -> let's work on this one
 
 pub trait InCell: Clone + Debug {
     type Domain: InDomain;
@@ -68,28 +47,26 @@ pub trait InCell: Clone + Debug {
     fn sub(&self) -> Res<<Self::Domain as InDomain>::Group>;
     fn attr(&self) -> Res<<Self::Domain as InDomain>::Group>;
 
+    // get serialized data for this subtree
+    fn raw(&self) -> Res<RawDataContainer> {
+        todo!()
+    }
+
+    // set the subtree as serialized data
+    fn set_raw(&self, raw: RawDataContainer) -> Res<()> {
+        todo!()
+    }
+
     fn set_value(&mut self, value: OwnedValue) -> Res<()> {
         todo!();
     }
     fn set_label(&mut self, value: OwnedValue) -> Res<()> {
         todo!();
     }
+
     fn delete(&mut self) -> Res<()> {
         todo!();
     }
-
-    // todo remove this and replace it with raw_write_to
-    fn as_data_source(&self) -> Option<Res<DataSource>> {
-        todo!()
-    }
-
-    fn raw_write_to(&self, destination: DataDestination) {
-        todo!()
-    }
-
-    // fn as_data_destination(&mut self) -> Option<Res<DataDestination>> {
-    //     todo!()
-    // }
 }
 
 pub trait InValueRef: Debug {

@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::base::*;
 
 pub fn str_eval(root: Cell, path: &str) -> Res<Vec<String>> {
-    root.path(path)?
+    root.search(path)?
         .into_iter()
         .map(|cres| -> Res<String> {
             // if let Ok(ref cell) = cres {

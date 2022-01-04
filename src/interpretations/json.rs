@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::{fs::File, path::Path};
 
 use serde_json::Value as SerdeValue;
@@ -83,22 +82,21 @@ impl From<serde_json::Error> for HErr {
     }
 }
 
-pub fn from_path(path: &Path) -> Res<Cell> {
+pub fn from_path(path: &Path) -> Res<Domain> {
     let file = File::open(path)?;
     let json: SerdeValue = serde_json::from_reader(file)?;
     from_json_value(json)
 }
 
-pub fn from_string(source: &str) -> Res<Cell> {
+pub fn from_string(source: &str) -> Res<Domain> {
     let json: SerdeValue = serde_json::from_str(source)?;
     from_json_value(json)
 }
 
-fn from_json_value(json: SerdeValue) -> Res<Cell> {
+fn from_json_value(json: SerdeValue) -> Res<Domain> {
     let root_node = node_from_json(json);
     let preroot = Orc::new(vec![root_node]);
-    let domain = Rc::new(Domain { preroot });
-    domain.root()
+    Ok(Domain { preroot })
 }
 
 fn owned_value_to_node(v: OwnedValue) -> Res<Node> {
@@ -239,7 +237,10 @@ impl InCell for Cell {
             NodeGroup::Array(ref mut ra) => {
                 let mut urca = ra.urc();
                 let a = guard_some!(urca.get_mut(), {
-                    return HErr::ExclusivityRequired("cannot set value".into()).into();
+                    return Err(HErr::ExclusivityRequired {
+                        path: "".into(),
+                        op: "set_value",
+                    });
                 });
                 let x = guard_some!(a.get_mut(self.pos), {
                     return HErr::internal("bad pos").into();
@@ -250,7 +251,10 @@ impl InCell for Cell {
             NodeGroup::Object(ref mut ro) => {
                 let mut urco = ro.urc();
                 let o = guard_some!(urco.get_mut(), {
-                    return HErr::ExclusivityRequired("cannot set value".into()).into();
+                    return Err(HErr::ExclusivityRequired {
+                        path: "".into(),
+                        op: "set_value",
+                    });
                 });
                 let x = guard_some!(o.at_mut(self.pos), {
                     return HErr::internal("bad pos").into();
@@ -268,14 +272,20 @@ impl InCell for Cell {
             NodeGroup::Array(ref mut a) => {
                 let mut urca = a.urc();
                 let v = guard_some!(urca.get_mut(), {
-                    return HErr::ExclusivityRequired("cannot delete".into()).into();
+                    return Err(HErr::ExclusivityRequired {
+                        path: "".into(),
+                        op: "delete",
+                    });
                 });
                 v.remove(self.pos);
             }
             NodeGroup::Object(ref mut o) => {
                 let mut urco = o.urc();
                 let v = guard_some!(urco.get_mut(), {
-                    return HErr::ExclusivityRequired("cannot delete".into()).into();
+                    return Err(HErr::ExclusivityRequired {
+                        path: "".into(),
+                        op: "delete",
+                    });
                 });
                 v.remove(self.pos);
             }

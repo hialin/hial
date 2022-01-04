@@ -62,11 +62,17 @@ impl InDomain for Domain {
         "file"
     }
 
-    fn new_from(source_interpretation: &str, source: DataSource) -> Res<Self> {
-        if let DataSource::File(path) = source {
-            from_path(path.to_path_buf())
-        } else {
-            Err(HErr::IncompatibleSource("".into()))
+    fn new_from(source_interpretation: &str, source: RawDataContainer) -> Res<Self> {
+        match source {
+            RawDataContainer::File(path) => from_path(path),
+            RawDataContainer::String(string) if source_interpretation == "value" => {
+                from_path(PathBuf::from(string))
+            }
+            _ => HErr::IncompatibleSource(format!(
+                "cannot make a file from {}",
+                source_interpretation
+            ))
+            .into(),
         }
     }
 

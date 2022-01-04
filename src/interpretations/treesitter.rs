@@ -59,12 +59,12 @@ pub struct CNode {
     src: Range<usize>,
 }
 
-pub fn from_path(path: &Path, language: &'static str) -> Res<Cell> {
+pub fn from_path(path: &Path, language: &'static str) -> Res<Domain> {
     let source = std::fs::read_to_string(&path)?;
     sitter_from_source(source, language)
 }
 
-pub fn from_string(source: String, language: &'static str) -> Res<Cell> {
+pub fn from_string(source: String, language: &'static str) -> Res<Domain> {
     sitter_from_source(source, language)
 }
 
@@ -75,7 +75,7 @@ pub fn get_underlying_string(cell: &Cell) -> Res<&str> {
     Ok(&cell.group.domain.source[cnode.src.clone()])
 }
 
-fn sitter_from_source(source: String, language: &'static str) -> Res<Cell> {
+fn sitter_from_source(source: String, language: &'static str) -> Res<Domain> {
     let sitter_language = guard_some!(tree_sitter_language(language), {
         return Err(HErr::Sitter(format!("unsupported language: {}", language)));
     });
@@ -106,12 +106,11 @@ fn sitter_from_source(source: String, language: &'static str) -> Res<Cell> {
     let tree = guard_some!(parser.parse(&source, None), {
         return Err(HErr::Sitter(format!("cannot get parse tree")));
     });
-    let domain = Rc::new(Domain {
+    Ok(Domain {
         language,
         source,
         tree,
-    });
-    domain.root()
+    })
 }
 
 fn node_to_cnode(mut cursor: TreeCursor, source: &str) -> CNode {

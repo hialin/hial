@@ -12,7 +12,7 @@ pub enum HErr {
     IncompatibleSource(String),
 
     // cannot change data because there are other readers
-    ExclusivityRequired(String),
+    ExclusivityRequired { path: String, op: &'static str },
 
     Json(String),
     Toml(String),
@@ -26,11 +26,14 @@ pub enum HErr {
 
 #[derive(Clone, Debug)]
 pub enum NotFound {
-    NoLabel, // the cell has no label
-    NoIndex, // the cell has no index
+    // the cell has no label
+    NoLabel,
+    // the cell has no index
+    NoIndex,
     NoGroup(String),
     NoResult(String),
     NoInterpretation(String),
+    NoSource,
 }
 
 impl From<NotFound> for HErr {

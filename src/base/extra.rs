@@ -1,10 +1,13 @@
+use std::ops::Deref;
+use std::rc::Rc;
+
 use crate::{
     base::*, enumerated_dynamic_type, interpretations::*, pathlang::eval::EvalIter, pathlang::Path,
 };
 
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
-    pub enum Domain {
+    pub(crate) enum DynDomain {
         OwnedValue(ownedvalue::Domain),
         File(file::Domain),
         Json(json::Domain),
@@ -15,7 +18,13 @@ enumerated_dynamic_type! {
         Http (http::Domain),
         TreeSitter (treesitter::Domain),
     }
-    with_domain
+    with_dyn_domain
+}
+
+#[derive(Clone, Debug)]
+pub struct Domain {
+    pub(crate) this: DynDomain,
+    pub(crate) source: Option<Cell>,
 }
 
 enumerated_dynamic_type! {
@@ -86,39 +95,59 @@ pub(crate) enum EnGroup {
 
 #[derive(Clone, Debug)]
 pub struct Cell {
+    pub(crate) domain: Rc<Domain>,
     pub(crate) this: EnCell,
     pub(crate) prev: Option<(Box<Cell>, Relation)>, //todo: remove box
 }
 
 #[derive(Clone, Debug)]
 pub struct Group {
+    pub(crate) domain: Rc<Domain>,
     pub(crate) this: EnGroup,
     pub(crate) prev: Option<(Box<Cell>, Relation)>, //todo: remove box
 }
 
 impl Domain {
     pub fn root(&self) -> Res<Cell> {
-        with_domain!(self, |x| {
+        let prev = if let Some(ref source) = self.source {
+            Some((Box::new(source.clone()), Relation::Interpretation))
+        } else {
+            None
+        };
+        with_dyn_domain!(&self.this, |x| {
             Ok(Cell {
+                domain: Rc::new(self.clone()),
                 this: EnCell::Dyn(DynCell::from(x.root()?)),
-                prev: None,
+                prev,
             })
         })
     }
 
-    pub fn flush_changes(&self) -> Res<()> {
-        todo!()
+    pub fn write_back(&self) -> Res<()> {
+        if let Some(ref source) = self.source {
+            let rawdata = self.root()?.raw()?;
+            source.set_raw(rawdata)?;
+            Ok(())
+        } else {
+            NotFound::NoSource.into()
+        }
     }
 
     pub fn interpretation(&self) -> &str {
-        with_domain!(self, |x| { x.interpretation() })
+        with_dyn_domain!(&self.this, |x| { x.interpretation() })
     }
 }
 
 impl From<OwnedValue> for Cell {
     fn from(ov: OwnedValue) -> Self {
+        let c = ownedvalue::Cell::from(ov);
+        let domain = Domain {
+            this: DynDomain::from(c.domain().clone()),
+            source: None,
+        };
         Cell {
-            this: EnCell::Dyn(DynCell::from(ownedvalue::Cell::from(ov))),
+            domain: Rc::new(domain),
+            this: EnCell::Dyn(DynCell::from(c)),
             prev: None,
         }
     }
@@ -126,19 +155,19 @@ impl From<OwnedValue> for Cell {
 
 impl From<Value<'_>> for Cell {
     fn from(v: Value) -> Self {
-        Cell {
-            this: EnCell::Dyn(DynCell::from(ownedvalue::Cell::from(v))),
-            prev: None,
-        }
+        Cell::from(v.to_owned_value())
+    }
+}
+
+impl From<&str> for Cell {
+    fn from(s: &str) -> Self {
+        Cell::from(s.to_string())
     }
 }
 
 impl From<String> for Cell {
     fn from(s: String) -> Self {
-        Cell {
-            this: EnCell::Dyn(DynCell::from(ownedvalue::Cell::from(s))),
-            prev: None,
-        }
+        Cell::from(OwnedValue::from(s))
     }
 }
 
@@ -159,8 +188,8 @@ impl ValueRef {
 }
 
 impl DynCell {
-    pub(crate) fn domain(&self) -> Domain {
-        with_dyn_cell!(self, |x| { Domain::from(x.domain().clone()) })
+    pub(crate) fn domain(&self) -> DynDomain {
+        with_dyn_cell!(self, |x| { DynDomain::from(x.domain().clone()) })
     }
 
     pub(crate) fn typ(&self) -> Res<&str> {
@@ -193,10 +222,7 @@ impl DynCell {
 
 impl Cell {
     pub fn domain(&self) -> Domain {
-        match &self.this {
-            EnCell::Dyn(dyn_cell) => dyn_cell.domain(),
-            EnCell::Field(field_cell) => field_cell.domain(),
-        }
+        self.domain.deref().clone()
     }
 
     pub fn typ(&self) -> Res<&str> {
@@ -230,6 +256,7 @@ impl Cell {
     pub fn sub(&self) -> Res<Group> {
         match &self.this {
             EnCell::Dyn(dyn_cell) => Ok(Group {
+                domain: self.domain.clone(),
                 this: EnGroup::Dyn(dyn_cell.sub()?),
                 prev: Some((Box::new(self.clone()), Relation::Sub)),
             }),
@@ -240,6 +267,7 @@ impl Cell {
     pub fn attr(&self) -> Res<Group> {
         match &self.this {
             EnCell::Dyn(dyn_cell) => Ok(Group {
+                domain: self.domain.clone(),
                 this: EnGroup::Dyn(dyn_cell.attr()?),
                 prev: Some((Box::new(self.clone()), Relation::Sub)),
             }),
@@ -253,6 +281,7 @@ impl Cell {
 
     pub fn elevate(self) -> Res<Group> {
         Ok(Group {
+            domain: self.domain.clone(),
             this: EnGroup::Elevation(ElevationGroup(self.clone())),
             prev: Some((Box::new(self), Relation::Interpretation)),
         })
@@ -262,7 +291,12 @@ impl Cell {
         match &self.this {
             EnCell::Field(_) => HErr::BadContext(format!("cannot take a field of a field")).into(),
             EnCell::Dyn(dyn_cell) => Ok(Group {
-                this: EnGroup::Field(Field(dyn_cell.clone(), FieldType::Value)),
+                domain: self.domain.clone(),
+                this: EnGroup::Field(Field(
+                    dyn_cell.clone(),
+                    FieldType::Value,
+                    Box::new(self.domain()),
+                )),
                 prev: Some((Box::new(self.clone()), Relation::Field)),
             }),
         }
@@ -272,14 +306,14 @@ impl Cell {
         self.elevate()?.get(interpretation)
     }
 
-    pub fn path<'a>(&self, path: &'a str) -> Res<PathSearch<'a>> {
+    pub fn search<'a>(&self, path: &'a str) -> Res<PathSearch<'a>> {
         Ok(PathSearch {
             cell: self.clone(),
             path: crate::pathlang::Path::parse(path)?,
         })
     }
 
-    pub fn get_path(&self) -> Res<String> {
+    pub fn path(&self) -> Res<String> {
         use std::fmt::Write;
         let err_fn = |err| eprintln!("💥 str write error {}", err);
         let write_label_fn =
@@ -358,18 +392,23 @@ impl Cell {
         }
     }
 
-    pub fn as_data_source(&self) -> Option<Res<DataSource>> {
+    pub fn raw(&self) -> Res<RawDataContainer> {
         match &self.this {
             EnCell::Dyn(dyn_cell) => {
-                with_dyn_cell!(dyn_cell, |x| { x.as_data_source() })
+                with_dyn_cell!(dyn_cell, |x| { x.raw() })
             }
-            EnCell::Field(field_cell) => field_cell.as_data_source(),
+            EnCell::Field(field_cell) => field_cell.raw(),
         }
     }
 
-    // pub fn as_data_destination(&mut self) -> Option<Res<DataDestination>> {
-    //     with_cell!(self, |x| { x.as_data_destination() })
-    // }
+    pub fn set_raw(&self, raw: RawDataContainer) -> Res<()> {
+        match &self.this {
+            EnCell::Dyn(dyn_cell) => {
+                with_dyn_cell!(dyn_cell, |x| { x.set_raw(raw) })
+            }
+            EnCell::Field(field_cell) => field_cell.set_raw(raw),
+        }
+    }
 
     pub fn debug_string(&self) -> String {
         let err_fn = |err| eprintln!("💥 str write error {}", err);
@@ -421,12 +460,14 @@ impl Group {
         match &self.this {
             EnGroup::Elevation(elevation_group) => elevation_group.at(index),
             EnGroup::Field(field_group) => Ok(Cell {
+                domain: self.domain.clone(),
                 this: EnCell::Field(field_group.at(index)?),
                 prev: self.prev.clone(),
             }),
             EnGroup::Dyn(dyn_group) => {
                 with_dyn_group!(dyn_group, |x| {
                     Ok(Cell {
+                        domain: self.domain.clone(),
                         this: EnCell::Dyn(DynCell::from(x.at(index)?)),
                         prev: self.prev.clone(),
                     })
@@ -440,12 +481,14 @@ impl Group {
         match &self.this {
             EnGroup::Elevation(elevation_group) => elevation_group.get(key),
             EnGroup::Field(field_group) => Ok(Cell {
+                domain: self.domain.clone(),
                 this: EnCell::Field(field_group.get(key)?),
                 prev: self.prev.clone(),
             }),
             EnGroup::Dyn(dyn_group) => {
                 with_dyn_group!(dyn_group, |x| {
                     Ok(Cell {
+                        domain: self.domain.clone(),
                         this: EnCell::Dyn(DynCell::from(x.get(key)?)),
                         prev: self.prev.clone(),
                     })
@@ -494,5 +537,8 @@ impl<'a> PathSearch<'a> {
     pub fn first(self) -> Res<Cell> {
         let x = self.into_iter().next();
         x.unwrap_or(NotFound::NoResult(format!("no result for this path")).into())
+    }
+    pub fn all(self) -> Res<Vec<Cell>> {
+        self.into_iter().collect::<Res<Vec<_>>>()
     }
 }

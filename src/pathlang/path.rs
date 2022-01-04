@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::rc::Rc;
 
 use crate::{
     base::*,
@@ -124,9 +125,14 @@ impl<'a> CellRepresentation<'a> {
     pub fn eval(&self) -> Res<Cell> {
         match self {
             CellRepresentation::Url(u) => {
-                let urlcell = url::from_string(&u.to_string())?;
+                let domain = url::from_string(&u.to_string())?;
+                let root = domain.root()?;
                 Cell {
-                    this: EnCell::Dyn(DynCell::Url(urlcell)),
+                    domain: Rc::new(Domain {
+                        this: DynDomain::from(domain),
+                        source: None,
+                    }),
+                    this: EnCell::Dyn(DynCell::Url(root)),
                     prev: None,
                 }
                 .elevate()?
@@ -134,17 +140,31 @@ impl<'a> CellRepresentation<'a> {
             }
             CellRepresentation::File(f) => {
                 let path = std::path::Path::new(f).to_path_buf();
+                let domain = file::from_path(path)?;
+                let root = domain.root()?;
                 Cell {
-                    this: EnCell::Dyn(DynCell::File(file::from_path(path)?.root()?)),
+                    domain: Rc::new(Domain {
+                        this: DynDomain::from(domain),
+                        source: None,
+                    }),
+                    this: EnCell::Dyn(DynCell::File(root)),
                     prev: None,
                 }
                 .elevate()?
                 .get("file")
             }
-            CellRepresentation::String(str) => Ok(Cell {
-                this: EnCell::Dyn(DynCell::from(ownedvalue::Cell::from(str.to_string()))),
-                prev: None,
-            }),
+            CellRepresentation::String(str) => {
+                let root = ownedvalue::Cell::from(str.to_string());
+                let domain = root.domain().clone();
+                Ok(Cell {
+                    domain: Rc::new(Domain {
+                        this: DynDomain::from(domain),
+                        source: None,
+                    }),
+                    this: EnCell::Dyn(DynCell::from(root)),
+                    prev: None,
+                })
+            }
         }
     }
 }

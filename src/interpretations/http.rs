@@ -48,7 +48,7 @@ pub struct Group {
     response: Domain,
 }
 
-pub fn from_string(url: &str) -> Res<Cell> {
+pub fn from_string(url: &str) -> Res<Domain> {
     let response = Client::builder()
         .user_agent("hial")
         .build()?
@@ -73,13 +73,12 @@ pub fn from_string(url: &str) -> Res<Cell> {
     if status >= 400 {
         eprintln!("Error: http call failed: {} = {} {}", url, status, reason);
     }
-    let domain = Domain(Orc::new(Response {
+    Ok(Domain(Orc::new(Response {
         status,
         reason,
         headers,
         body: response.bytes()?.as_ref().to_vec(),
-    }));
-    domain.root()
+    })))
 }
 
 pub fn to_string(cell: &Cell) -> Res<String> {

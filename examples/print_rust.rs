@@ -57,13 +57,15 @@ fn test_rustapi_with_path() -> Res<()> {
         .be("file")?
         .sub()?
         .get("examples")?;
-    let stacks = folder.path("/productiondump.json^json/stacks")?.first()?;
+    let stacks = folder.search("/productiondump.json^json/stacks")?.first()?;
     for stack in stacks.sub()? {
         let stack = stack?;
-        if stack.path("/system_stack")?.first()?.value().get()? == "true" {
+        if stack.search("/system_stack")?.first()?.value().get()? == "true" {
             continue;
         }
-        let service = stack.path("/dockerCompose^string^yaml/services")?.first()?;
+        let service = stack
+            .search("/dockerCompose^string^yaml/services")?
+            .first()?;
         println!("service found");
         let nameref = service.value();
         let name = nameref.get()?;

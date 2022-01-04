@@ -81,22 +81,20 @@ enum Attribute {
     Error(String),
 }
 
-pub fn from_path(path: &Path) -> Res<Cell> {
+pub fn from_path(path: &Path) -> Res<Domain> {
     let mut reader = Reader::from_file(path.clone()).map_err(HErr::from)?;
     let root = xml_to_node(&mut reader)?;
-    let domain = Rc::new(Domain {
+    Ok(Domain {
         preroot: NodeList(Rc::new(vec![root])),
-    });
-    domain.root()
+    })
 }
 
-pub fn from_string(string: &str) -> Res<Cell> {
+pub fn from_string(string: &str) -> Res<Domain> {
     let mut reader = Reader::from_str(string);
     let root = xml_to_node(&mut reader)?;
-    let domain = Rc::new(Domain {
+    Ok(Domain {
         preroot: NodeList(Rc::new(vec![root])),
-    });
-    domain.root()
+    })
 }
 
 fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
