@@ -35,7 +35,7 @@
 - todo: write support: json, rust, fs
 - todo: c interop and a small c test
 
-- cell must implement partialeq, eq
+- cell must implement partialeq, eq (same pointed location)
 
 - todo: tree guide lines
 - todo: colors: interp, type, label, value

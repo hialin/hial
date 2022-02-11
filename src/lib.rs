@@ -1,10 +1,11 @@
 #![allow(unused_variables, dead_code)]
+#![feature(test)]
 #![deny(
-	// warnings, // todo uncomment this
-    missing_debug_implementations,
-    // missing_copy_implementations, // todo uncomment this
-    bare_trait_objects,
-    // missing_docs
+// warnings, // todo uncomment this
+missing_debug_implementations,
+// missing_copy_implementations, // todo uncomment this
+bare_trait_objects,
+// missing_docs
 )]
 
 use std::borrow::Borrow;

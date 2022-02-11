@@ -49,6 +49,14 @@ pub(crate) enum EnCell {
     Dyn(DynCell),
 }
 
+#[derive(Clone, Debug)]
+pub struct Cell {
+    pub(crate) domain: Rc<Domain>,
+    pub(crate) this: EnCell,
+    // todo: remove box
+    pub(crate) prev: Option<(Box<Cell>, Relation)>,
+}
+
 enumerated_dynamic_type! {
     #[derive(Debug)]
     enum DynValueRef {
@@ -94,17 +102,11 @@ pub(crate) enum EnGroup {
 }
 
 #[derive(Clone, Debug)]
-pub struct Cell {
-    pub(crate) domain: Rc<Domain>,
-    pub(crate) this: EnCell,
-    pub(crate) prev: Option<(Box<Cell>, Relation)>, //todo: remove box
-}
-
-#[derive(Clone, Debug)]
 pub struct Group {
     pub(crate) domain: Rc<Domain>,
     pub(crate) this: EnGroup,
-    pub(crate) prev: Option<(Box<Cell>, Relation)>, //todo: remove box
+    // todo: remove box
+    pub(crate) prev: Option<(Box<Cell>, Relation)>,
 }
 
 impl Domain {
@@ -295,7 +297,7 @@ impl Cell {
                 this: EnGroup::Field(Field(
                     dyn_cell.clone(),
                     FieldType::Value,
-                    Box::new(self.domain()),
+                    self.domain.clone(),
                 )),
                 prev: Some((Box::new(self.clone()), Relation::Field)),
             }),

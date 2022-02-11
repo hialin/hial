@@ -58,6 +58,7 @@ macro_rules! add_elevation {
     ($ret:ident, $interp:literal, |$cellname:ident, $strname:ident| $body:block) => {
         $ret.put($interp, |$cellname: Cell| -> Res<Cell> {
             let vref = $cellname.value();
+            println!("------{:?}", vref.get());
             if let Value::Str($strname) = vref.get()? {
                 let domain = ($body)?;
                 let root = domain.root()?;

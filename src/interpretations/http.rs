@@ -3,7 +3,7 @@ use reqwest::{blocking::Client, Error as ReqwestError};
 use crate::utils::orc::{Orc, Urc};
 use crate::{base::*, utils::vecmap::VecMap};
 
-// ^http .value = bytes
+// ^http .value -> bytes
 //       @status
 //          code
 //          reason

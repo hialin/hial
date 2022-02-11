@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use std::rc::Rc;
 
 use crate::base::*;
 
@@ -12,16 +13,15 @@ pub enum FieldType {
 }
 
 #[derive(Clone, Debug)]
-// todo remove box
 pub(crate) struct Field(
     pub(crate) DynCell,
     pub(crate) FieldType,
-    pub(crate) Box<Domain>,
+    pub(crate) Rc<Domain>,
 );
 
 #[derive(Debug)]
 pub(crate) enum ValueRef {
-    // todo remove this boxing
+    // todo remove box
     ValueRef(Box<extra::ValueRef>),
     Field(DynCell, FieldType),
     Label(FieldType),
