@@ -17,7 +17,7 @@ The uniform data API maximizes developer comfort and speed. A simple and uniform
 
 For devops, this provides programmatic access to configuration files. Programmers can use it as a structured grep utility, for complex data conversions, for testing program invariants, etc.
 
-One should probably not use it for performance intensive tasks or large amounts of data. But it should be used for prototyping such cases.
+One should probably not use it for performance intensive tasks or large amounts of data. But it can be used for prototyping such cases.
 
 **Please be warned** that the current implementations are neither performant nor failproof. The project is currently in alpha state and the APIs will most likely suffer extensive changes.
 
@@ -35,7 +35,7 @@ A cell also has a string **type**describing its kind, depending on the interpret
 
 ### Examples:
 
-- A *folder* of the file system is a cell. It may have *sub* items (files or folders which it contains) and may have a *super* (parent folder). Its *attr* items are creation/modification date, access rights, size, etc. The folder name is both the *label* and the *value*.
+- A *folder* of the file system is a cell. It may have *sub* cells (files or folders which it contains) and may have a *super* cell (parent folder). Its *attr* items are creation/modification date, access rights, size, etc. The folder name is both the *label* and the *value*.
 
 - A *file* of the file system is a cell. It has no *sub* items, may have one *super*, has the same *attr* as a folder and both a *label* and *value* as its name. A file cell can be *interpreted* in many other ways (string cell, json/yaml/xml cell tree, programming cell trees).
 
@@ -70,9 +70,9 @@ Examples:
 - `./src/**^rust` returns a list of all rust files (all files that have a rust interpretation) descending from the `src` folder.
 - `./src/**^rust/**/*[#type=="function_item"]` lists all rust functions in all rust files in the `src` folder.
 - `./src/**^rust/**/*[#type=="function_item"]/**/*[#type=="let_declaration"]` lists all occurences of *let* declarations in all functions in all rust files in the src folder.
-- `./src/**^rust/**/*[#type=="function_item"]/**/*[#type=="let_declaration"][/pattern/*]` lists only destructuring patterns in all occurences of *let* declarations in all functions in all rust files in the src folder. The destructuring patterns are the only ones that have a descendant of `pattern`, for which this filter: `[/pattern/*]` is true.
+- `./src/**^rust/**/*[#type=="function_item"]/**/*[#type=="let_declaration"][/pattern/*]` lists only destructuring patterns in all occurences of *let* declarations in all functions in all rust files in the src folder. The destructuring patterns are the only ones that have a descendant of `pattern`, for which the filter `[/pattern/*]` is true.
 
-To test the examples yourself, run the `hial` tool in bash, e.g.: `hial explore 'http://api.github.com^http^json'`
+To test the examples yourself, run the `hial` command line tool, e.g.: `hial ls 'http://api.github.com^http^json'`
 
 ## What's the current feature implementation status?
 
@@ -80,17 +80,17 @@ See [issues.md](./issues.md).
 
 ## What languages are supported?
 
-- [x] Rust API is natively available; Rust is also the implementation language.
-- [ ] C interop: work in progress.
-- [ ] Python, Java, Go, Javascript wrappers are planned.
+- Rust API is natively available; Rust is also the implementation language.
+- C interop: work in progress.
+- Python, Java, Go, Javascript wrappers are planned.
 
 ## API examples, use cases
 
 #### Explore files on the file system
 
 ```bash
-# bash, works
-hial explore "."
+# shell, works
+hial ls "."
 ```
 
 ```python
@@ -102,7 +102,7 @@ for cell in path('./**'):
 #### Read a list of services from a Docker compose file and print those that have inaccessible images [working]
 
 ```bash
-# bash, works
+# shell, works
 echo "Bad images:"
 hial print "./config.yaml^yaml/services[/image#value^http@status/code!=200]/name"
 ```

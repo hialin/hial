@@ -1,5 +1,5 @@
 #![allow(unused_variables, dead_code)]
-#![feature(test)]
+// #![feature(test)]
 #![deny(
 // warnings, // todo uncomment this
 missing_debug_implementations,

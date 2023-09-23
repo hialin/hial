@@ -54,12 +54,12 @@ struct Args {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Command {
     None,
-    Print(PrintCommand),
+    Print(ListCommand),
     PerfTest(PerfTestCommand),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct PrintCommand {
+struct ListCommand {
     path: String,
     depth: usize,
     breadth: usize,
@@ -79,7 +79,7 @@ fn parse_args() -> Res<Args> {
                 .help("Verbose description of operations"),
         )
         .subcommand(
-            SubCommand::with_name("print")
+            SubCommand::with_name("ls")
                 .about("shows the tree of the path result")
                 .arg(
                     Arg::with_name("path")
@@ -123,7 +123,7 @@ fn parse_args() -> Res<Args> {
 
     args.verbose = matches.is_present("verbose");
 
-    if let Some(command) = matches.subcommand_matches("print") {
+    if let Some(command) = matches.subcommand_matches("ls") {
         let path = command.value_of("path").unwrap_or("").to_string();
         let depth = guard_ok!(command.value_of("depth").unwrap_or("0").parse(), _x => {
             return HErr::BadArgument("cannot parse `depth` argument as integer".into()).into()
@@ -131,7 +131,7 @@ fn parse_args() -> Res<Args> {
         let breadth = guard_ok!(command.value_of("breadth").unwrap_or("0").parse(), _x => {
             return HErr::BadArgument("cannot parse `breadth` argument as integer".into()).into()
         });
-        args.command = Command::Print(PrintCommand {
+        args.command = Command::Print(ListCommand {
             path,
             depth,
             breadth,
