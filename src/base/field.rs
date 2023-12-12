@@ -22,7 +22,7 @@ pub(crate) struct Field(
 #[derive(Debug)]
 pub(crate) enum ValueRef {
     // todo remove box
-    ValueRef(Box<extra::ValueRef>),
+    ValueRef(Box<extra::ExValueRef>),
     Field(DynCell, FieldType),
     Label(FieldType),
 }

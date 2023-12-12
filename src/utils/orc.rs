@@ -46,8 +46,7 @@ impl<T> Drop for Orc<T> {
         unsafe {
             self.0.as_mut().dec_orc();
             if self.0.as_ref().can_be_dropped() {
-                Box::from_raw(self.0.as_ptr());
-                // let it leak
+                drop(Box::from_raw(self.0.as_ptr()));
             }
         }
     }
@@ -76,8 +75,7 @@ impl<T> Drop for Urc<T> {
         unsafe {
             self.0.as_mut().dec_urc();
             if self.0.as_ref().can_be_dropped() {
-                Box::from_raw(self.0.as_ptr());
-                // let it drop
+                drop(Box::from_raw(self.0.as_ptr()));
             }
         }
     }

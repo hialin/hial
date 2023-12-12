@@ -75,7 +75,7 @@ enumerated_dynamic_type! {
 }
 
 #[derive(Debug)]
-pub struct ValueRef(DynValueRef);
+pub struct ExValueRef(DynValueRef);
 
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
@@ -173,7 +173,7 @@ impl From<String> for Cell {
     }
 }
 
-impl ValueRef {
+impl ExValueRef {
     pub fn get(&self) -> Res<Value> {
         with_valueref!(&self.0, |x| { x.get() })
     }
@@ -183,9 +183,9 @@ impl ValueRef {
     }
 }
 
-impl ValueRef {
-    fn from<T: Into<DynValueRef>>(x: T) -> ValueRef {
-        ValueRef(x.into())
+impl ExValueRef {
+    fn from<T: Into<DynValueRef>>(x: T) -> ExValueRef {
+        ExValueRef(x.into())
     }
 }
 
@@ -200,11 +200,11 @@ impl DynCell {
     pub(crate) fn index(&self) -> Res<usize> {
         with_dyn_cell!(self, |x| { Ok(x.index()?) })
     }
-    pub(crate) fn label(&self) -> ValueRef {
-        with_dyn_cell!(self, |x| { ValueRef::from(x.label()) })
+    pub(crate) fn label(&self) -> ExValueRef {
+        with_dyn_cell!(self, |x| { ExValueRef::from(x.label()) })
     }
-    pub(crate) fn value(&self) -> ValueRef {
-        with_dyn_cell!(self, |x| { ValueRef::from(x.value()) })
+    pub(crate) fn value(&self) -> ExValueRef {
+        with_dyn_cell!(self, |x| { ExValueRef::from(x.value()) })
     }
 
     pub(crate) fn sub(&self) -> Res<DynGroup> {
@@ -241,17 +241,17 @@ impl Cell {
         }
     }
 
-    pub fn label(&self) -> ValueRef {
+    pub fn label(&self) -> ExValueRef {
         match &self.this {
             EnCell::Dyn(dyn_cell) => dyn_cell.label(),
-            EnCell::Field(field_cell) => ValueRef::from(field_cell.label()),
+            EnCell::Field(field_cell) => ExValueRef::from(field_cell.label()),
         }
     }
 
-    pub fn value(&self) -> ValueRef {
+    pub fn value(&self) -> ExValueRef {
         match &self.this {
             EnCell::Dyn(dyn_cell) => dyn_cell.value(),
-            EnCell::Field(field_cell) => ValueRef::from(field_cell.value()),
+            EnCell::Field(field_cell) => ExValueRef::from(field_cell.value()),
         }
     }
 

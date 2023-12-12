@@ -137,7 +137,7 @@ impl Display for StrFloat {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum Value<'a> {
     None,
     Bool(bool),
@@ -146,6 +146,20 @@ pub enum Value<'a> {
     Str(&'a str),
     // OsStr(&'a OsStr),
     Bytes(&'a [u8]),
+}
+
+impl<'a> fmt::Debug for Value<'a> {
+    fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Value::None => write!(buf, "{}", DISPLAY_VALUE_NONE),
+            Value::Bool(x) => write!(buf, "{:?}", x),
+            Value::Int(x) => write!(buf, "{:?}", x),
+            Value::Float(x) => write!(buf, "{:?}", x),
+            Value::Str(x) => write!(buf, "{:?}", x),
+            // Value::OsStr(x) => write!(buf, "{:?}", x.to_string_lossy()),
+            Value::Bytes(x) => write!(buf, "Bytes({:?})", String::from_utf8_lossy(x)),
+        }
+    }
 }
 
 impl<'a> Default for Value<'a> {
@@ -180,7 +194,7 @@ where
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum OwnedValue {
     None,
     Bool(bool),
@@ -189,6 +203,19 @@ pub enum OwnedValue {
     String(String),
     // OsString(OsString),
     Bytes(Vec<u8>),
+}
+
+impl fmt::Debug for OwnedValue {
+    fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OwnedValue::None => write!(buf, "{}", DISPLAY_VALUE_NONE),
+            OwnedValue::Bool(x) => write!(buf, "{:?}", x),
+            OwnedValue::Int(x) => write!(buf, "{:?}", x),
+            OwnedValue::Float(x) => write!(buf, "{:?}", x),
+            OwnedValue::String(ref x) => write!(buf, "{:?}", x),
+            OwnedValue::Bytes(x) => write!(buf, "{}", String::from_utf8_lossy(x)),
+        }
+    }
 }
 
 impl Default for OwnedValue {

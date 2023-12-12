@@ -82,7 +82,7 @@ enum Attribute {
 }
 
 pub fn from_path(path: &Path) -> Res<Domain> {
-    let mut reader = Reader::from_file(path.clone()).map_err(HErr::from)?;
+    let mut reader = Reader::from_file(path).map_err(HErr::from)?;
     let root = xml_to_node(&mut reader)?;
     Ok(Domain {
         preroot: NodeList(Rc::new(vec![root])),
