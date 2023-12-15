@@ -6,7 +6,6 @@ use crate::{
     base::*, guard_ok, guard_some, interpretations::*, utils::vecmap::VecMap, verbose_error,
 };
 
-type ConstructorFn = fn(RawDataContainer) -> Res<Cell>;
 type ElevateFn = fn(Cell) -> Res<Cell>;
 type VecMapOfElevateFn = VecMap<&'static str, ElevateFn>;
 
@@ -20,7 +19,7 @@ fn get_elevation_map_for(interpretation: &str) -> Option<VecMapOfElevateFn> {
     {
         // try reading
         let reader_opt = guard_ok!(ELEVATION_MAP.read(), err => {
-            verbose_error(HErr::internal(format!("{:?}", err)));
+            verbose_error(HErr::internal(format!("{:?}", err))); // TODO remove verbose_errors
             return None;
         });
         if let Some(reader) = reader_opt.as_ref() {

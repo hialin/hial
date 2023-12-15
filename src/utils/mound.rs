@@ -1,3 +1,5 @@
+// EXPERIMENT, CURRENTLY UNUSED
+// TODO: Remove this file if it is not used in the future
 #![allow(soft_unstable)]
 
 use std::cell::RefCell;

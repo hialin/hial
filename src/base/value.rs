@@ -9,12 +9,23 @@ use crate::guard_variant;
 
 pub const DISPLAY_VALUE_NONE: &str = "ø"; // ø❍•⸰·
 
-#[derive(Copy, Clone, Debug, Eq, Ord, Hash)]
+#[derive(Copy, Clone, Debug)]
 pub enum Int {
     I64(i64),
     U64(u64),
     I32(i32),
     U32(u32),
+}
+
+impl Int {
+    pub fn as_i128(&self) -> i128 {
+        match *self {
+            Int::I64(a) => a as i128,
+            Int::U64(a) => a as i128,
+            Int::I32(a) => a as i128,
+            Int::U32(a) => a as i128,
+        }
+    }
 }
 
 impl PartialEq for Int {
@@ -48,25 +59,32 @@ impl PartialEq for Int {
     }
 }
 
+impl Eq for Int {}
+
 impl PartialOrd for Int {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let big = |x| match x {
-            Int::I64(a) => a as i128,
-            Int::U64(a) => a as i128,
-            Int::I32(a) => a as i128,
-            Int::U32(a) => a as i128,
-        };
-        big(*self).partial_cmp(&big(*other))
+        self.as_i128().partial_cmp(&other.as_i128())
+    }
+}
+impl Ord for Int {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_i128().cmp(&other.as_i128())
     }
 }
 
-impl<'a> Default for Int {
+impl Hash for Int {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_i128().hash(state)
+    }
+}
+
+impl Default for Int {
     fn default() -> Self {
         Int::I64(0)
     }
 }
 
-impl<'a> Display for Int {
+impl Display for Int {
     fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Int::I32(x) => write!(buf, "{}", x),
@@ -102,7 +120,7 @@ impl Ord for StrFloat {
 impl PartialEq for StrFloat {
     fn eq(&self, other: &Self) -> bool {
         if self.0.is_nan() {
-            return other.0.is_nan();
+            other.0.is_nan()
         } else {
             self.0 == other.0
         }
@@ -137,8 +155,9 @@ impl Display for StrFloat {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum Value<'a> {
+    #[default]
     None,
     Bool(bool),
     Int(Int),
@@ -159,12 +178,6 @@ impl<'a> fmt::Debug for Value<'a> {
             // Value::OsStr(x) => write!(buf, "{:?}", x.to_string_lossy()),
             Value::Bytes(x) => write!(buf, "Bytes({:?})", String::from_utf8_lossy(x)),
         }
-    }
-}
-
-impl<'a> Default for Value<'a> {
-    fn default() -> Self {
-        Value::None
     }
 }
 
@@ -194,8 +207,9 @@ where
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum OwnedValue {
+    #[default]
     None,
     Bool(bool),
     Int(Int),
@@ -215,12 +229,6 @@ impl fmt::Debug for OwnedValue {
             OwnedValue::String(ref x) => write!(buf, "{:?}", x),
             OwnedValue::Bytes(x) => write!(buf, "{}", String::from_utf8_lossy(x)),
         }
-    }
-}
-
-impl Default for OwnedValue {
-    fn default() -> Self {
-        OwnedValue::None
     }
 }
 
@@ -262,8 +270,8 @@ impl<'a> From<&'a OwnedValue> for Value<'a> {
             OwnedValue::Bool(x) => Value::Bool(*x),
             OwnedValue::Int(x) => Value::Int(*x),
             OwnedValue::Float(x) => Value::Float(*x),
-            OwnedValue::String(x) => Value::Str(&x),
-            OwnedValue::Bytes(x) => Value::Bytes(&x),
+            OwnedValue::String(ref x) => Value::Str(x),
+            OwnedValue::Bytes(ref x) => Value::Bytes(x),
         }
     }
 }

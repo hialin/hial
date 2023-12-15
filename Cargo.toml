@@ -10,24 +10,27 @@ crate-type = ["lib", "cdylib"]
 
 [dependencies]
 lazy_static = "1.4"
-linked-hash-map = "0.5"
+linked-hash-map = "0.5" # TODO: replace this package
 yaml-rust = "0.4"
-quick-xml = "0.22"
-url = "2.2"
-reqwest = { version = "0.11", features = ["blocking", "json"] }
-tree-sitter = "0.19"
-nom="6"
-clap="2.33"
+quick-xml = "0.23" # TODO: update to 0.31
+url = "2.1"
+reqwest = { version = "0.10", features = [
+    "blocking",
+    "json",
+] } # TODO: update to 0.11
+tree-sitter = "0.19" # TODO: update to 0.20
+nom = "7.1"
+clap = "2.1" # TODO: update to 4.4
 rand = "0.8"
 
 [dependencies.serde_json]
-version = "1"
+version = "1.0"
 features = ["preserve_order"]
 
 [dependencies.toml]
-version = "0.5"
+version = "0.8"
 features = ["preserve_order"]
 
 [build-dependencies]
 cc = "1.0"
-cbindgen = "0.20"
+cbindgen = "0"

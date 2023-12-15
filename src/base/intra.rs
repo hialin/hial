@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use crate::base::*;
 
+// TODO: is this needed? remove this
 // data container alternatives for serialized forms
 #[derive(Clone, Debug)]
 pub enum RawDataContainer {
@@ -23,10 +24,11 @@ pub trait InDomain: Clone + Debug {
         todo!()
     }
 
+    // TODO: this should return a group: json objects/arrays; xml root elements
     fn root(&self) -> Res<Self::Cell>;
     // fn cell(&self, trace: &Self::Trace) -> Self::Cell;
 
-    //fn origin(&self) -> Res<Path>;
+    // fn origin(&self) -> Res<Path>;
     // fn save_to_origin(&self) -> Res<()>;
     // fn save_to(&self, target: &InDomain>) -> Res<()>;
 }

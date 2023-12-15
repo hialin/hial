@@ -1,4 +1,4 @@
-#![feature(test)]
+// #![feature(test)]
 #![allow(unused_variables, dead_code)]
 #![deny(
 // warnings, // todo uncomment this
@@ -25,7 +25,7 @@ pub static mut VERBOSE: bool = false;
 
 #[macro_export]
 macro_rules! verbose {
-    ($($arg:tt)*) => (if unsafe{crate::VERBOSE} { eprintln!("[verbose] {}", format!($($arg)*))});
+    ($($arg:tt)*) => (if unsafe{$crate::VERBOSE} { eprintln!("[verbose] {}", format!($($arg)*))});
 }
 
 pub fn set_verbose(flag: bool) {

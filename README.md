@@ -11,35 +11,36 @@ An uniform data API is a programmatic interface to different types of data repre
 
 ### Why is it needed?
 
-The uniform data API maximizes developer comfort and speed. A simple and uniform data model makes it easy to create, transform, filter, delete any kind of data, programmatically. Automated programmatic editing, custom verification of programs, semantic diffs and similar tasks become possible.
+The uniform data API maximizes user comfort and speed by mapping the data into a single mental model. This model can be used in 90% of all cases, while the remaining 10% of cases can be handled by the usual specialized APIs. A simple and uniform data model makes it easy to create, transform, filter, delete any kind of data, programmatically.
 
-### Should you use it?
+The following tasks should be easy with such an API:
+- interactive or automated data exploration (structured grep)
+- targeted editing of configuration files (e.g. change a specific value in a json/yaml/toml/text file)
+- custom verification of programs, e.g. testing program invariants
+- complex data conversions
+- semantic diffs
 
-For devops, this provides programmatic access to configuration files. Programmers can use it as a structured grep utility, for complex data conversions, for testing program invariants, etc.
+## The data model
 
-One should probably not use it for performance intensive tasks or large amounts of data. But it can be used for prototyping such cases.
+The data model is that of a graph of simple data nodes. The graph is always represented as a spanning tree, with a single root node and a hierarchy of children nodes.
 
-**Please be warned** that the current implementations are neither performant nor failproof. The project is currently in alpha state and the APIs will most likely suffer extensive changes.
+Each data node is called a **cell**. It may have a **value** (a simple data type like string, number, bool or blob).
 
-## What's the data model?
+A cell may have subordinate cells (children in the tree structure) which are organized into a **group**. We call this the **sub** group. A cell may also have attributes or properties which also cells and are put into the **attr** group.
 
-The data model is that of a graph (usually just a tree) of simple data nodes.
+All cells except the root cell have a **super** cell and are part of the **super** group (all the cells with the same parent, or the sub group of the super cell). A cell may have an **index** (a number) or a **label** (usually a string) to identify it in the super group.
 
-Each data node is called a **cell**, and each cell is linked to other cells. The linked cells are organized into **groups**. Childrens of a cell are in the **sub** ("subordinate") group, parent cell(s) are the **super** ("superordinate") group, and cell attributes or properties are put into the **attr** group.
+A cell is always an **interpretation** of some underlying data. For example a series of bytes `7b 22 61 22 3a 31 7d` can be interpreted as a byte array (a single cell with a blob value of `7b 22 61 22 3a 31 7d`) or as an utf-8 encoded string (another cell with a string value of `{"a":1}`) or as a json tree of cells (the root cell being the json object `{}` with a sub cell with label `a` and value `1`). A cell with some value can be always explicitly re-interpreted as another type of cell.
 
-Each cell may have a numeric **index** and/or a **label** that makes it reachable within the group, and may have a pure data **value**. A value can be: null, bool, number, string or blob (byte array).
-
-A cell is an **interpretation** of some underlying data. For example a series of bytes can be interpreted as a byte array (a cell with a blob value) or as an utf-8 encoded string (another cell with a string value) or as a json tree (a tree of cells). From a cell of a certain interpretation we can jump to the cell of a different interpretation.
-
-A cell also has a string **type**describing its kind, depending on the interpretation. Such types can be: "file", "folder", "array" (in the json interpretation), "function_item" (in the rust interpretation), "response" (in the http interpretation), etc.
+A cell also has a string **type**describing its kind, depending on the interpretation. Such types can be: "file" or "folder" (in the fs interpretation), "array" (in the json interpretation), "function_item" (in the rust interpretation), "response" (in the http interpretation), etc.
 
 ### Examples:
 
-- A *folder* of the file system is a cell. It may have *sub* cells (files or folders which it contains) and may have a *super* cell (parent folder). Its *attr* items are creation/modification date, access rights, size, etc. The folder name is both the *label* and the *value*.
+- A *folder* of the file system is a cell. It has a *sub* group and may have *sub* cells (files or folders which it contains); it may also have a *super* cell (parent folder). Its *attr* items are creation/modification date, access rights, size, etc. The folder name is the *label* and has no *value*.
 
-- A *file* of the file system is a cell. It has no *sub* items, may have one *super*, has the same *attr* as a folder and both a *label* and *value* as its name. A file cell can be *interpreted* in many other ways (string cell, json/yaml/xml cell tree, programming cell trees).
+- A *file* of the file system is a cell. It has no *sub* items, may have one *super*, has the same *attr* as a folder and the *label* as its name. A file cell can be *interpreted* in many other ways (string cell, json/yaml/xml cell tree, programming cell trees).
 
-- An entry into a json object is a cell. The parent object is its *super*. The json key in the key/value pair is the cell *label*. If the value of this json object entry is null or bool or number, then the cell value will be the same; if it's an array or object then the cell value will be null and the cell will have a *sub* group with the content of the array or object.
+- An entry into a json object is a cell. The parent object is its *super* group. The json key in the key/value pair is the cell *label*. If the value of this json object entry is null or bool or number, then the cell will have a corresponding value and no *sub*; if it's an array or object then the cell will have a *sub* group with the content of the array or object.
 
 - A method in a java project is a cell. It has a parent class (*super*), access attributes (*attr*), and arguments, return type and method body as children (*sub*).
 
@@ -94,7 +95,7 @@ hial ls "."
 ```
 
 ```python
-# python, in progress: python interop not done
+# python, wip: python interop not done
 for cell in path('./**'):
     print(cell.value())
 ```
@@ -109,9 +110,9 @@ hial print "./config.yaml^yaml/services[/image#value^http@status/code!=200]/name
 
 ```python
 # python, in progress: python interop not done
-for service in cell('config.yaml').be('file').be('yaml').sub('services'):
+for service in hial.path('./config.yaml^yaml/services'):
     name = service.value
-    image = service.sub('image')
-    if image.be('http').attr('status').sub('code') >= 400:
+    image = service / 'image'
+    if image.path('^http[@method=HEAD]@status/code') >= 400:
         print(f"service {name} has an invalid image: {image}")
 ```
