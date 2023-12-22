@@ -41,6 +41,12 @@ pub struct ValueRef {
     pub is_label: bool,
 }
 
+#[derive(Debug)]
+pub struct CellReader {
+    group: Group,
+    pos: usize,
+}
+
 #[derive(Clone, Debug)]
 pub struct Group {
     domain: Domain,
@@ -70,7 +76,7 @@ impl From<toml::de::Error> for HErr {
 }
 
 pub fn from_path(path: &Path) -> Res<Domain> {
-    let source = std::fs::read_to_string(&path)?;
+    let source = std::fs::read_to_string(path)?;
     from_string(&source)
 }
 
@@ -100,7 +106,7 @@ impl InValueRef for ValueRef {
                     None => HErr::internal("").into(),
                 },
                 NodeGroup::Table(ref t) => match t.at(self.pos) {
-                    Some(x) => Ok(get_value(&x.1)),
+                    Some(x) => Ok(get_value(x.1)),
                     None => HErr::internal("").into(),
                 },
             }
@@ -108,9 +114,39 @@ impl InValueRef for ValueRef {
     }
 }
 
+impl InCellReader for CellReader {
+    fn index(&self) -> Res<usize> {
+        Ok(self.pos)
+    }
+
+    fn label(&self) -> Res<Value> {
+        match self.group.nodes {
+            NodeGroup::Array(ref a) => NotFound::NoLabel.into(),
+            NodeGroup::Table(ref t) => match t.at(self.pos) {
+                Some(x) => Ok(Value::Str(x.0)),
+                None => HErr::internal("").into(),
+            },
+        }
+    }
+
+    fn value(&self) -> Res<Value> {
+        match self.group.nodes {
+            NodeGroup::Array(ref a) => match a.get(self.pos) {
+                Some(x) => Ok(get_value(x)),
+                None => HErr::internal("").into(),
+            },
+            NodeGroup::Table(ref t) => match t.at(self.pos) {
+                Some(x) => Ok(get_value(x.1)),
+                None => HErr::internal("").into(),
+            },
+        }
+    }
+}
+
 impl InCell for Cell {
     type Domain = Domain;
     type ValueRef = ValueRef;
+    type CellReader = CellReader;
 
     fn domain(&self) -> &Self::Domain {
         &self.group.domain
@@ -123,10 +159,17 @@ impl InCell for Cell {
                 None => HErr::internal("").into(),
             },
             NodeGroup::Table(ref t) => match t.at(self.pos) {
-                Some(x) => Ok(get_typ(&x.1)),
+                Some(x) => Ok(get_typ(x.1)),
                 None => HErr::internal("").into(),
             },
         }
+    }
+
+    fn read(&self) -> Res<Self::CellReader> {
+        Ok(CellReader {
+            group: self.group.clone(),
+            pos: self.pos,
+        })
     }
 
     fn index(&self) -> Res<usize> {
@@ -177,7 +220,7 @@ impl InCell for Cell {
     }
 
     fn attr(&self) -> Res<Group> {
-        NotFound::NoGroup(format!("")).into()
+        NotFound::NoGroup("".into()).into()
     }
 }
 
@@ -225,7 +268,7 @@ impl InGroup for Group {
                         group: self.clone(),
                         pos,
                     }),
-                    _ => NotFound::NoResult(format!("{}", k)).into(),
+                    _ => NotFound::NoResult(k.to_string()).into(),
                 },
             },
         }
@@ -242,11 +285,11 @@ impl InGroup for Group {
         match &self.nodes {
             NodeGroup::Array(array) if index < array.len() => Ok(Cell {
                 group: self.clone(),
-                pos: index as usize,
+                pos: index,
             }),
             NodeGroup::Table(t) if index < t.len() => Ok(Cell {
                 group: self.clone(),
-                pos: index as usize,
+                pos: index,
             }),
             _ => NotFound::NoResult(format!("{}", index)).into(),
         }

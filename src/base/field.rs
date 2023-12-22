@@ -27,6 +27,47 @@ pub(crate) enum ValueRef {
     Label(FieldType),
 }
 
+#[derive(Debug)]
+pub(crate) enum CellReader {
+    // todo remove box
+    CellReader(Box<extra::ExCellReader>),
+    Field(DynCell, FieldType),
+}
+
+impl CellReader {
+    pub fn index(&self) -> Res<usize> {
+        match self {
+            CellReader::CellReader(reader) => reader.index(),
+            CellReader::Field(cell, fieldtype) => match fieldtype {
+                FieldType::Value => HErr::internal("unexpected value").into(),
+                FieldType::Label => HErr::internal("unexpected label").into(),
+                FieldType::Type => Ok(Value::Str(cell.typ()?)),
+                FieldType::Index => Ok(Value::Int(Int::U64(cell.index()? as u64))),
+            },
+            CellReader::Label(fieldtype) => match fieldtype {
+                FieldType::Value => Ok(Value::Str("value")),
+                FieldType::Label => Ok(Value::Str("label")),
+                FieldType::Type => Ok(Value::Str("type")),
+                FieldType::Index => Ok(Value::Str("index")),
+            },
+        }
+    }
+
+    pub fn label(&self) -> ValueRef {
+        ValueRef::Label(self.1)
+    }
+
+    pub fn value(&self) -> ValueRef {
+        if self.1 == FieldType::Value {
+            ValueRef::ValueRef(Box::new(self.0.value()))
+        } else if self.1 == FieldType::Label {
+            ValueRef::ValueRef(Box::new(self.0.label()))
+        } else {
+            ValueRef::Field(self.0.clone(), self.1)
+        }
+    }
+}
+
 impl ValueRef {
     pub fn get(&self) -> Res<Value> {
         match self {

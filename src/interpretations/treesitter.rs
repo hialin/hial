@@ -50,6 +50,12 @@ pub struct ValueRef {
     pub is_label: bool,
 }
 
+#[derive(Debug)]
+pub struct CellReader {
+    group: Group,
+    pos: usize,
+}
+
 #[derive(Clone, Debug)]
 pub struct CNode {
     typ: &'static str,
@@ -207,9 +213,33 @@ impl InValueRef for ValueRef {
     }
 }
 
+impl InCellReader for CellReader {
+    fn index(&self) -> Res<usize> {
+        Ok(self.pos)
+    }
+
+    fn label(&self) -> Res<Value> {
+        if let Some(label) = self.group.nodes[self.pos].name {
+            Ok(Value::Str(label))
+        } else {
+            NotFound::NoLabel.into()
+        }
+    }
+
+    fn value(&self) -> Res<Value> {
+        let cnode = &self.group.nodes[self.pos];
+        if cnode.value.is_empty() {
+            Ok(Value::None)
+        } else {
+            Ok(Value::Str(&cnode.value))
+        }
+    }
+}
+
 impl InCell for Cell {
     type Domain = Domain;
     type ValueRef = ValueRef;
+    type CellReader = CellReader;
 
     fn domain(&self) -> &Domain {
         &self.group.domain
@@ -217,6 +247,13 @@ impl InCell for Cell {
 
     fn typ(&self) -> Res<&str> {
         Ok(self.group.nodes[self.pos].typ)
+    }
+
+    fn read(&self) -> Res<Self::CellReader> {
+        Ok(CellReader {
+            group: self.group.clone(),
+            pos: self.pos,
+        })
     }
 
     fn index(&self) -> Res<usize> {

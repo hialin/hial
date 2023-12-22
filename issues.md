@@ -1,24 +1,36 @@
 # List of Todos and other Issues
 
+## TODOs
+
+1. (wip) get rid of valueref
+2. use enum-dispatch for all types
+
+
 ### Feature implementation status
 
-| *Feature*       | *Readable* | *Writeble* |
-|-----------------|------------|------------|
-| file system     |    yes     |            |
-| http request    |    yes     |            |
-|                 |            |            |
-| plain text      |            |            |
-| markdown        |            |            |
-|                 |            |            |
-| json            |    yes     |            |
-| yaml            |    yes     |            |
-| toml            |    yes     |            |
-| xml             |    yes     |            |
-|                 |            |            |
-| rust            |    yes     |            |
-| python          |            |            |
-| javascript      |            |            |
-| go              |            |            |
+| *Feature*  | *Readable* | *Writeble* |
+|------------|------------|------------|
+| url        |    yes     |            |
+| fs         |    yes     |            |
+| http       |    yes     |            |
+| markdown   |            |            |
+| json       |            |            |
+| rust       |    yes     |            |
+| git        |            |            |
+| database   |            |            |
+| ical       |            |            |
+|            |            |            |
+| plain text |            |            |
+| yaml       |    yes     |            |
+| toml       |    yes     |            |
+| xml        |    yes     |            |
+|            |            |            |
+| python     |            |            |
+| javascript |            |            |
+| go         |            |            |
+|------------|------------|------------|
+
+
 
 
 

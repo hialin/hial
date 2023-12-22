@@ -39,6 +39,12 @@ pub struct ValueRef {
     is_label: bool,
 }
 
+#[derive(Debug)]
+pub struct CellReader {
+    group: Group,
+    pos: u32,
+}
+
 #[derive(Clone, Debug)]
 struct FileEntry {
     path: PathBuf,
@@ -94,6 +100,47 @@ impl InDomain for Domain {
     }
 }
 
+impl InCellReader for CellReader {
+    fn index(&self) -> Res<usize> {
+        Ok(self.pos as usize)
+    }
+
+    fn label(&self) -> Res<Value> {
+        if self.group.attribute_group_file_pos == u32::MAX {
+            let fileentry =
+                guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
+            let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
+            Ok(Value::Str(md.name.as_str()))
+        } else {
+            if self.pos == 0 {
+                Ok(Value::Str("size"))
+            } else {
+                HErr::internal("").into()
+            }
+        }
+    }
+
+    fn value(&self) -> Res<Value> {
+        let fpos = if self.group.attribute_group_file_pos == u32::MAX {
+            self.pos
+        } else {
+            self.group.attribute_group_file_pos
+        };
+        let fileentry =
+            guard_ok!(&self.group.files[fpos as usize], err => {return Err(err.clone())});
+        let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
+        if self.group.attribute_group_file_pos == u32::MAX {
+            Ok(Value::Str(md.name.as_str()))
+        } else {
+            if self.pos == 0 {
+                Ok(Value::Int(Int::U64(md.filesize)))
+            } else {
+                HErr::internal("").into()
+            }
+        }
+    }
+}
+
 impl InValueRef for ValueRef {
     fn get(&self) -> Res<Value> {
         if self.is_label {
@@ -133,6 +180,7 @@ impl InValueRef for ValueRef {
 impl InCell for Cell {
     type Domain = Domain;
     type ValueRef = ValueRef;
+    type CellReader = CellReader;
 
     fn domain(&self) -> &Self::Domain {
         &self.group.domain
@@ -151,6 +199,13 @@ impl InCell for Cell {
                 HErr::internal("").into()
             }
         }
+    }
+
+    fn read(&self) -> Res<Self::CellReader> {
+        Ok(CellReader {
+            group: self.group.clone(),
+            pos: self.pos,
+        })
     }
 
     fn index(&self) -> Res<usize> {

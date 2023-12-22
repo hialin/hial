@@ -104,6 +104,7 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
     make_indent(indent, buffer)?;
     write!(buffer, "{}", prefix)?;
 
+    let reader = cell.read();
     let keyref = cell.label();
     let valueref = cell.value();
     let key = keyref.get();

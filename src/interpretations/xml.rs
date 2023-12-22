@@ -36,11 +36,18 @@ pub struct Cell {
     group: Group,
     pos: usize,
 }
+
 #[derive(Debug)]
 pub struct ValueRef {
     group: Group,
     pos: usize,
     pub is_label: bool,
+}
+
+#[derive(Debug)]
+pub struct CellReader {
+    group: Group,
+    pos: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -284,9 +291,51 @@ impl InValueRef for ValueRef {
     }
 }
 
+impl InCellReader for CellReader {
+    fn index(&self) -> Res<usize> {
+        Ok(self.pos)
+    }
+
+    fn label(&self) -> Res<Value> {
+        match &self.group.nodes {
+            NodeGroup::Node(group) => match &group.0[self.pos] {
+                Node::Element((x, _, _)) => Ok(Value::Str(x.as_str())),
+                Node::Decl(_) => Ok(Value::Str("xml")),
+                Node::DocType(x) => Ok(Value::Str("DOCTYPE")),
+                x => NotFound::NoResult(format!("")).into(),
+            },
+            NodeGroup::Attr(group) => match &group.0[self.pos] {
+                Attribute::Attribute(k, _) => Ok(Value::Str(k.as_str())),
+                _ => NotFound::NoResult(format!("")).into(),
+            },
+        }
+    }
+
+    fn value(&self) -> Res<Value> {
+        match &self.group.nodes {
+            NodeGroup::Node(group) => match &group.0[self.pos] {
+                Node::Document(_) => Ok(Value::None),
+                Node::Decl(_) => Ok(Value::Str("xml")),
+                Node::DocType(x) => Ok(Value::Str(x.trim())),
+                Node::PI(x) => Ok(Value::Str(x)),
+                Node::Element((x, _, _)) => Ok(Value::Str(x)),
+                Node::Text(x) => Ok(Value::Str(x)),
+                Node::Comment(x) => Ok(Value::Str(x)),
+                Node::CData(x) => Ok(Value::Bytes(x.as_slice())),
+                Node::Error(x) => Ok(Value::Str(x)),
+            },
+            NodeGroup::Attr(group) => match &group.0[self.pos] {
+                Attribute::Attribute(_, x) => Ok(Value::Str(x)),
+                Attribute::Error(x) => Ok(Value::Str(x)),
+            },
+        }
+    }
+}
+
 impl InCell for Cell {
     type Domain = Domain;
     type ValueRef = ValueRef;
+    type CellReader = CellReader;
 
     fn domain(&self) -> &Domain {
         &self.group.domain
@@ -307,6 +356,13 @@ impl InCell for Cell {
             },
             NodeGroup::Attr(group) => Ok("attribute"),
         }
+    }
+
+    fn read(&self) -> Res<Self::CellReader> {
+        Ok(CellReader {
+            group: self.group.clone(),
+            pos: self.pos,
+        })
     }
 
     fn index(&self) -> Res<usize> {

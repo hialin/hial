@@ -52,6 +52,12 @@ pub struct Cell {
 }
 
 #[derive(Debug)]
+pub struct CellReader {
+    group: UrcNodeGroup,
+    pos: usize,
+}
+
+#[derive(Debug)]
 pub struct ValueRef {
     group: UrcNodeGroup,
     pos: usize,
@@ -154,9 +160,53 @@ impl InValueRef for ValueRef {
     }
 }
 
+impl InCellReader for CellReader {
+    fn index(&self) -> Res<usize> {
+        Ok(self.pos)
+    }
+
+    fn label(&self) -> Res<Value> {
+        if let UrcNodeGroup::Object(ref o) = self.group {
+            if let Some(x) = o.at(self.pos) {
+                return Ok(Value::Str(x.0));
+            } else {
+                return HErr::internal("bad pos").into();
+            }
+        }
+        NotFound::NoLabel.into()
+    }
+
+    fn value(&self) -> Res<Value> {
+        fn get_value(node: &Node) -> Value {
+            match node {
+                Node::Null => Value::None,
+                Node::Bool(b) => Value::Bool(*b),
+                Node::I64(i) => Value::Int(Int::I64(*i)),
+                Node::U64(u) => Value::Int(Int::U64(*u)),
+                Node::F64(f) => Value::Float(StrFloat(*f)),
+                Node::String(ref s) => Value::Str(s.as_str()),
+                Node::Array(_) => Value::None,
+                Node::Object(_) => Value::None,
+            }
+        }
+
+        match self.group {
+            UrcNodeGroup::Array(ref a) => match a.get(self.pos) {
+                Some(ref x) => Ok(get_value(x)),
+                None => HErr::internal("").into(),
+            },
+            UrcNodeGroup::Object(ref o) => match o.at(self.pos) {
+                Some(x) => Ok(get_value(&x.1)),
+                None => HErr::internal("").into(),
+            },
+        }
+    }
+}
+
 impl InCell for Cell {
     type Domain = Domain;
     type ValueRef = ValueRef;
+    type CellReader = CellReader;
 
     fn domain(&self) -> &Self::Domain {
         &self.group.domain
@@ -173,6 +223,16 @@ impl InCell for Cell {
                 None => HErr::internal(format!("bad index {}", self.pos)).into(),
             },
         }
+    }
+
+    fn read(&self) -> Res<Self::CellReader> {
+        Ok(CellReader {
+            group: match self.group.nodes {
+                NodeGroup::Array(ref a) => UrcNodeGroup::Array(a.urc()),
+                NodeGroup::Object(ref o) => UrcNodeGroup::Object(o.urc()),
+            },
+            pos: self.pos,
+        })
     }
 
     fn index(&self) -> Res<usize> {

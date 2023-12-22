@@ -21,6 +21,9 @@ impl InDomain for Domain {
 pub struct Cell(Domain);
 
 #[derive(Debug)]
+pub struct CellReader(Urc<OwnedValue>);
+
+#[derive(Debug)]
 pub struct ValueRef(Urc<OwnedValue>, bool);
 
 impl From<OwnedValue> for Cell {
@@ -51,9 +54,24 @@ impl InValueRef for ValueRef {
     }
 }
 
+impl InCellReader for CellReader {
+    fn index(&self) -> Res<usize> {
+        NotFound::NoIndex.into()
+    }
+
+    fn label(&self) -> Res<Value> {
+        NotFound::NoLabel.into()
+    }
+
+    fn value(&self) -> Res<Value> {
+        Ok(self.0.as_value())
+    }
+}
+
 impl InCell for Cell {
     type Domain = Domain;
     type ValueRef = ValueRef;
+    type CellReader = CellReader;
 
     fn domain(&self) -> &Self::Domain {
         &self.0
@@ -61,6 +79,10 @@ impl InCell for Cell {
 
     fn typ(&self) -> Res<&str> {
         Ok("value")
+    }
+
+    fn read(&self) -> Res<Self::CellReader> {
+        Ok(CellReader(self.0 .0.urc()))
     }
 
     fn index(&self) -> Res<usize> {

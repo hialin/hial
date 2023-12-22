@@ -74,8 +74,28 @@ enumerated_dynamic_type! {
     with_valueref
 }
 
+enumerated_dynamic_type! {
+    #[derive(Debug)]
+    enum DynCellReader {
+        Field(field::CellReader),
+        OwnedValue(ownedvalue::CellReader),
+        File(file::CellReader),
+        Json(json::CellReader),
+        Toml(toml::CellReader),
+        Yaml(yaml::CellReader),
+        Xml(xml::CellReader),
+        Url(url::CellReader),
+        Http(http::CellReader),
+        TreeSitter(treesitter::CellReader),
+    }
+    with_cell_reader
+}
+
 #[derive(Debug)]
 pub struct ExValueRef(DynValueRef);
+
+#[derive(Debug)]
+pub struct ExCellReader(DynCellReader);
 
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
@@ -189,6 +209,18 @@ impl ExValueRef {
     }
 }
 
+impl ExCellReader {
+    pub(crate) fn index(&self) -> Res<usize> {
+        with_cell_reader!(&self.0, |x| { Ok(x.index()?) })
+    }
+    pub(crate) fn label(&self) -> Res<Value> {
+        with_cell_reader!(&self.0, |x| { Ok(x.label()?) })
+    }
+    pub(crate) fn value(&self) -> Res<Value> {
+        with_cell_reader!(&self.0, |x| { Ok(x.value()?) })
+    }
+}
+
 impl DynCell {
     pub(crate) fn domain(&self) -> DynDomain {
         with_dyn_cell!(self, |x| { DynDomain::from(x.domain().clone()) })
@@ -231,6 +263,13 @@ impl Cell {
         match &self.this {
             EnCell::Dyn(dyn_cell) => dyn_cell.typ(),
             EnCell::Field(field_cell) => field_cell.typ(),
+        }
+    }
+
+    pub fn read(&self) -> Res<ExCellReader> {
+        match &self.this {
+            EnCell::Dyn(dyn_cell) => dyn_cell.read(),
+            EnCell::Field(field_cell) => ExCellReader::from(field_cell.read()),
         }
     }
 

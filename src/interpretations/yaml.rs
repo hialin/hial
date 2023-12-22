@@ -35,6 +35,12 @@ pub struct Cell {
 }
 
 #[derive(Debug)]
+pub struct CellReader {
+    group: Group,
+    pos: usize,
+}
+
+#[derive(Debug)]
 pub struct ValueRef {
     group: Group,
     pos: usize,
@@ -115,9 +121,38 @@ impl InValueRef for ValueRef {
     }
 }
 
+impl InCellReader for CellReader {
+    fn index(&self) -> Res<usize> {
+        Ok(self.pos)
+    }
+    fn label(&self) -> Res<Value> {
+        match self.group.nodes {
+            NodeGroup::Array(ref a) => NotFound::NoLabel.into(),
+            NodeGroup::Object(ref o) => match o.at(self.pos) {
+                Some(x) => Ok(Value::Str(x.0)),
+                None => HErr::internal("").into(),
+            },
+        }
+    }
+
+    fn value(&self) -> Res<Value> {
+        match self.group.nodes {
+            NodeGroup::Array(ref a) => match a.get(self.pos) {
+                Some(x) => Ok(get_value(x)),
+                None => HErr::internal("").into(),
+            },
+            NodeGroup::Object(ref o) => match o.at(self.pos) {
+                Some(x) => Ok(get_value(&x.1)),
+                None => HErr::internal("").into(),
+            },
+        }
+    }
+}
+
 impl InCell for Cell {
     type Domain = Domain;
     type ValueRef = ValueRef;
+    type CellReader = CellReader;
 
     fn domain(&self) -> &Domain {
         &self.group.domain
@@ -134,6 +169,13 @@ impl InCell for Cell {
                 None => HErr::internal("").into(),
             },
         }
+    }
+
+    fn read(&self) -> Res<Self::CellReader> {
+        Ok(CellReader {
+            group: self.group.clone(),
+            pos: self.pos,
+        })
     }
 
     fn index(&self) -> Res<usize> {
