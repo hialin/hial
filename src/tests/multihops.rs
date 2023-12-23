@@ -13,7 +13,7 @@ fn test_multihop() -> Res<()> {
     let result = &results[0];
 
     assert_eq!(result.path()?, "http://api.github.com/");
-    assert_eq!(result.value().get()?, "1");
+    assert_eq!(result.read()?.value()?, "1");
 
     Ok(())
 }

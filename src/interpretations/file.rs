@@ -111,12 +111,10 @@ impl InCellReader for CellReader {
                 guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
             let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
             Ok(Value::Str(md.name.as_str()))
+        } else if self.pos == 0 {
+            Ok(Value::Str("size"))
         } else {
-            if self.pos == 0 {
-                Ok(Value::Str("size"))
-            } else {
-                HErr::internal("").into()
-            }
+            HErr::internal("").into()
         }
     }
 
@@ -131,55 +129,16 @@ impl InCellReader for CellReader {
         let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
         if self.group.attribute_group_file_pos == u32::MAX {
             Ok(Value::Str(md.name.as_str()))
+        } else if self.pos == 0 {
+            Ok(Value::Int(Int::U64(md.filesize)))
         } else {
-            if self.pos == 0 {
-                Ok(Value::Int(Int::U64(md.filesize)))
-            } else {
-                HErr::internal("").into()
-            }
-        }
-    }
-}
-
-impl InValueRef for ValueRef {
-    fn get(&self) -> Res<Value> {
-        if self.is_label {
-            if self.group.attribute_group_file_pos == u32::MAX {
-                let fileentry = guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
-                let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
-                Ok(Value::Str(md.name.as_str()))
-            } else {
-                if self.pos == 0 {
-                    Ok(Value::Str("size"))
-                } else {
-                    HErr::internal("").into()
-                }
-            }
-        } else {
-            let fpos = if self.group.attribute_group_file_pos == u32::MAX {
-                self.pos
-            } else {
-                self.group.attribute_group_file_pos
-            };
-            let fileentry =
-                guard_ok!(&self.group.files[fpos as usize], err => {return Err(err.clone())});
-            let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
-            if self.group.attribute_group_file_pos == u32::MAX {
-                Ok(Value::Str(md.name.as_str()))
-            } else {
-                if self.pos == 0 {
-                    Ok(Value::Int(Int::U64(md.filesize)))
-                } else {
-                    HErr::internal("").into()
-                }
-            }
+            HErr::internal("").into()
         }
     }
 }
 
 impl InCell for Cell {
     type Domain = Domain;
-    type ValueRef = ValueRef;
     type CellReader = CellReader;
 
     fn domain(&self) -> &Self::Domain {
@@ -192,12 +151,10 @@ impl InCell for Cell {
                 guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
             let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
             Ok(if md.is_dir { "dir" } else { "file" })
+        } else if self.pos == 0 {
+            Ok("attribute")
         } else {
-            if self.pos == 0 {
-                Ok("attribute")
-            } else {
-                HErr::internal("").into()
-            }
+            HErr::internal("").into()
         }
     }
 
@@ -206,26 +163,6 @@ impl InCell for Cell {
             group: self.group.clone(),
             pos: self.pos,
         })
-    }
-
-    fn index(&self) -> Res<usize> {
-        Ok(self.pos as usize)
-    }
-
-    fn label(&self) -> ValueRef {
-        ValueRef {
-            group: self.group.clone(),
-            pos: self.pos,
-            is_label: true,
-        }
-    }
-
-    fn value(&self) -> ValueRef {
-        ValueRef {
-            group: self.group.clone(),
-            pos: self.pos,
-            is_label: false,
-        }
     }
 
     fn sub(&self) -> Res<Group> {
@@ -296,15 +233,13 @@ impl InGroup for Group {
             } else {
                 NotFound::NoResult(format!("{}", index)).into()
             }
+        } else if index < 1 {
+            Ok(Cell {
+                group: self.clone(),
+                pos: index as u32,
+            })
         } else {
-            if index < 1 {
-                Ok(Cell {
-                    group: self.clone(),
-                    pos: index as u32,
-                })
-            } else {
-                NotFound::NoResult(format!("{}", index)).into()
-            }
+            NotFound::NoResult(format!("{}", index)).into()
         }
     }
 
@@ -323,15 +258,13 @@ impl InGroup for Group {
                 }
             }
             NotFound::NoResult(format!("{}", key)).into()
+        } else if key == "size" {
+            Ok(Cell {
+                group: self.clone(),
+                pos: 0,
+            })
         } else {
-            if key == "size" {
-                Ok(Cell {
-                    group: self.clone(),
-                    pos: 0,
-                })
-            } else {
-                NotFound::NoResult(format!("{}", key)).into()
-            }
+            NotFound::NoResult(format!("{}", key)).into()
         }
     }
 }

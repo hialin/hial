@@ -117,51 +117,8 @@ impl InDomain for Domain {
     }
 }
 
-impl InValueRef for ValueRef {
-    fn get(&self) -> Res<Value> {
-        if self.is_label {
-            match (&self.kind, self.pos) {
-                (GroupKind::Root, _) => NotFound::NoLabel.into(),
-                (GroupKind::Attr, 0) => Ok(Value::Str("status")),
-                (GroupKind::Attr, 1) => Ok(Value::Str("headers")),
-                (GroupKind::Status, 0) => Ok(Value::Str("code")),
-                (GroupKind::Status, 1) => Ok(Value::Str("reason")),
-                (GroupKind::Headers, _) => {
-                    if let Some((k, _)) = self.response.headers.at(self.pos) {
-                        return Ok(Value::Str(k));
-                    }
-                    HErr::internal(format!("bad pos in headers: {}", self.pos)).into()
-                }
-                _ => HErr::internal(format!("bad kind/pos: {:?}/{}", self.kind, self.pos)).into(),
-            }
-        } else {
-            match (&self.kind, self.pos) {
-                (GroupKind::Root, 0) => Ok(Value::Bytes(&self.response.body)),
-                (GroupKind::Attr, 0) => Ok(Value::None),
-                (GroupKind::Attr, 1) => Ok(Value::None),
-                (GroupKind::Status, 0) => Ok(Value::Int(Int::I32(self.response.status as i32))),
-                (GroupKind::Status, 1) => Ok(if self.response.reason.is_empty() {
-                    Value::None
-                } else {
-                    Value::Str(&self.response.reason)
-                }),
-                (GroupKind::Headers, _) => {
-                    let header_values = if let Some(hv) = self.response.headers.at(self.pos) {
-                        hv.1
-                    } else {
-                        return Err(HErr::Http(format!("logic error")));
-                    };
-                    Ok(Value::Str(header_values[0].as_str()))
-                }
-                _ => Err(HErr::Http(format!("logic error"))),
-            }
-        }
-    }
-}
-
 impl InCell for Cell {
     type Domain = Domain;
-    type ValueRef = ValueRef;
     type CellReader = CellReader;
 
     fn domain(&self) -> &Self::Domain {
@@ -186,28 +143,6 @@ impl InCell for Cell {
             response: self.group.response.0.urc(),
             pos: self.pos,
         })
-    }
-
-    fn index(&self) -> Res<usize> {
-        Ok(self.pos)
-    }
-
-    fn label(&self) -> ValueRef {
-        ValueRef {
-            response: self.group.response.0.urc(),
-            kind: self.group.kind,
-            pos: self.pos,
-            is_label: true,
-        }
-    }
-
-    fn value(&self) -> ValueRef {
-        ValueRef {
-            response: self.group.response.0.urc(),
-            kind: self.group.kind,
-            pos: self.pos,
-            is_label: false,
-        }
     }
 
     fn sub(&self) -> Res<Group> {

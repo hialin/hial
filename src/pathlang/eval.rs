@@ -380,12 +380,18 @@ impl<'s> EvalIter<'s> {
                 return false;
             }
         } else if let Some(index) = path_item.index {
-            match subcell.index() {
-                Ok(cellindex) => {
-                    if index != cellindex {
+            match subcell.read() {
+                Ok(reader) => match reader.index() {
+                    Ok(cellindex) => {
+                        if index != cellindex {
+                            return false;
+                        }
+                    }
+                    Err(e) => {
+                        verbose_error(e);
                         return false;
                     }
-                }
+                },
                 Err(e) => {
                     verbose_error(e);
                     return false;
@@ -429,13 +435,15 @@ impl<'s> EvalIter<'s> {
         if *sel == Selector::Star || *sel == Selector::DoubleStar {
             return true;
         } else {
-            let labelref = cell.label();
-            match labelref.get() {
-                Ok(ref k) => {
-                    if sel == k {
-                        return true;
+            match cell.read() {
+                Ok(reader) => match reader.label() {
+                    Ok(ref k) => {
+                        if sel == k {
+                            return true;
+                        }
                     }
-                }
+                    Err(e) => verbose_error(e),
+                },
                 Err(e) => verbose_error(e),
             }
         }
@@ -451,8 +459,12 @@ impl<'s> EvalIter<'s> {
             });
             if let Some(op) = expr.op {
                 if let Some(right) = expr.right {
-                    let lvalueref = cell.value();
-                    let lvalue = guard_ok!(lvalueref.get(), err => {
+                    let reader = guard_ok!(cell.read(), err => {
+                        verbose_error(err);
+                        continue;
+                    });
+
+                    let lvalue = guard_ok!(reader.value(), err => {
                         verbose_error(err);
                         continue;
                     });

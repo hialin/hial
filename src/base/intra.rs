@@ -37,17 +37,12 @@ pub trait InTrace: Clone + Debug {}
 
 pub trait InCell: Clone + Debug {
     type Domain: InDomain;
-    type ValueRef: InValueRef; // TODO: remove this
     type CellReader: InCellReader;
 
     fn domain(&self) -> &Self::Domain;
 
     fn typ(&self) -> Res<&str>;
     fn read(&self) -> Res<Self::CellReader>;
-
-    fn index(&self) -> Res<usize>; // TODO: remove this
-    fn label(&self) -> Self::ValueRef; // TODO: remove this
-    fn value(&self) -> Self::ValueRef; // TODO: remove this
 
     fn sub(&self) -> Res<<Self::Domain as InDomain>::Group>;
     fn attr(&self) -> Res<<Self::Domain as InDomain>::Group>;
@@ -78,14 +73,6 @@ pub trait InCellReader: Debug {
     fn index(&self) -> Res<usize>;
     fn label(&self) -> Res<Value>;
     fn value(&self) -> Res<Value>;
-}
-
-pub trait InValueRef: Debug {
-    fn get(&self) -> Res<Value>;
-
-    fn with<T>(&self, f: impl Fn(Res<Value>) -> T) -> T {
-        f(self.get())
-    }
 }
 
 pub trait InGroup: Clone + Debug {

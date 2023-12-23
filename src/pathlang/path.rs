@@ -132,7 +132,7 @@ impl<'a> CellRepresentation<'a> {
                         this: DynDomain::from(domain),
                         source: None,
                     }),
-                    this: EnCell::Dyn(DynCell::Url(root)),
+                    this: DynCell::Url(root),
                     prev: None,
                 }
                 .elevate()?
@@ -147,7 +147,7 @@ impl<'a> CellRepresentation<'a> {
                         this: DynDomain::from(domain),
                         source: None,
                     }),
-                    this: EnCell::Dyn(DynCell::File(root)),
+                    this: DynCell::File(root),
                     prev: None,
                 }
                 .elevate()?
@@ -161,7 +161,7 @@ impl<'a> CellRepresentation<'a> {
                         this: DynDomain::from(domain),
                         source: None,
                     }),
-                    this: EnCell::Dyn(DynCell::from(root)),
+                    this: DynCell::from(root),
                     prev: None,
                 })
             }

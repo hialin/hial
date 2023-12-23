@@ -56,9 +56,9 @@ fn get_elevation_map_for(interpretation: &str) -> Option<VecMapOfElevateFn> {
 macro_rules! add_elevation {
     ($ret:ident, $interp:literal, |$cellname:ident, $strname:ident| $body:block) => {
         $ret.put($interp, |$cellname: Cell| -> Res<Cell> {
-            let vref = $cellname.value();
-            println!("••• {:?}", vref.get());
-            if let Value::Str($strname) = vref.get()? {
+            let reader = $cellname.read()?;
+            println!("••• {:?}", reader.value());
+            if let Value::Str($strname) = reader.value()? {
                 let domain = ($body)?;
                 let root = domain.root()?;
                 return Ok(Cell {
@@ -66,7 +66,7 @@ macro_rules! add_elevation {
                         this: DynDomain::from(domain),
                         source: Some($cellname.clone()),
                     }),
-                    this: EnCell::Dyn(DynCell::from(root)),
+                    this: DynCell::from(root),
                     prev: Some((Box::new($cellname), Relation::Interpretation)),
                 });
             }
@@ -95,7 +95,7 @@ fn value_elevation_map() -> VecMap<&'static str, ElevateFn> {
 fn file_elevation_map() -> VecMap<&'static str, ElevateFn> {
     fn get_path(cell: &Cell) -> Res<&std::path::Path> {
         if let Cell {
-            this: EnCell::Dyn(DynCell::File(ref file)),
+            this: DynCell::File(ref file),
             ..
         } = cell
         {
@@ -117,7 +117,7 @@ fn file_elevation_map() -> VecMap<&'static str, ElevateFn> {
 fn url_elevation_map() -> VecMap<&'static str, ElevateFn> {
     fn get_url(cell: &Cell) -> Res<&str> {
         if let Cell {
-            this: EnCell::Dyn(DynCell::Url(ref url)),
+            this: DynCell::Url(ref url),
             ..
         } = cell
         {
@@ -135,7 +135,7 @@ fn url_elevation_map() -> VecMap<&'static str, ElevateFn> {
 fn http_elevation_map() -> VecMap<&'static str, ElevateFn> {
     fn http_as_string(cell: &Cell) -> Res<String> {
         if let Cell {
-            this: EnCell::Dyn(DynCell::Http(ref h)),
+            this: DynCell::Http(ref h),
             ..
         } = cell
         {
@@ -157,7 +157,7 @@ fn rust_elevation_map() -> VecMap<&'static str, ElevateFn> {
     let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
     fn ts_as_string(cell: &Cell) -> Res<String> {
         if let Cell {
-            this: EnCell::Dyn(DynCell::TreeSitter(ref ts)),
+            this: DynCell::TreeSitter(ref ts),
             ..
         } = cell
         {
@@ -177,32 +177,34 @@ fn rust_elevation_map() -> VecMap<&'static str, ElevateFn> {
 
 pub(crate) fn standard_interpretation(cell: &Cell) -> Option<&str> {
     if cell.domain().interpretation() == "file" && cell.typ().ok()? == "file" {
-        let nameref = cell.label();
-        if let Ok(Value::Str(name)) = nameref.get() {
-            if name.ends_with(".c") {
-                return Some("c");
-            } else if name.ends_with(".javascript") {
-                return Some("javascript");
-            } else if name.ends_with(".json") {
-                return Some("json");
-            } else if name.ends_with(".rs") {
-                return Some("rust");
-            } else if name.ends_with(".toml") {
-                return Some("toml");
-            } else if name.ends_with(".xml") {
-                return Some("xml");
-            } else if name.ends_with(".yaml") || name.ends_with(".yml") {
-                return Some("yaml");
+        if let Ok(reader) = cell.read() {
+            if let Ok(Value::Str(name)) = reader.label() {
+                if name.ends_with(".c") {
+                    return Some("c");
+                } else if name.ends_with(".javascript") {
+                    return Some("javascript");
+                } else if name.ends_with(".json") {
+                    return Some("json");
+                } else if name.ends_with(".rs") {
+                    return Some("rust");
+                } else if name.ends_with(".toml") {
+                    return Some("toml");
+                } else if name.ends_with(".xml") {
+                    return Some("xml");
+                } else if name.ends_with(".yaml") || name.ends_with(".yml") {
+                    return Some("yaml");
+                }
             }
         }
     }
     if cell.domain().interpretation() == "value" {
-        let vref = cell.value();
-        if let Ok(Value::Str(s)) = vref.get() {
-            if s.starts_with("http://") || s.starts_with("https://") {
-                return Some("http");
-            } else if s.starts_with(".") || s.starts_with("/") {
-                return Some("file");
+        if let Ok(reader) = cell.read() {
+            if let Ok(Value::Str(s)) = reader.value() {
+                if s.starts_with("http://") || s.starts_with("https://") {
+                    return Some("http");
+                } else if s.starts_with(".") || s.starts_with("/") {
+                    return Some("file");
+                }
             }
         }
     }
@@ -269,8 +271,8 @@ impl ElevationGroup {
         }
         if key == "value" {
             println!("elevate default {} to value", old_interp);
-            let vref = self.0.value();
-            return Ok(Cell::from(vref.get()?.to_owned_value()));
+            let v = self.0.read()?.value()?.to_owned_value();
+            return Ok(Cell::from(v));
         }
         println!("no elevation from {} to {}", old_interp, interp);
         NotFound::NoInterpretation(format!("no elevation from {} to {}", old_interp, interp)).into()

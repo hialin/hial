@@ -40,16 +40,6 @@ impl Cell {
     }
 }
 
-impl InValueRef for ValueRef {
-    fn get(&self) -> Res<Value> {
-        if self.1 {
-            NotFound::NoLabel.into()
-        } else {
-            Ok(Value::Str(self.0 .0.as_str()))
-        }
-    }
-}
-
 impl InCellReader for CellReader {
     fn index(&self) -> Res<usize> {
         NotFound::NoIndex.into()
@@ -66,7 +56,6 @@ impl InCellReader for CellReader {
 
 impl InCell for Cell {
     type Domain = Domain;
-    type ValueRef = ValueRef;
     type CellReader = CellReader;
 
     fn domain(&self) -> &Domain {
@@ -79,18 +68,6 @@ impl InCell for Cell {
 
     fn read(&self) -> Res<Self::CellReader> {
         Ok(CellReader(self.0.clone()))
-    }
-
-    fn index(&self) -> Res<usize> {
-        NotFound::NoIndex.into()
-    }
-
-    fn label(&self) -> ValueRef {
-        ValueRef(self.0.clone(), true)
-    }
-
-    fn value(&self) -> ValueRef {
-        ValueRef(self.0.clone(), false)
     }
 
     fn sub(&self) -> Res<VoidGroup<Domain>> {

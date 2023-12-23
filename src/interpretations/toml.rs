@@ -89,31 +89,6 @@ pub fn from_string(source: &str) -> Res<Domain> {
     })
 }
 
-impl InValueRef for ValueRef {
-    fn get(&self) -> Res<Value> {
-        if self.is_label {
-            match self.group.nodes {
-                NodeGroup::Array(ref a) => NotFound::NoLabel.into(),
-                NodeGroup::Table(ref t) => match t.at(self.pos) {
-                    Some(x) => Ok(Value::Str(x.0)),
-                    None => HErr::internal("").into(),
-                },
-            }
-        } else {
-            match self.group.nodes {
-                NodeGroup::Array(ref a) => match a.get(self.pos) {
-                    Some(x) => Ok(get_value(x)),
-                    None => HErr::internal("").into(),
-                },
-                NodeGroup::Table(ref t) => match t.at(self.pos) {
-                    Some(x) => Ok(get_value(x.1)),
-                    None => HErr::internal("").into(),
-                },
-            }
-        }
-    }
-}
-
 impl InCellReader for CellReader {
     fn index(&self) -> Res<usize> {
         Ok(self.pos)
@@ -145,7 +120,6 @@ impl InCellReader for CellReader {
 
 impl InCell for Cell {
     type Domain = Domain;
-    type ValueRef = ValueRef;
     type CellReader = CellReader;
 
     fn domain(&self) -> &Self::Domain {
@@ -170,26 +144,6 @@ impl InCell for Cell {
             group: self.group.clone(),
             pos: self.pos,
         })
-    }
-
-    fn index(&self) -> Res<usize> {
-        Ok(self.pos)
-    }
-
-    fn label(&self) -> ValueRef {
-        ValueRef {
-            group: self.group.clone(),
-            pos: self.pos,
-            is_label: true,
-        }
-    }
-
-    fn value(&self) -> ValueRef {
-        ValueRef {
-            group: self.group.clone(),
-            pos: self.pos,
-            is_label: false,
-        }
     }
 
     fn sub(&self) -> Res<Group> {

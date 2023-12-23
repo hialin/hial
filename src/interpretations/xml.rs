@@ -254,43 +254,6 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
     Ok(document)
 }
 
-impl InValueRef for ValueRef {
-    fn get(&self) -> Res<Value> {
-        if self.is_label {
-            match &self.group.nodes {
-                NodeGroup::Node(group) => match &group.0[self.pos] {
-                    Node::Element((x, _, _)) => Ok(Value::Str(x.as_str())),
-                    Node::Decl(_) => Ok(Value::Str("xml")),
-                    Node::DocType(x) => Ok(Value::Str("DOCTYPE")),
-                    x => NotFound::NoResult(format!("")).into(),
-                },
-                NodeGroup::Attr(group) => match &group.0[self.pos] {
-                    Attribute::Attribute(k, _) => Ok(Value::Str(k.as_str())),
-                    _ => NotFound::NoResult(format!("")).into(),
-                },
-            }
-        } else {
-            match &self.group.nodes {
-                NodeGroup::Node(group) => match &group.0[self.pos] {
-                    Node::Document(_) => Ok(Value::None),
-                    Node::Decl(_) => Ok(Value::Str("xml")),
-                    Node::DocType(x) => Ok(Value::Str(x.trim())),
-                    Node::PI(x) => Ok(Value::Str(x)),
-                    Node::Element((x, _, _)) => Ok(Value::Str(x)),
-                    Node::Text(x) => Ok(Value::Str(x)),
-                    Node::Comment(x) => Ok(Value::Str(x)),
-                    Node::CData(x) => Ok(Value::Bytes(x.as_slice())),
-                    Node::Error(x) => Ok(Value::Str(x)),
-                },
-                NodeGroup::Attr(group) => match &group.0[self.pos] {
-                    Attribute::Attribute(_, x) => Ok(Value::Str(x)),
-                    Attribute::Error(x) => Ok(Value::Str(x)),
-                },
-            }
-        }
-    }
-}
-
 impl InCellReader for CellReader {
     fn index(&self) -> Res<usize> {
         Ok(self.pos)
@@ -334,7 +297,6 @@ impl InCellReader for CellReader {
 
 impl InCell for Cell {
     type Domain = Domain;
-    type ValueRef = ValueRef;
     type CellReader = CellReader;
 
     fn domain(&self) -> &Domain {
@@ -363,25 +325,6 @@ impl InCell for Cell {
             group: self.group.clone(),
             pos: self.pos,
         })
-    }
-
-    fn index(&self) -> Res<usize> {
-        Ok(self.pos)
-    }
-
-    fn label(&self) -> ValueRef {
-        ValueRef {
-            group: self.group.clone(),
-            pos: self.pos,
-            is_label: false,
-        }
-    }
-    fn value(&self) -> ValueRef {
-        ValueRef {
-            group: self.group.clone(),
-            pos: self.pos,
-            is_label: false,
-        }
     }
 
     fn sub(&self) -> Res<Group> {
@@ -445,11 +388,14 @@ impl InGroup for Group {
     fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, key: S) -> Res<Cell> {
         let key = key.into();
         for i in 0..self.len() {
-            let cell = self.at(i)?;
-            let labelref = cell.label();
-            match labelref.get() {
-                Ok(k) if key == k => return Ok(cell),
-                _ => {}
+            if let Ok(cell) = self.at(i) {
+                if let Ok(reader) = cell.read() {
+                    if let Ok(k) = reader.label() {
+                        if key == k {
+                            return Ok(cell);
+                        }
+                    }
+                }
             }
         }
         NotFound::NoResult(format!("key: {}", key)).into()

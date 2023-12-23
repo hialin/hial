@@ -21,7 +21,7 @@ fn mutate_json() -> Res<()> {
     let mut f1 = json.search(path)?.first()?;
     f1.set_value(newvalue.to_owned_value())?;
     // pprint::pprint(&json, 0, 0);
-    assert_eq!(json.search(path)?.first()?.value().get()?, newvalue);
+    assert_eq!(json.search(path)?.first()?.read()?.value()?, newvalue);
     Ok(())
 }
 
@@ -57,12 +57,12 @@ fn mutate_and_write_json() -> Res<()> {
 
     // pprint::pprint(&json, 0, 0);
 
-    assert_eq!(json.search(path1)?.first()?.value().get()?, newvalue);
-    assert_eq!(json.search(path2)?.first()?.value().get()?, Value::None);
+    assert_eq!(json.search(path1)?.first()?.read()?.value()?, newvalue);
+    assert_eq!(json.search(path2)?.first()?.read()?.value()?, Value::None);
 
     json.domain().write_back()?;
     assert_eq!(
-        json_original.value().get()?.to_string(),
+        json_original.read()?.value()?.to_string(),
         r#"{
             "hosts": [
                 {

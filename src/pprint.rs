@@ -104,26 +104,28 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
     make_indent(indent, buffer)?;
     write!(buffer, "{}", prefix)?;
 
-    let reader = cell.read();
-    let keyref = cell.label();
-    let valueref = cell.value();
-    let key = keyref.get();
-    let value = valueref.get();
-    match key {
-        Ok(k) => {
-            if Some(&k) != value.as_ref().ok() {
-                write!(buffer, "{}: ", k)
-            } else {
-                write!(buffer, "")
-            }
+    match cell.read() {
+        Ok(reader) => {
+            let key = reader.label();
+            let value = reader.value();
+            match key {
+                Ok(k) => {
+                    if Some(&k) != value.as_ref().ok() {
+                        write!(buffer, "{}: ", k)
+                    } else {
+                        write!(buffer, "")
+                    }
+                }
+                Err(HErr::NotFound(_)) => write!(buffer, ""),
+                Err(err) => write!(buffer, "⚠{:?}⚠ ", err),
+            }?;
+            match value {
+                Ok(v) => write!(buffer, "{}", v),
+                Err(err) => write!(buffer, "⚠{:?}⚠", err),
+            }?;
         }
-        Err(HErr::NotFound(_)) => write!(buffer, ""),
-        Err(err) => write!(buffer, "⚠{:?}⚠ ", err),
-    }?;
-    match value {
-        Ok(v) => write!(buffer, "{}", v),
-        Err(err) => write!(buffer, "⚠{:?}⚠", err),
-    }?;
+        Err(err) => write!(buffer, "⚠cannot read: {:?}⚠", err)?,
+    }
 
     match cell.sub() {
         Ok(group) => {
