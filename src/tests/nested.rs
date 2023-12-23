@@ -1,6 +1,4 @@
-use crate::base::*;
-use crate::pprint::*;
-use crate::*;
+use crate::{base::*, pprint::pprint, utils::log::set_verbose};
 
 #[test]
 fn test_nested() -> Res<()> {

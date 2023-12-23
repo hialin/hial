@@ -155,7 +155,7 @@ impl InCell for Cell {
             group.kind = GroupKind::Headers;
             Ok(group)
         } else {
-            NotFound::NoGroup(format!("http/")).into()
+            nores()
         }
     }
 
@@ -165,7 +165,7 @@ impl InCell for Cell {
             group.kind = GroupKind::Attr;
             Ok(group)
         } else {
-            NotFound::NoGroup(format!("http@")).into()
+            nores()
         }
     }
 }
@@ -177,7 +177,7 @@ impl InCellReader for CellReader {
 
     fn label(&self) -> Res<Value> {
         match (&self.kind, self.pos) {
-            (GroupKind::Root, _) => NotFound::NoLabel.into(),
+            (GroupKind::Root, _) => nores(),
             (GroupKind::Attr, 0) => Ok(Value::Str("status")),
             (GroupKind::Attr, 1) => Ok(Value::Str("headers")),
             (GroupKind::Status, 0) => Ok(Value::Str("code")),
@@ -186,9 +186,9 @@ impl InCellReader for CellReader {
                 if let Some((k, _)) = self.response.headers.at(self.pos) {
                     return Ok(Value::Str(k));
                 }
-                HErr::internal(format!("bad pos in headers: {}", self.pos)).into()
+                fault(format!("bad pos in headers: {}", self.pos))
             }
-            _ => HErr::internal(format!("bad kind/pos: {:?}/{}", self.kind, self.pos)).into(),
+            _ => fault(format!("bad kind/pos: {:?}/{}", self.kind, self.pos)),
         }
     }
 
@@ -250,7 +250,7 @@ impl InGroup for Group {
                 group: self.clone(),
                 pos: index,
             }),
-            _ => NotFound::NoResult(format!("{}", index)).into(),
+            _ => nores(),
         }
     }
 
@@ -282,11 +282,11 @@ impl InGroup for Group {
                             pos: i,
                         })
                     } else {
-                        NotFound::NoResult(format!("{}", key)).into()
+                        nores()
                     }
                 }
             },
-            _ => NotFound::NoResult(format!("{}", key)).into(),
+            _ => nores(),
         }
     }
 }

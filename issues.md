@@ -2,8 +2,9 @@
 
 ## TODOs
 
-1. (wip) get rid of valueref
-2. use enum-dispatch for all types
+- add cellwriter
+- fix field selection
+- use enum-dispatch for all types
 
 
 ### Feature implementation status

@@ -116,7 +116,7 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
                         write!(buffer, "")
                     }
                 }
-                Err(HErr::NotFound(_)) => write!(buffer, ""),
+                Err(HErr::None) => write!(buffer, ""),
                 Err(err) => write!(buffer, "⚠{:?}⚠ ", err),
             }?;
             match value {
@@ -132,7 +132,7 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
             let kt = group.label_type();
             write!(buffer, "{}", if kt.is_indexed { "" } else { " ∤" })
         }
-        Err(HErr::NotFound(_)) => write!(buffer, ""),
+        Err(HErr::None) => write!(buffer, ""),
         Err(err) => write!(buffer, "⚠{:?}⚠", err),
     }?;
 

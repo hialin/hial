@@ -41,14 +41,6 @@ impl Cell {
 }
 
 impl InCellReader for CellReader {
-    fn index(&self) -> Res<usize> {
-        NotFound::NoIndex.into()
-    }
-
-    fn label(&self) -> Res<Value> {
-        NotFound::NoLabel.into()
-    }
-
     fn value(&self) -> Res<Value> {
         Ok(Value::Str(self.0 .0.as_str()))
     }
@@ -68,14 +60,6 @@ impl InCell for Cell {
 
     fn read(&self) -> Res<Self::CellReader> {
         Ok(CellReader(self.0.clone()))
-    }
-
-    fn sub(&self) -> Res<VoidGroup<Domain>> {
-        NotFound::NoGroup(format!("/")).into()
-    }
-
-    fn attr(&self) -> Res<VoidGroup<Domain>> {
-        NotFound::NoGroup(format!("@")).into()
     }
 }
 

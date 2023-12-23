@@ -15,7 +15,6 @@ pub enum RawDataContainer {
 pub trait InDomain: Clone + Debug {
     type Cell: InCell;
     type Group: InGroup;
-    // type Trace: InTrace;
 
     fn interpretation(&self) -> &str;
 
@@ -24,16 +23,12 @@ pub trait InDomain: Clone + Debug {
         todo!()
     }
 
-    // TODO: this should return a group: json objects/arrays; xml root elements
     fn root(&self) -> Res<Self::Cell>;
-    // fn cell(&self, trace: &Self::Trace) -> Self::Cell;
 
     // fn origin(&self) -> Res<Path>;
     // fn save_to_origin(&self) -> Res<()>;
     // fn save_to(&self, target: &InDomain>) -> Res<()>;
 }
-
-pub trait InTrace: Clone + Debug {}
 
 pub trait InCell: Clone + Debug {
     type Domain: InDomain;
@@ -44,8 +39,12 @@ pub trait InCell: Clone + Debug {
     fn typ(&self) -> Res<&str>;
     fn read(&self) -> Res<Self::CellReader>;
 
-    fn sub(&self) -> Res<<Self::Domain as InDomain>::Group>;
-    fn attr(&self) -> Res<<Self::Domain as InDomain>::Group>;
+    fn sub(&self) -> Res<<Self::Domain as InDomain>::Group> {
+        nores()
+    }
+    fn attr(&self) -> Res<<Self::Domain as InDomain>::Group> {
+        nores()
+    }
 
     // get serialized data for this subtree
     fn raw(&self) -> Res<RawDataContainer> {
@@ -70,10 +69,19 @@ pub trait InCell: Clone + Debug {
 }
 
 pub trait InCellReader: Debug {
-    fn index(&self) -> Res<usize>;
-    fn label(&self) -> Res<Value>;
-    fn value(&self) -> Res<Value>;
+    fn index(&self) -> Res<usize> {
+        nores()
+    }
+    fn label(&self) -> Res<Value> {
+        nores()
+    }
+    fn value(&self) -> Res<Value> {
+        nores()
+    }
 }
+
+// pub trait InCellWriter: Debug {
+// }
 
 pub trait InGroup: Clone + Debug {
     type Domain: InDomain;
@@ -81,6 +89,9 @@ pub trait InGroup: Clone + Debug {
 
     fn label_type(&self) -> LabelType;
     fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     fn at(&self, index: usize) -> Res<<Self::Domain as InDomain>::Cell>;
     fn get<'s, 'a, S: Into<Selector<'a>>>(
         &'s self,
@@ -92,10 +103,6 @@ pub trait InGroup: Clone + Debug {
     //     todo!();
     // }
 }
-
-#[derive(Clone, Debug)]
-pub struct DummyTrace {}
-impl InTrace for DummyTrace {}
 
 #[derive(Clone, Debug)]
 pub struct VoidGroup<D>(PhantomData<D>);
@@ -116,11 +123,11 @@ impl<D: InDomain> InGroup for VoidGroup<D> {
     }
 
     fn at(&self, index: usize) -> Res<D::Cell> {
-        NotFound::NoResult(format!("")).into()
+        nores()
     }
 
     fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<D::Cell> {
-        NotFound::NoResult(format!("")).into()
+        nores()
     }
 }
 

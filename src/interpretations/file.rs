@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::{
     cmp::Ordering,
     ffi::OsString,
-    fs, io,
+    fs,
     path::{Path, PathBuf},
     rc::Rc,
 };
@@ -84,7 +84,7 @@ impl InDomain for Domain {
 
     fn root(&self) -> Res<Self::Cell> {
         let files = guard_some!(self.0.file_map.get(self.0.root_path.as_path()), {
-            return HErr::internal("").into();
+            return fault("initial path not found");
         })
         .clone();
         // .get(self.root_path.as_path());
@@ -114,7 +114,7 @@ impl InCellReader for CellReader {
         } else if self.pos == 0 {
             Ok(Value::Str("size"))
         } else {
-            HErr::internal("").into()
+            fault("invalid attribute index")
         }
     }
 
@@ -132,7 +132,7 @@ impl InCellReader for CellReader {
         } else if self.pos == 0 {
             Ok(Value::Int(Int::U64(md.filesize)))
         } else {
-            HErr::internal("").into()
+            fault("invalid attribute index")
         }
     }
 }
@@ -154,7 +154,7 @@ impl InCell for Cell {
         } else if self.pos == 0 {
             Ok("attribute")
         } else {
-            HErr::internal("").into()
+            fault("invalid attribute index")
         }
     }
 
@@ -171,7 +171,7 @@ impl InCell for Cell {
                 guard_ok!(&self.group.files[self.pos  as usize], err => {return Err(err.clone())});
             let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
             if !md.is_dir {
-                return NotFound::NoGroup(format!("file is not a folder")).into();
+                return nores();
             }
             let mut siblings = vec![];
             read_files(&fileentry.path, &mut siblings)?;
@@ -181,7 +181,7 @@ impl InCell for Cell {
                 attribute_group_file_pos: u32::MAX,
             })
         } else {
-            NotFound::NoGroup(format!("FileAttributes")).into()
+            nores()
         }
     }
 
@@ -191,7 +191,7 @@ impl InCell for Cell {
                 guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
             let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
             if md.is_dir {
-                return NotFound::NoGroup(format!("@")).into();
+                return nores();
             }
             Ok(Group {
                 domain: self.group.domain.clone(),
@@ -199,7 +199,7 @@ impl InCell for Cell {
                 attribute_group_file_pos: self.pos,
             })
         } else {
-            NotFound::NoGroup(format!("FileAttributes@")).into()
+            nores()
         }
     }
 }
@@ -231,7 +231,7 @@ impl InGroup for Group {
                     pos: index as u32,
                 })
             } else {
-                NotFound::NoResult(format!("{}", index)).into()
+                nores()
             }
         } else if index < 1 {
             Ok(Cell {
@@ -239,7 +239,7 @@ impl InGroup for Group {
                 pos: index as u32,
             })
         } else {
-            NotFound::NoResult(format!("{}", index)).into()
+            nores()
         }
     }
 
@@ -257,14 +257,14 @@ impl InGroup for Group {
                     });
                 }
             }
-            NotFound::NoResult(format!("{}", key)).into()
+            nores()
         } else if key == "size" {
             Ok(Cell {
                 group: self.clone(),
                 pos: 0,
             })
         } else {
-            NotFound::NoResult(format!("{}", key)).into()
+            nores()
         }
     }
 }
@@ -272,7 +272,7 @@ impl InGroup for Group {
 pub fn from_path(path: PathBuf) -> Res<Domain> {
     let path = path.canonicalize()?;
     if !path.exists() {
-        return NotFound::NoResult(format!("file not found: {:?}", path)).into();
+        return nores();
     }
 
     let mut siblings = vec![];
@@ -284,9 +284,7 @@ pub fn from_path(path: PathBuf) -> Res<Domain> {
             .position(|f| f.is_ok() && f.as_ref().unwrap().path == path);
         pos = match pos_res {
             Some(pos) => pos,
-            None => {
-                return NotFound::NoResult(format!("file removed concurrently: {:?}", path)).into();
-            }
+            None => return nores(),
         };
     } else {
         let os_name = path
@@ -372,10 +370,4 @@ fn read_files(path: &Path, entries: &mut Vec<Res<FileEntry>>) -> Res<()> {
         (Err(e1), Err(e2)) => format!("{:?}", e1).cmp(&format!("{:?}", e2)),
     });
     Ok(())
-}
-
-impl From<io::Error> for HErr {
-    fn from(e: io::Error) -> HErr {
-        HErr::IO(e.kind(), format!("{}", e))
-    }
 }

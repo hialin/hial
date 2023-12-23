@@ -96,10 +96,10 @@ impl InCellReader for CellReader {
 
     fn label(&self) -> Res<Value> {
         match self.group.nodes {
-            NodeGroup::Array(ref a) => NotFound::NoLabel.into(),
+            NodeGroup::Array(ref a) => nores(),
             NodeGroup::Table(ref t) => match t.at(self.pos) {
                 Some(x) => Ok(Value::Str(x.0)),
-                None => HErr::internal("").into(),
+                None => fault(""),
             },
         }
     }
@@ -108,11 +108,11 @@ impl InCellReader for CellReader {
         match self.group.nodes {
             NodeGroup::Array(ref a) => match a.get(self.pos) {
                 Some(x) => Ok(get_value(x)),
-                None => HErr::internal("").into(),
+                None => fault(""),
             },
             NodeGroup::Table(ref t) => match t.at(self.pos) {
                 Some(x) => Ok(get_value(x.1)),
-                None => HErr::internal("").into(),
+                None => fault(""),
             },
         }
     }
@@ -130,11 +130,11 @@ impl InCell for Cell {
         match self.group.nodes {
             NodeGroup::Array(ref a) => match a.get(self.pos) {
                 Some(n) => Ok(get_typ(n)),
-                None => HErr::internal("").into(),
+                None => fault(""),
             },
             NodeGroup::Table(ref t) => match t.at(self.pos) {
                 Some(x) => Ok(get_typ(x.1)),
-                None => HErr::internal("").into(),
+                None => fault(""),
             },
         }
     }
@@ -157,7 +157,7 @@ impl InCell for Cell {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Table(o.clone()),
                 }),
-                _ => NotFound::NoGroup("".into()).into(),
+                _ => nores(),
             },
             NodeGroup::Table(ref table) => match table.at(self.pos) {
                 Some((_, Node::Array(a))) => Ok(Group {
@@ -168,13 +168,13 @@ impl InCell for Cell {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Table(o.clone()),
                 }),
-                _ => NotFound::NoGroup("".into()).into(),
+                _ => nores(),
             },
         }
     }
 
     fn attr(&self) -> Res<Group> {
-        NotFound::NoGroup("".into()).into()
+        nores()
     }
 }
 
@@ -214,7 +214,7 @@ impl InGroup for Group {
 
     fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
         match &self.nodes {
-            NodeGroup::Array(a) => NotFound::NoLabel.into(),
+            NodeGroup::Array(a) => nores(),
             NodeGroup::Table(t) => match key.into() {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
                 Selector::Str(k) => match t.get(k) {
@@ -222,7 +222,7 @@ impl InGroup for Group {
                         group: self.clone(),
                         pos,
                     }),
-                    _ => NotFound::NoResult(k.to_string()).into(),
+                    _ => nores(),
                 },
             },
         }
@@ -245,7 +245,7 @@ impl InGroup for Group {
                 group: self.clone(),
                 pos: index,
             }),
-            _ => NotFound::NoResult(format!("{}", index)).into(),
+            _ => nores(),
         }
     }
 }

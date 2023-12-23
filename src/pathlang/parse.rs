@@ -19,14 +19,14 @@ impl<'a> Path<'a> {
     pub fn parse(input: &str) -> Res<Path> {
         let path_res = all_consuming(path_items)(input);
         let path =
-            guard_ok!(path_res, err => { return Err(HErr::BadPath(convert_error(input, err)))});
+            guard_ok!(path_res, err => { return HErr::User(convert_error(input, err)).into()});
         Ok(path.1)
     }
 
     pub fn parse_with_starter(input: &str) -> Res<(CellRepresentation, Path)> {
         let path_res = all_consuming(path_with_starter)(input);
         let path =
-            guard_ok!(path_res, err => { return Err(HErr::BadPath(convert_error(input, err)))});
+            guard_ok!(path_res, err => { return HErr::User(convert_error(input, err)).into()});
         Ok(path.1)
     }
 }

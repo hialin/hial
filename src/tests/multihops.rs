@@ -1,5 +1,4 @@
-use crate::base::*;
-use crate::*;
+use crate::{base::*, utils::log::set_verbose};
 
 #[test]
 fn test_multihop() -> Res<()> {

@@ -45,14 +45,6 @@ impl From<String> for Cell {
 }
 
 impl InCellReader for CellReader {
-    fn index(&self) -> Res<usize> {
-        NotFound::NoIndex.into()
-    }
-
-    fn label(&self) -> Res<Value> {
-        NotFound::NoLabel.into()
-    }
-
     fn value(&self) -> Res<Value> {
         Ok(self.0.as_value())
     }
@@ -74,20 +66,12 @@ impl InCell for Cell {
         Ok(CellReader(self.0 .0.urc()))
     }
 
-    fn sub(&self) -> Res<VoidGroup<Domain>> {
-        NotFound::NoGroup(format!("/")).into()
-    }
-
-    fn attr(&self) -> Res<VoidGroup<Domain>> {
-        NotFound::NoGroup(format!("@")).into()
-    }
-
     fn raw(&self) -> Res<RawDataContainer> {
         let vref = self.0 .0.urc();
         if let Value::Str(s) = vref.as_value() {
             Ok(RawDataContainer::String(s.to_owned()))
         } else {
-            NotFound::NoResult("".into()).into()
+            nores()
         }
     }
 

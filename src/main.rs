@@ -1,28 +1,28 @@
 use clap::{App, Arg, SubCommand};
-use hiallib::{base::*, pathlang::Path, pprint::pprint, *};
+use hiallib::{base::*, pathlang::Path, pprint::pprint, utils::log::set_verbose, *};
 
 fn main() -> Res<()> {
     let args = parse_args()?;
 
     set_verbose(args.verbose);
-    // verbose!("{:?}", args);
+    // debug!("{:?}", args);
 
     match args.command {
         Command::None => {
-            verbose!("No command.")
+            debug!("No command.")
         }
         Command::Print(command) => {
-            verbose!("Command: print {}", &command.path);
+            debug!("Command: print {}", &command.path);
             let (cell_repr, path) = match Path::parse_with_starter(&command.path) {
                 Ok(x) => x,
-                Err(HErr::BadPath(msg)) => {
+                Err(HErr::User(msg)) => {
                     eprintln!("Bad path: {}", msg);
                     return Ok(());
                 }
                 Err(err) => return Err(err),
             };
-            verbose!("Root: {}", cell_repr);
-            verbose!("Path: {}", path);
+            debug!("Root: {}", cell_repr);
+            debug!("Path: {}", path);
             let root = cell_repr.eval()?;
 
             let mut anyfound = false;
@@ -34,11 +34,11 @@ fn main() -> Res<()> {
                 }
             }
             if !anyfound {
-                verbose!("No matches.")
+                debug!("No matches.")
             }
         }
         Command::PerfTest(command) => {
-            verbose!("Command: perftest {:?}", &command);
+            debug!("Command: perftest {:?}", &command);
             perftests::perftests(command.alloc_count);
         }
     }
@@ -126,10 +126,10 @@ fn parse_args() -> Res<Args> {
     if let Some(command) = matches.subcommand_matches("ls") {
         let path = command.value_of("path").unwrap_or("").to_string();
         let depth = guard_ok!(command.value_of("depth").unwrap_or("0").parse(), _x => {
-            return HErr::BadArgument("cannot parse `depth` argument as integer".into()).into()
+            return HErr::User("cannot parse `depth` argument as integer".into()).into()
         });
         let breadth = guard_ok!(command.value_of("breadth").unwrap_or("0").parse(), _x => {
-            return HErr::BadArgument("cannot parse `breadth` argument as integer".into()).into()
+            return HErr::User("cannot parse `breadth` argument as integer".into()).into()
         });
         args.command = Command::Print(ListCommand {
             path,
@@ -138,7 +138,7 @@ fn parse_args() -> Res<Args> {
         });
     } else if let Some(command) = matches.subcommand_matches("perftest") {
         let alloc_count = guard_ok!(command.value_of("alloc_count").unwrap_or("0").parse(), _x => {
-            return HErr::BadArgument("cannot parse `count` argument as integer".into()).into()
+            return HErr::User("cannot parse `count` argument as integer".into()).into()
         });
         args.command = Command::PerfTest(PerfTestCommand { alloc_count });
     }

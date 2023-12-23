@@ -3,12 +3,12 @@ use std::collections::HashSet;
 use crate::pathlang::path::PathItem;
 use crate::{
     base::*,
-    guard_ok, guard_some,
+    debug, guard_ok, guard_some,
     pathlang::{path::Expression, Path},
-    verbose, verbose_error,
+    utils::log::verbose_error,
 };
 
-macro_rules! debug {
+macro_rules! eval_debug {
     (
         $body:block
     ) => {
@@ -30,7 +30,7 @@ pub struct CellNode {
 
 impl<'s> EvalIter<'s> {
     pub(crate) fn new(start: Cell, path: Path<'s>) -> EvalIter<'s> {
-        debug!({
+        eval_debug!({
             println!("");
             println!("********************************");
             println!("==> path is: {}\n", path)
@@ -52,7 +52,7 @@ impl<'s> EvalIter<'s> {
     }
 
     fn is_doublestar_match(cell: &Cell, path_index: usize, path: &Vec<PathItem<'s>>) -> bool {
-        debug!({
+        eval_debug!({
             // println!(
             //     "is_doublestar_match: {} index {}",
             //     cell.debug_string(),
@@ -79,7 +79,7 @@ impl<'s> EvalIter<'s> {
     }
 
     fn pump(&mut self) -> Option<Res<Cell>> {
-        debug!({
+        eval_debug!({
             println!("----");
             print!("stack:");
             for cn in &self.stack {
@@ -103,13 +103,13 @@ impl<'s> EvalIter<'s> {
             return None;
         });
 
-        debug!({
+        eval_debug!({
             println!("pump:     {} : {:?}", cell.debug_string(), path_indices);
         });
 
         if path_indices.iter().any(|i| *i >= self.path.len()) {
             path_indices.retain(|i| *i < self.path.len());
-            debug!({
+            eval_debug!({
                 println!(
                     "found result: {};    push back with indices = {:?}",
                     cell.debug_string(),
@@ -196,7 +196,7 @@ impl<'s> EvalIter<'s> {
                     continue;
                 }
 
-                debug!({
+                eval_debug!({
                     println!(
                         "push interpretation: {} : pathindex={}",
                         subcell.debug_string(),
@@ -232,7 +232,7 @@ impl<'s> EvalIter<'s> {
                     continue;
                 }
                 if Self::accept_subcell(subcell.clone(), path_item) {
-                    debug!({
+                    eval_debug!({
                         println!("match: {} for {}", subcell.debug_string(), path_item);
                     });
                     if double_stars {
@@ -243,13 +243,13 @@ impl<'s> EvalIter<'s> {
                         accepted_path_indices.insert(*path_index + 2);
                     }
                 } else {
-                    debug!({
+                    eval_debug!({
                         println!("no match {} for {}", subcell.debug_string(), path_item);
                     });
                 }
             }
             if !accepted_path_indices.is_empty() {
-                debug!({
+                eval_debug!({
                     println!(
                         "push by star relation: {} : {:?}",
                         subcell.debug_string(),
@@ -282,7 +282,7 @@ impl<'s> EvalIter<'s> {
             } else if let Some(idx) = path_item.index {
                 group.at(idx)
             } else {
-                verbose!(
+                debug!(
                     "error: empty selector and index in path: {:?}",
                     path_item.selector
                 );
@@ -299,7 +299,7 @@ impl<'s> EvalIter<'s> {
                 }
             }
             if !accepted_path_indices.is_empty() {
-                debug!({
+                eval_debug!({
                     println!(
                         "push by non-star relation: {} : {:?}",
                         subcell.debug_string(),
@@ -331,7 +331,7 @@ impl<'s> EvalIter<'s> {
     //                 continue;
     //             });
     //
-    //             debug!({
+    //             eval_debug!({
     //                 println!(
     //                     "push by field: {} : {:?}",
     //                     subcell.debug_string(),
@@ -407,14 +407,14 @@ impl<'s> EvalIter<'s> {
         for filter in &path_item.filters {
             match EvalIter::eval_bool_expression(subcell.clone(), &filter.expr) {
                 Err(e) => {
-                    debug!({
+                    eval_debug!({
                         // println!("verbose eval filter match ERROR");
                     });
                     verbose_error(e);
                     return false;
                 }
                 Ok(false) => {
-                    debug!({
+                    eval_debug!({
                         // println!("verbose eval filter match FALSE");
                     });
                     return false;
@@ -422,14 +422,14 @@ impl<'s> EvalIter<'s> {
                 Ok(true) => {}
             }
         }
-        debug!({
+        eval_debug!({
             // println!("eval filter match test is TRUE: {}", subcell.debug_string());
         });
         true
     }
 
     fn cell_matches_selector(cell: &Cell, sel: &Selector) -> bool {
-        debug!({
+        eval_debug!({
             // println!("cell_matches_selector: selector {:?}; cell {:?}", sel, cell);
         });
         if *sel == Selector::Star || *sel == Selector::DoubleStar {

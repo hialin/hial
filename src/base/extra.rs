@@ -103,11 +103,10 @@ pub struct Group {
 
 impl Domain {
     pub fn root(&self) -> Res<Cell> {
-        let prev = if let Some(ref source) = self.source {
-            Some((Box::new(source.clone()), Relation::Interpretation))
-        } else {
-            None
-        };
+        let prev = self
+            .source
+            .as_ref()
+            .map(|s| (Box::new(s.clone()), Relation::Interpretation));
         with_dyn_domain!(&self.this, |x| {
             Ok(Cell {
                 domain: Rc::new(self.clone()),
@@ -123,7 +122,7 @@ impl Domain {
             source.set_raw(rawdata)?;
             Ok(())
         } else {
-            NotFound::NoSource.into()
+            nores()
         }
     }
 
@@ -267,7 +266,7 @@ impl Cell {
             |s: &mut String, reader: &CellReader, interpretation: &str, is_interpretation: bool| {
                 match reader.label() {
                     Ok(l) => write!(s, "{}", l).unwrap_or_else(err_fn),
-                    Err(HErr::NotFound(_)) => {
+                    Err(HErr::None) => {
                         if is_interpretation {
                             write!(s, "{}", interpretation).unwrap_or_else(err_fn)
                         } else if let Ok(index) = reader.index() {
@@ -284,7 +283,7 @@ impl Cell {
             |s: &mut String, reader: &CellReader, interpretation: &str| match reader.value() {
                 Ok(value) => {
                     if interpretation == "value" {
-                        let mut v = format!("{}", value).replace("\n", "\\n");
+                        let mut v = format!("{}", value).replace('\n', "\\n");
                         if v.len() > 4 {
                             v.truncate(4);
                             v += "...";
@@ -294,7 +293,7 @@ impl Cell {
                         write!(s, "{}", value).unwrap_or_else(err_fn);
                     }
                 }
-                Err(HErr::NotFound(_)) => write!(s, "<?>").unwrap_or_else(err_fn),
+                Err(HErr::None) => write!(s, "<?>").unwrap_or_else(err_fn),
                 Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
             };
 
@@ -357,13 +356,13 @@ impl Cell {
             Ok(reader) => {
                 match reader.label() {
                     Ok(l) => write!(s, "{}", l).unwrap_or_else(err_fn),
-                    Err(HErr::NotFound(_)) => {}
+                    Err(HErr::None) => {}
                     Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
                 };
                 write!(s, ":").unwrap_or_else(err_fn);
                 match reader.value() {
                     Ok(v) => write!(s, "{}", v).unwrap_or_else(err_fn),
-                    Err(HErr::NotFound(_)) => {}
+                    Err(HErr::None) => {}
                     Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
                 };
             }
@@ -392,6 +391,10 @@ impl Group {
                 with_dyn_group!(dyn_group, |x| { x.len() })
             }
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn at(&self, index: usize) -> Res<Cell> {
@@ -464,7 +467,7 @@ impl<'a> IntoIterator for PathSearch<'a> {
 impl<'a> PathSearch<'a> {
     pub fn first(self) -> Res<Cell> {
         let x = self.into_iter().next();
-        x.unwrap_or(NotFound::NoResult(format!("no result for this path")).into())
+        x.unwrap_or(nores())
     }
     pub fn all(self) -> Res<Vec<Cell>> {
         self.into_iter().collect::<Res<Vec<_>>>()

@@ -3,7 +3,8 @@ use std::rc::Rc;
 use lazy_static::lazy_static;
 
 use crate::{
-    base::*, guard_ok, guard_some, interpretations::*, utils::vecmap::VecMap, verbose_error,
+    base::*, guard_ok, guard_some, interpretations::*, utils::log::verbose_error,
+    utils::vecmap::VecMap,
 };
 
 type ElevateFn = fn(Cell) -> Res<Cell>;
@@ -19,7 +20,7 @@ fn get_elevation_map_for(interpretation: &str) -> Option<VecMapOfElevateFn> {
     {
         // try reading
         let reader_opt = guard_ok!(ELEVATION_MAP.read(), err => {
-            verbose_error(HErr::internal(format!("{:?}", err))); // TODO remove verbose_errors
+            verbose_error(HErr::Internal(format!("{:?}", err))); // TODO remove verbose_errors
             return None;
         });
         if let Some(reader) = reader_opt.as_ref() {
@@ -32,7 +33,7 @@ fn get_elevation_map_for(interpretation: &str) -> Option<VecMapOfElevateFn> {
     }
 
     let mut writer = guard_ok!(ELEVATION_MAP.write(), err => {
-        verbose_error(HErr::internal(format!("{:?}", err)));
+        verbose_error(HErr::Internal(format!("{:?}", err)));
         return None;
     });
     if writer.is_none() {
@@ -70,7 +71,7 @@ macro_rules! add_elevation {
                     prev: Some((Box::new($cellname), Relation::Interpretation)),
                 });
             }
-            HErr::internal("elevation: not a string").into()
+            fault("elevation: not a string")
         });
     };
 }
@@ -101,7 +102,7 @@ fn file_elevation_map() -> VecMap<&'static str, ElevateFn> {
         {
             return file::get_path(file);
         }
-        HErr::internal("elevation: not a file").into()
+        fault("elevation: not a file")
     }
     let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
     add_elevation!(ret, "json", |cell, s| { json::from_path(get_path(&cell)?) });
@@ -123,7 +124,7 @@ fn url_elevation_map() -> VecMap<&'static str, ElevateFn> {
         {
             return Ok(url.as_str());
         }
-        HErr::internal("elevation: not a url").into()
+        fault("elevation: not a url")
     }
     let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
     add_elevation!(ret, "http", |cell, s| {
@@ -141,7 +142,7 @@ fn http_elevation_map() -> VecMap<&'static str, ElevateFn> {
         {
             return http::to_string(h);
         }
-        HErr::internal("elevation: not a http cell").into()
+        fault("elevation: not a http cell")
     }
     let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
     add_elevation!(ret, "json", |cell, s| {
@@ -164,7 +165,7 @@ fn rust_elevation_map() -> VecMap<&'static str, ElevateFn> {
             let s = treesitter::get_underlying_string(&ts)?;
             Ok(s.to_string())
         } else {
-            HErr::internal("rust to string elevation").into()
+            fault("rust to string elevation")
         }
     }
     add_elevation!(ret, "string", |cell, s| {
@@ -237,10 +238,10 @@ impl ElevationGroup {
             if let Some(func_tuple) = e.at(index) {
                 func_tuple.1(self.0.clone())
             } else {
-                NotFound::NoInterpretation(format!("index {}", index)).into()
+                nores()
             }
         } else {
-            HErr::internal(format!("no elevation map (at) for {}", interp)).into()
+            fault(format!("no elevation map (at) for {}", interp))
         }
     }
 
@@ -250,14 +251,10 @@ impl ElevationGroup {
         let old_interp = domain.interpretation();
         let interp = match key {
             Selector::Str(k) => k,
-            Selector::Top => guard_some!(standard_interpretation(&self.0), {
-                return NotFound::NoInterpretation(format!("'^'")).into();
-            }),
-            Selector::Star => {
-                return HErr::BadArgument(format!("no interpretation for '*'")).into()
-            }
+            Selector::Top => guard_some!(standard_interpretation(&self.0), { return nores() }),
+            Selector::Star => return HErr::User(format!("no interpretation for '*'")).into(),
             Selector::DoubleStar => {
-                return HErr::BadArgument(format!("no interpretation for '**'")).into()
+                return HErr::User(format!("no interpretation for '**'")).into()
             }
         };
         if interp == old_interp {
@@ -275,6 +272,6 @@ impl ElevationGroup {
             return Ok(Cell::from(v));
         }
         println!("no elevation from {} to {}", old_interp, interp);
-        NotFound::NoInterpretation(format!("no elevation from {} to {}", old_interp, interp)).into()
+        nores()
     }
 }

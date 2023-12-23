@@ -131,10 +131,10 @@ impl InCellReader for CellReader {
             if let Some(x) = o.at(self.pos) {
                 return Ok(Value::Str(x.0));
             } else {
-                return HErr::internal("bad pos").into();
+                return fault("bad pos");
             }
         }
-        NotFound::NoLabel.into()
+        nores()
     }
 
     fn value(&self) -> Res<Value> {
@@ -154,11 +154,11 @@ impl InCellReader for CellReader {
         match self.group {
             UrcNodeGroup::Array(ref a) => match a.get(self.pos) {
                 Some(ref x) => Ok(get_value(x)),
-                None => HErr::internal("").into(),
+                None => fault(""),
             },
             UrcNodeGroup::Object(ref o) => match o.at(self.pos) {
                 Some(x) => Ok(get_value(&x.1)),
-                None => HErr::internal("").into(),
+                None => fault(""),
             },
         }
     }
@@ -176,11 +176,11 @@ impl InCell for Cell {
         match self.group.nodes {
             NodeGroup::Array(ref a) => match a.urc().get(self.pos) {
                 Some(n) => Ok(get_typ(n)),
-                None => HErr::internal(format!("bad index {}", self.pos)).into(),
+                None => fault(format!("bad index {}", self.pos)),
             },
             NodeGroup::Object(ref o) => match o.urc().at(self.pos) {
                 Some(x) => Ok(get_typ(&x.1)),
-                None => HErr::internal(format!("bad index {}", self.pos)).into(),
+                None => fault(format!("bad index {}", self.pos)),
             },
         }
     }
@@ -206,7 +206,7 @@ impl InCell for Cell {
                     domain: self.domain().clone(),
                     nodes: NodeGroup::Object(o.clone()),
                 }),
-                _ => NotFound::NoGroup("".into()).into(),
+                _ => nores(),
             },
             NodeGroup::Object(ref object) => match object.urc().at(self.pos) {
                 Some((_, Node::Array(a))) => Ok(Group {
@@ -217,13 +217,9 @@ impl InCell for Cell {
                     domain: self.domain().clone(),
                     nodes: NodeGroup::Object(o.clone()),
                 }),
-                _ => NotFound::NoGroup("".into()).into(),
+                _ => nores(),
             },
         }
-    }
-
-    fn attr(&self) -> Res<Group> {
-        NotFound::NoGroup(format!("")).into()
     }
 
     fn set_value(&mut self, v: OwnedValue) -> Res<()> {
@@ -237,7 +233,7 @@ impl InCell for Cell {
                     });
                 });
                 let x = guard_some!(a.get_mut(self.pos), {
-                    return HErr::internal("bad pos").into();
+                    return fault("bad pos");
                 });
                 *x = owned_value_to_node(v)?;
             }
@@ -251,7 +247,7 @@ impl InCell for Cell {
                     });
                 });
                 let x = guard_some!(o.at_mut(self.pos), {
-                    return HErr::internal("bad pos").into();
+                    return fault("bad pos");
                 });
                 let nv = owned_value_to_node(v)?;
                 *x.1 = nv;
@@ -313,7 +309,7 @@ impl InGroup for Group {
 
     fn get<'s, S: Into<Selector<'s>>>(&self, key: S) -> Res<Cell> {
         match &self.nodes {
-            NodeGroup::Array(a) => NotFound::NoLabel.into(),
+            NodeGroup::Array(a) => nores(),
             NodeGroup::Object(o) => match key.into() {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
                 Selector::Str(k) => match o.urc().get(k) {
@@ -321,7 +317,7 @@ impl InGroup for Group {
                         group: self.clone(),
                         pos,
                     }),
-                    _ => NotFound::NoResult(format!("")).into(),
+                    _ => nores(),
                 },
             },
         }
@@ -344,7 +340,7 @@ impl InGroup for Group {
                 group: self.clone(),
                 pos: index as usize,
             }),
-            _ => NotFound::NoResult(format!("{}", index)).into(),
+            _ => nores(),
         }
     }
 }

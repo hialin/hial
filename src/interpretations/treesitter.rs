@@ -76,7 +76,7 @@ pub fn from_string(source: String, language: &'static str) -> Res<Domain> {
 
 pub fn get_underlying_string(cell: &Cell) -> Res<&str> {
     let cnode = guard_some!(cell.group.nodes.get(cell.pos), {
-        return HErr::internal("bad pos in rust cell").into();
+        return fault("bad pos in rust cell");
     });
     Ok(&cell.group.domain.source[cnode.src.clone()])
 }
@@ -203,7 +203,7 @@ impl InCellReader for CellReader {
         if let Some(label) = self.group.nodes[self.pos].name {
             Ok(Value::Str(label))
         } else {
-            NotFound::NoLabel.into()
+            nores()
         }
     }
 
@@ -242,10 +242,6 @@ impl InCell for Cell {
         group.nodes = cnode.subs.clone();
         Ok(group)
     }
-
-    fn attr(&self) -> Res<Group> {
-        NotFound::NoGroup(format!("@")).into()
-    }
 }
 
 impl InGroup for Group {
@@ -269,7 +265,7 @@ impl InGroup for Group {
                 pos: index,
             })
         } else {
-            NotFound::NoResult(format!("{}", index)).into()
+            nores()
         }
     }
 
@@ -282,7 +278,7 @@ impl InGroup for Group {
                 }
             }
         }
-        NotFound::NoResult(format!("")).into()
+        nores()
     }
 }
 

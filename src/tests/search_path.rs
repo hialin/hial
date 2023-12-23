@@ -1,6 +1,8 @@
-use crate::base::*;
-use crate::pathlang::path::{Expression, Filter, Path, PathItem};
-use crate::set_verbose;
+use crate::{
+    base::*,
+    pathlang::path::{Expression, Filter, Path, PathItem},
+    utils::log::set_verbose,
+};
 
 use super::utils::*;
 

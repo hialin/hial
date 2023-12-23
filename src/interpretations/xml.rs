@@ -5,7 +5,7 @@ use std::rc::Rc;
 use quick_xml::{events::Event, Error as XmlError, Reader};
 
 // use crate::vecmap::*;
-use crate::{base::*, guard_some, verbose};
+use crate::{base::*, debug, guard_some};
 
 #[derive(Clone, Debug)]
 pub struct Domain {
@@ -78,7 +78,7 @@ enum Node {
     Element((String, Rc<Vec<Attribute>>, Rc<Vec<Node>>)),
     Text(String),
     Comment(String),
-    CData(Box<Vec<u8>>),
+    CData(Vec<u8>),
     Error(String),
 }
 
@@ -205,9 +205,9 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 let v = &mut stack
                     .last_mut()
                     .ok_or(HErr::Xml(format!("no element in stack")))?;
-                let mut u = (&*e).to_vec();
+                let mut u = e.to_vec();
                 u.shrink_to_fit();
-                v.push(Node::CData(Box::new(u)));
+                v.push(Node::CData(u));
             }
             Ok(Event::End(ref e)) => {
                 counts.count_element += 1;
@@ -250,7 +250,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
         .ok_or(HErr::Xml(format!("no element in stack")))?;
     let document = Node::Document(Rc::new(v));
 
-    verbose!("counts: {:?}", counts);
+    debug!("xml stats: {:?}", counts);
     Ok(document)
 }
 
@@ -265,11 +265,11 @@ impl InCellReader for CellReader {
                 Node::Element((x, _, _)) => Ok(Value::Str(x.as_str())),
                 Node::Decl(_) => Ok(Value::Str("xml")),
                 Node::DocType(x) => Ok(Value::Str("DOCTYPE")),
-                x => NotFound::NoResult(format!("")).into(),
+                x => nores(),
             },
             NodeGroup::Attr(group) => match &group.0[self.pos] {
                 Attribute::Attribute(k, _) => Ok(Value::Str(k.as_str())),
-                _ => NotFound::NoResult(format!("")).into(),
+                _ => nores(),
             },
         }
     }
@@ -338,9 +338,9 @@ impl InCell for Cell {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Node(NodeList(x.clone())),
                 }),
-                _ => NotFound::NoGroup(format!("/")).into(),
+                _ => nores(),
             },
-            _ => NotFound::NoGroup(format!("/")).into(),
+            _ => nores(),
         }
     }
 
@@ -351,9 +351,9 @@ impl InCell for Cell {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Attr(AttrList(x.clone())),
                 }),
-                _ => NotFound::NoGroup(format!("@")).into(),
+                _ => nores(),
             },
-            _ => NotFound::NoGroup(format!("@")).into(),
+            _ => nores(),
         }
     }
 }
@@ -377,7 +377,7 @@ impl InGroup for Group {
 
     fn at(&self, index: usize) -> Res<Cell> {
         if index >= self.len() {
-            return NotFound::NoResult(format!("{}", index)).into();
+            return nores();
         }
         Ok(Cell {
             group: self.clone(),
@@ -398,7 +398,7 @@ impl InGroup for Group {
                 }
             }
         }
-        NotFound::NoResult(format!("key: {}", key)).into()
+        nores()
     }
 }
 
