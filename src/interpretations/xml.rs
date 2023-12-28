@@ -12,9 +12,8 @@ pub struct Domain {
     preroot: NodeList,
 }
 
-impl InDomain for Domain {
+impl DomainTrait for Domain {
     type Cell = Cell;
-    type Group = Group;
 
     fn interpretation(&self) -> &str {
         "xml"
@@ -49,6 +48,10 @@ pub struct CellReader {
     group: Group,
     pos: usize,
 }
+
+#[derive(Debug)]
+pub struct CellWriter {}
+impl CellWriterTrait for CellWriter {}
 
 #[derive(Clone, Debug)]
 pub struct Group {
@@ -254,7 +257,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
     Ok(document)
 }
 
-impl InCellReader for CellReader {
+impl CellReaderTrait for CellReader {
     fn index(&self) -> Res<usize> {
         Ok(self.pos)
     }
@@ -295,13 +298,10 @@ impl InCellReader for CellReader {
     }
 }
 
-impl InCell for Cell {
-    type Domain = Domain;
+impl CellTrait for Cell {
+    type Group = Group;
     type CellReader = CellReader;
-
-    fn domain(&self) -> &Domain {
-        &self.group.domain
-    }
+    type CellWriter = CellWriter;
 
     fn typ(&self) -> Res<&str> {
         match &self.group.nodes {
@@ -325,6 +325,10 @@ impl InCell for Cell {
             group: self.group.clone(),
             pos: self.pos,
         })
+    }
+
+    fn write(&self) -> Res<Self::CellWriter> {
+        Ok(CellWriter {})
     }
 
     fn sub(&self) -> Res<Group> {
@@ -358,8 +362,8 @@ impl InCell for Cell {
     }
 }
 
-impl InGroup for Group {
-    type Domain = Domain;
+impl GroupTrait for Group {
+    type Cell = Cell;
 
     fn label_type(&self) -> LabelType {
         LabelType {

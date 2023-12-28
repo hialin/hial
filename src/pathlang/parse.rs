@@ -23,7 +23,7 @@ impl<'a> Path<'a> {
         Ok(path.1)
     }
 
-    pub fn parse_with_starter(input: &str) -> Res<(CellRepresentation, Path)> {
+    pub fn parse_with_starter(input: &str) -> Res<(PathStart, Path)> {
         let path_res = all_consuming(path_with_starter)(input);
         let path =
             guard_ok!(path_res, err => { return HErr::User(convert_error(input, err)).into()});
@@ -41,33 +41,28 @@ fn convert_error(input: &str, err: nom::Err<VerboseError<&str>>) -> String {
     }
 }
 
-fn path_with_starter(input: &str) -> NomRes<&str, (CellRepresentation, Path)> {
-    context("path", tuple((cell_representation, path_items)))(input).map(|(next_input, res)| {
+fn path_with_starter(input: &str) -> NomRes<&str, (PathStart, Path)> {
+    context("path", tuple((path_start, path_items)))(input).map(|(next_input, res)| {
         let (start, path) = res;
         (next_input, (start, path))
     })
 }
 
-fn cell_representation(input: &str) -> NomRes<&str, CellRepresentation> {
+fn path_start(input: &str) -> NomRes<&str, PathStart> {
     context(
-        "cell_representation",
-        alt((
-            cell_representation_url,
-            cell_representation_file,
-            cell_representation_string,
-        )),
+        "path_start",
+        alt((path_start_url, path_start_file, path_start_string)),
     )(input)
     .map(|(next_input, res)| (next_input, res))
 }
 
-fn cell_representation_url(input: &str) -> NomRes<&str, CellRepresentation> {
-    context("cell_representation_url", url)(input)
-        .map(|(next_input, res)| (next_input, CellRepresentation::Url(res)))
+fn path_start_url(input: &str) -> NomRes<&str, PathStart> {
+    context("path_start_url", url)(input).map(|(next_input, res)| (next_input, PathStart::Url(res)))
 }
 
-fn cell_representation_file(input: &str) -> NomRes<&str, CellRepresentation> {
+fn path_start_file(input: &str) -> NomRes<&str, PathStart> {
     context(
-        "cell_representation_file",
+        "path_start_file",
         tuple((
             alt((tag("/"), tag("."))),
             many0(terminated(path_code_points, tag("/"))),
@@ -80,13 +75,13 @@ fn cell_representation_file(input: &str) -> NomRes<&str, CellRepresentation> {
         if let Some(last) = res.2 {
             len += last.len();
         }
-        (next_input, CellRepresentation::File(&input[0..len]))
+        (next_input, PathStart::File(&input[0..len]))
     })
 }
 
-fn cell_representation_string(input: &str) -> NomRes<&str, CellRepresentation> {
-    context("cell_representation_string", string)(input)
-        .map(|(next_input, res)| (next_input, CellRepresentation::String(res)))
+fn path_start_string(input: &str) -> NomRes<&str, PathStart> {
+    context("path_start_string", string)(input)
+        .map(|(next_input, res)| (next_input, PathStart::String(res)))
 }
 
 fn value(input: &str) -> NomRes<&str, Value> {

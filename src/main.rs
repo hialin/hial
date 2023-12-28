@@ -13,7 +13,7 @@ fn main() -> Res<()> {
         }
         Command::Print(command) => {
             debug!("Command: print {}", &command.path);
-            let (cell_repr, path) = match Path::parse_with_starter(&command.path) {
+            let (path_start, path) = match Path::parse_with_starter(&command.path) {
                 Ok(x) => x,
                 Err(HErr::User(msg)) => {
                     eprintln!("Bad path: {}", msg);
@@ -21,9 +21,9 @@ fn main() -> Res<()> {
                 }
                 Err(err) => return Err(err),
             };
-            debug!("Root: {}", cell_repr);
+            debug!("Root: {}", path_start);
             debug!("Path: {}", path);
-            let root = cell_repr.eval()?;
+            let root = path_start.eval()?;
 
             let mut anyfound = false;
             for cell in path.eval(root) {

@@ -55,6 +55,10 @@ pub struct Group {
     response: Domain,
 }
 
+#[derive(Debug)]
+pub struct CellWriter {}
+impl CellWriterTrait for CellWriter {}
+
 pub fn from_string(url: &str) -> Res<Domain> {
     let response = Client::builder()
         .user_agent("hial")
@@ -98,9 +102,8 @@ pub fn to_string(cell: &Cell) -> Res<String> {
     }
 }
 
-impl InDomain for Domain {
+impl DomainTrait for Domain {
     type Cell = Cell;
-    type Group = Group;
 
     fn interpretation(&self) -> &str {
         "http"
@@ -117,13 +120,10 @@ impl InDomain for Domain {
     }
 }
 
-impl InCell for Cell {
-    type Domain = Domain;
+impl CellTrait for Cell {
+    type Group = Group;
     type CellReader = CellReader;
-
-    fn domain(&self) -> &Self::Domain {
-        &self.group.response
-    }
+    type CellWriter = CellWriter;
 
     fn typ(&self) -> Res<&str> {
         match (&self.group.kind, self.pos) {
@@ -143,6 +143,10 @@ impl InCell for Cell {
             response: self.group.response.0.urc(),
             pos: self.pos,
         })
+    }
+
+    fn write(&self) -> Res<Self::CellWriter> {
+        Ok(CellWriter {})
     }
 
     fn sub(&self) -> Res<Group> {
@@ -170,7 +174,7 @@ impl InCell for Cell {
     }
 }
 
-impl InCellReader for CellReader {
+impl CellReaderTrait for CellReader {
     fn index(&self) -> Res<usize> {
         Ok(self.pos)
     }
@@ -216,8 +220,8 @@ impl InCellReader for CellReader {
     }
 }
 
-impl InGroup for Group {
-    type Domain = Domain;
+impl GroupTrait for Group {
+    type Cell = Cell;
     // type SelectIterator = std::vec::IntoIter<Res<Cell>>;
 
     fn label_type(&self) -> LabelType {

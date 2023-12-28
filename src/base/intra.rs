@@ -1,27 +1,12 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::path::PathBuf;
 
 use crate::base::*;
 
-// TODO: is this needed? remove this
-// data container alternatives for serialized forms
-#[derive(Clone, Debug)]
-pub enum RawDataContainer {
-    File(PathBuf),
-    String(String),
-}
-
-pub trait InDomain: Clone + Debug {
-    type Cell: InCell;
-    type Group: InGroup;
+pub trait DomainTrait: Clone + Debug {
+    type Cell: CellTrait;
 
     fn interpretation(&self) -> &str;
-
-    // fn accepts(source_interpretation: &str, source: DataSource) -> Res<bool>;
-    fn new_from(source_interpretation: &str, source: RawDataContainer) -> Res<Self> {
-        todo!()
-    }
 
     fn root(&self) -> Res<Self::Cell>;
 
@@ -30,35 +15,44 @@ pub trait InDomain: Clone + Debug {
     // fn save_to(&self, target: &InDomain>) -> Res<()>;
 }
 
-pub trait InCell: Clone + Debug {
-    type Domain: InDomain;
-    type CellReader: InCellReader;
-
-    fn domain(&self) -> &Self::Domain;
+pub trait CellTrait: Clone + Debug {
+    type Group: GroupTrait;
+    type CellReader: CellReaderTrait;
+    type CellWriter: CellWriterTrait;
 
     fn typ(&self) -> Res<&str>;
     fn read(&self) -> Res<Self::CellReader>;
+    fn write(&self) -> Res<Self::CellWriter>;
 
-    fn sub(&self) -> Res<<Self::Domain as InDomain>::Group> {
+    fn sub(&self) -> Res<Self::Group> {
         nores()
     }
-    fn attr(&self) -> Res<<Self::Domain as InDomain>::Group> {
+    fn attr(&self) -> Res<Self::Group> {
+        nores()
+    }
+}
+
+pub trait CellReaderTrait: Debug {
+    fn index(&self) -> Res<usize> {
         nores()
     }
 
-    // get serialized data for this subtree
-    fn raw(&self) -> Res<RawDataContainer> {
-        todo!()
+    fn label(&self) -> Res<Value> {
+        nores()
     }
 
-    // set the subtree as serialized data
-    fn set_raw(&self, raw: RawDataContainer) -> Res<()> {
-        todo!()
+    fn value(&self) -> Res<Value> {
+        nores()
     }
 
+    // TODO: add fn to get the subtree as serialized data
+}
+
+pub trait CellWriterTrait: Debug {
     fn set_value(&mut self, value: OwnedValue) -> Res<()> {
         todo!();
     }
+
     fn set_label(&mut self, value: OwnedValue) -> Res<()> {
         todo!();
     }
@@ -68,23 +62,8 @@ pub trait InCell: Clone + Debug {
     }
 }
 
-pub trait InCellReader: Debug {
-    fn index(&self) -> Res<usize> {
-        nores()
-    }
-    fn label(&self) -> Res<Value> {
-        nores()
-    }
-    fn value(&self) -> Res<Value> {
-        nores()
-    }
-}
-
-// pub trait InCellWriter: Debug {
-// }
-
-pub trait InGroup: Clone + Debug {
-    type Domain: InDomain;
+pub trait GroupTrait: Clone + Debug {
+    type Cell: CellTrait;
     // type SelectIterator: Iterator<Item = Res<Self::Cell>>;
 
     fn label_type(&self) -> LabelType;
@@ -92,11 +71,8 @@ pub trait InGroup: Clone + Debug {
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
-    fn at(&self, index: usize) -> Res<<Self::Domain as InDomain>::Cell>;
-    fn get<'s, 'a, S: Into<Selector<'a>>>(
-        &'s self,
-        label: S,
-    ) -> Res<<Self::Domain as InDomain>::Cell>;
+    fn at(&self, index: usize) -> Res<Self::Cell>;
+    fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::Cell>;
     // fn get_all<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::SelectIterator>;
 
     // fn add(&mut self) -> Res<()> {
@@ -105,14 +81,14 @@ pub trait InGroup: Clone + Debug {
 }
 
 #[derive(Clone, Debug)]
-pub struct VoidGroup<D>(PhantomData<D>);
-impl<D> From<D> for VoidGroup<D> {
-    fn from(_: D) -> Self {
+pub struct VoidGroup<C>(PhantomData<C>);
+impl<C> From<C> for VoidGroup<C> {
+    fn from(_: C) -> Self {
         VoidGroup(PhantomData)
     }
 }
-impl<D: InDomain> InGroup for VoidGroup<D> {
-    type Domain = D;
+impl<C: CellTrait> GroupTrait for VoidGroup<C> {
+    type Cell = C;
 
     fn label_type(&self) -> LabelType {
         LabelType::default()
@@ -122,11 +98,11 @@ impl<D: InDomain> InGroup for VoidGroup<D> {
         0
     }
 
-    fn at(&self, index: usize) -> Res<D::Cell> {
+    fn at(&self, index: usize) -> Res<C> {
         nores()
     }
 
-    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<D::Cell> {
+    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<C> {
         nores()
     }
 }

@@ -4,6 +4,7 @@ use crate::pprint;
 #[test]
 fn test_files() -> Res<()> {
     let examples = Cell::from(".".to_string())
+        .be("path")?
         .be("file")?
         .sub()?
         .get("examples")?;

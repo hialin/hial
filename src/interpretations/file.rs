@@ -45,6 +45,9 @@ pub struct CellReader {
     pos: u32,
 }
 
+#[derive(Debug)]
+pub struct CellWriter {}
+
 #[derive(Clone, Debug)]
 struct FileEntry {
     path: PathBuf,
@@ -60,26 +63,11 @@ struct Metadata {
     is_link: bool,
 }
 
-impl InDomain for Domain {
+impl DomainTrait for Domain {
     type Cell = Cell;
-    type Group = Group;
 
     fn interpretation(&self) -> &str {
         "file"
-    }
-
-    fn new_from(source_interpretation: &str, source: RawDataContainer) -> Res<Self> {
-        match source {
-            RawDataContainer::File(path) => from_path(path),
-            RawDataContainer::String(string) if source_interpretation == "value" => {
-                from_path(PathBuf::from(string))
-            }
-            _ => HErr::IncompatibleSource(format!(
-                "cannot make a file from {}",
-                source_interpretation
-            ))
-            .into(),
-        }
     }
 
     fn root(&self) -> Res<Self::Cell> {
@@ -100,7 +88,7 @@ impl InDomain for Domain {
     }
 }
 
-impl InCellReader for CellReader {
+impl CellReaderTrait for CellReader {
     fn index(&self) -> Res<usize> {
         Ok(self.pos as usize)
     }
@@ -137,13 +125,12 @@ impl InCellReader for CellReader {
     }
 }
 
-impl InCell for Cell {
-    type Domain = Domain;
-    type CellReader = CellReader;
+impl CellWriterTrait for CellWriter {}
 
-    fn domain(&self) -> &Self::Domain {
-        &self.group.domain
-    }
+impl CellTrait for Cell {
+    type Group = Group;
+    type CellReader = CellReader;
+    type CellWriter = CellWriter;
 
     fn typ(&self) -> Res<&str> {
         if self.group.attribute_group_file_pos == u32::MAX {
@@ -163,6 +150,10 @@ impl InCell for Cell {
             group: self.group.clone(),
             pos: self.pos,
         })
+    }
+
+    fn write(&self) -> Res<Self::CellWriter> {
+        Ok(CellWriter {})
     }
 
     fn sub(&self) -> Res<Group> {
@@ -204,8 +195,8 @@ impl InCell for Cell {
     }
 }
 
-impl InGroup for Group {
-    type Domain = Domain;
+impl GroupTrait for Group {
+    type Cell = Cell;
     // type SelectIterator = std::vec::IntoIter<Res<Cell>>;
 
     fn label_type(&self) -> LabelType {
@@ -269,7 +260,7 @@ impl InGroup for Group {
     }
 }
 
-pub fn from_path(path: PathBuf) -> Res<Domain> {
+pub fn from_path(path: &Path) -> Res<Domain> {
     let path = path.canonicalize()?;
     if !path.exists() {
         return nores();

@@ -11,8 +11,12 @@ fn test_multihop() -> Res<()> {
     assert_eq!(results.len(), 1);
     let result = &results[0];
 
-    assert_eq!(result.path()?, "http://api.github.com/");
     assert_eq!(result.read()?.value()?, "1");
+
+    // TODO: implement path() without Box<Cell> parent
+    // How do we implement a path() method for a multihop without keeping
+    //  the parent cell in a box, which makes an allocation for every cell?
+    assert_eq!(result.path()?, "http://api.github.com/");
 
     Ok(())
 }

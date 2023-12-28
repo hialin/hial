@@ -2,9 +2,15 @@
 
 ## TODOs
 
-- add cellwriter
-- fix field selection
 - use enum-dispatch for all types
+- remove domain? make cell return domain? how to save changes?
+- replace linked-hash-map
+- update quick-xml
+- update tree-sitter
+- update clap
+- replace vecmap with indexmap
+- remove commented out code
+- add filepath as attribute to fs interpretation?
 
 
 ### Feature implementation status
@@ -20,6 +26,7 @@
 | git        |            |            |
 | database   |            |            |
 | ical       |            |            |
+| zip        |            |            |
 |            |            |            |
 | plain text |            |            |
 | yaml       |    yes     |            |
@@ -50,9 +57,10 @@
 
 - cell must implement partialeq, eq (same pointed location)
 
-- todo: tree guide lines
-- todo: colors: interp, type, label, value
-- todo: option to hide attrs?
+- todo CLI:
+    - todo: tree guide lines
+    - todo: colors: interp, type, label, value
+    - todo: option to hide attrs?
 
 - todo: python interop and a larger python example
 - todo: review examples, check accessors, operators

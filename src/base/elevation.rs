@@ -1,9 +1,9 @@
-use std::rc::Rc;
+use std::path::{Path, PathBuf};
 
 use lazy_static::lazy_static;
 
 use crate::{
-    base::*, guard_ok, guard_some, interpretations::*, utils::log::verbose_error,
+    base::*, debug, guard_ok, guard_some, interpretations::*, utils::log::verbose_error,
     utils::vecmap::VecMap,
 };
 
@@ -42,6 +42,7 @@ fn get_elevation_map_for(interpretation: &str) -> Option<VecMapOfElevateFn> {
         map.put("value", value_elevation_map());
         map.put("file", file_elevation_map());
         map.put("url", url_elevation_map());
+        map.put("path", path_elevation_map());
         map.put("http", http_elevation_map());
         map.put("rust", rust_elevation_map());
 
@@ -63,12 +64,11 @@ macro_rules! add_elevation {
                 let domain = ($body)?;
                 let root = domain.root()?;
                 return Ok(Cell {
-                    domain: Rc::new(Domain {
-                        this: DynDomain::from(domain),
-                        source: Some($cellname.clone()),
-                    }),
+                    // domain: Rc::new(Domain {
+                    //     this: DynDomain::from(domain),
+                    //     source: Some($cellname.clone()),
+                    // }),
                     this: DynCell::from(root),
-                    prev: Some((Box::new($cellname), Relation::Interpretation)),
                 });
             }
             fault("elevation: not a string")
@@ -79,9 +79,7 @@ macro_rules! add_elevation {
 fn value_elevation_map() -> VecMap<&'static str, ElevateFn> {
     let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
     add_elevation!(ret, "url", |cell, s| { url::from_string(s) });
-    add_elevation!(ret, "file", |cell, s| {
-        file::Domain::new_from(cell.domain().interpretation(), cell.raw()?)
-    });
+    add_elevation!(ret, "path", |cell, s| { path::from_string(s) });
     add_elevation!(ret, "json", |cell, s| { json::from_string(s) });
     add_elevation!(ret, "toml", |cell, s| { toml::from_string(s) });
     add_elevation!(ret, "yaml", |cell, s| { yaml::from_string(s) });
@@ -116,7 +114,7 @@ fn file_elevation_map() -> VecMap<&'static str, ElevateFn> {
 }
 
 fn url_elevation_map() -> VecMap<&'static str, ElevateFn> {
-    fn get_url(cell: &Cell) -> Res<&str> {
+    fn get_url_as_string(cell: &Cell) -> Res<&str> {
         if let Cell {
             this: DynCell::Url(ref url),
             ..
@@ -127,9 +125,26 @@ fn url_elevation_map() -> VecMap<&'static str, ElevateFn> {
         fault("elevation: not a url")
     }
     let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
-    add_elevation!(ret, "http", |cell, s| {
-        http::from_string(get_url(&cell)?)
+    add_elevation!(ret, "file", |cell, s| {
+        let path = PathBuf::from(get_url_as_string(&cell)?);
+        file::from_path(&path)
     });
+    ret
+}
+
+fn path_elevation_map() -> VecMap<&'static str, ElevateFn> {
+    fn get_path(cell: &Cell) -> Res<&Path> {
+        if let Cell {
+            this: DynCell::Path(ref path),
+            ..
+        } = cell
+        {
+            return path.as_path();
+        }
+        fault("elevation: not a url")
+    }
+    let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
+    add_elevation!(ret, "file", |cell, s| { file::from_path(get_path(&cell)?) });
     ret
 }
 
@@ -170,14 +185,14 @@ fn rust_elevation_map() -> VecMap<&'static str, ElevateFn> {
     }
     add_elevation!(ret, "string", |cell, s| {
         let s = ts_as_string(&cell)?;
-        let cell = ownedvalue::Cell::from(s);
-        Res::Ok(cell.domain().clone())
+        let domain = ownedvalue::Domain::from(s);
+        Res::Ok(domain)
     });
     ret
 }
 
 pub(crate) fn standard_interpretation(cell: &Cell) -> Option<&str> {
-    if cell.domain().interpretation() == "file" && cell.typ().ok()? == "file" {
+    if cell.interpretation() == "file" && cell.typ().ok()? == "file" {
         if let Ok(reader) = cell.read() {
             if let Ok(Value::Str(name)) = reader.label() {
                 if name.ends_with(".c") {
@@ -198,7 +213,7 @@ pub(crate) fn standard_interpretation(cell: &Cell) -> Option<&str> {
             }
         }
     }
-    if cell.domain().interpretation() == "value" {
+    if cell.interpretation() == "value" {
         if let Ok(reader) = cell.read() {
             if let Ok(Value::Str(s)) = reader.value() {
                 if s.starts_with("http://") || s.starts_with("https://") {
@@ -224,7 +239,7 @@ impl ElevationGroup {
     }
 
     pub fn len(&self) -> usize {
-        if let Some(e) = get_elevation_map_for(self.0.domain().interpretation()) {
+        if let Some(e) = get_elevation_map_for(self.0.interpretation()) {
             e.len()
         } else {
             0
@@ -232,8 +247,7 @@ impl ElevationGroup {
     }
 
     pub fn at(&self, index: usize) -> Res<Cell> {
-        let domain = self.0.domain();
-        let interp = domain.interpretation();
+        let interp = self.0.interpretation();
         if let Some(e) = get_elevation_map_for(interp) {
             if let Some(func_tuple) = e.at(index) {
                 func_tuple.1(self.0.clone())
@@ -247,8 +261,7 @@ impl ElevationGroup {
 
     pub fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
         let key = key.into();
-        let domain = self.0.domain();
-        let old_interp = domain.interpretation();
+        let old_interp = self.0.interpretation();
         let interp = match key {
             Selector::Str(k) => k,
             Selector::Top => guard_some!(standard_interpretation(&self.0), { return nores() }),
@@ -262,16 +275,11 @@ impl ElevationGroup {
         }
         if let Some(e) = get_elevation_map_for(old_interp) {
             if let Some(func_tuple) = e.get(interp) {
-                println!("elevate {} to {}", old_interp, key);
+                debug!("elevate {} to {}", old_interp, key);
                 return func_tuple.2(self.0.clone());
             }
         }
-        if key == "value" {
-            println!("elevate default {} to value", old_interp);
-            let v = self.0.read()?.value()?.to_owned_value();
-            return Ok(Cell::from(v));
-        }
-        println!("no elevation from {} to {}", old_interp, interp);
+        debug!("no elevation from {} to {}", old_interp, interp);
         nores()
     }
 }

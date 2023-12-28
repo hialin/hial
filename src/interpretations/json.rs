@@ -5,7 +5,6 @@ use serde_json::Value as SerdeValue;
 use crate::utils::orc::Urc;
 use crate::{
     base::*,
-    guard_some,
     utils::{orc::*, vecmap::*},
 };
 
@@ -14,9 +13,8 @@ pub struct Domain {
     preroot: Orc<Vec<Node>>,
 }
 
-impl InDomain for Domain {
+impl DomainTrait for Domain {
     type Cell = Cell;
-    type Group = Group;
 
     fn interpretation(&self) -> &str {
         "json"
@@ -25,7 +23,6 @@ impl InDomain for Domain {
     fn root(&self) -> Res<Self::Cell> {
         Ok(Cell {
             group: Group {
-                domain: self.clone(),
                 nodes: NodeGroup::Array(self.preroot.clone()),
             },
             pos: 0,
@@ -66,7 +63,6 @@ pub struct ValueRef {
 
 #[derive(Clone, Debug)]
 pub struct Group {
-    domain: Domain,
     nodes: NodeGroup,
 }
 
@@ -81,6 +77,10 @@ pub enum UrcNodeGroup {
     Array(Urc<Vec<Node>>),
     Object(Urc<VecMap<String, Node>>),
 }
+
+#[derive(Debug)]
+pub struct CellWriter {}
+impl CellWriterTrait for CellWriter {}
 
 impl From<serde_json::Error> for HErr {
     fn from(e: serde_json::Error) -> HErr {
@@ -121,7 +121,7 @@ fn owned_value_to_node(v: OwnedValue) -> Res<Node> {
     })
 }
 
-impl InCellReader for CellReader {
+impl CellReaderTrait for CellReader {
     fn index(&self) -> Res<usize> {
         Ok(self.pos)
     }
@@ -164,13 +164,10 @@ impl InCellReader for CellReader {
     }
 }
 
-impl InCell for Cell {
-    type Domain = Domain;
+impl CellTrait for Cell {
+    type Group = Group;
     type CellReader = CellReader;
-
-    fn domain(&self) -> &Self::Domain {
-        &self.group.domain
-    }
+    type CellWriter = CellWriter;
 
     fn typ(&self) -> Res<&str> {
         match self.group.nodes {
@@ -195,26 +192,26 @@ impl InCell for Cell {
         })
     }
 
+    fn write(&self) -> Res<Self::CellWriter> {
+        Ok(CellWriter {})
+    }
+
     fn sub(&self) -> Res<Group> {
         match self.group.nodes {
             NodeGroup::Array(ref array) => match &array.urc().get(self.pos) {
                 Some(Node::Array(a)) => Ok(Group {
-                    domain: self.domain().clone(),
                     nodes: NodeGroup::Array(a.clone()),
                 }),
                 Some(Node::Object(o)) => Ok(Group {
-                    domain: self.domain().clone(),
                     nodes: NodeGroup::Object(o.clone()),
                 }),
                 _ => nores(),
             },
             NodeGroup::Object(ref object) => match object.urc().at(self.pos) {
                 Some((_, Node::Array(a))) => Ok(Group {
-                    domain: self.domain().clone(),
                     nodes: NodeGroup::Array(a.clone()),
                 }),
                 Some((_, Node::Object(o))) => Ok(Group {
-                    domain: self.domain().clone(),
                     nodes: NodeGroup::Object(o.clone()),
                 }),
                 _ => nores(),
@@ -222,66 +219,66 @@ impl InCell for Cell {
         }
     }
 
-    fn set_value(&mut self, v: OwnedValue) -> Res<()> {
-        match self.group.nodes {
-            NodeGroup::Array(ref mut ra) => {
-                let mut urca = ra.urc();
-                let a = guard_some!(urca.get_mut(), {
-                    return Err(HErr::ExclusivityRequired {
-                        path: "".into(),
-                        op: "set_value",
-                    });
-                });
-                let x = guard_some!(a.get_mut(self.pos), {
-                    return fault("bad pos");
-                });
-                *x = owned_value_to_node(v)?;
-            }
+    // fn set_value(&mut self, v: OwnedValue) -> Res<()> {
+    //     match self.group.nodes {
+    //         NodeGroup::Array(ref mut ra) => {
+    //             let mut urca = ra.urc();
+    //             let a = guard_some!(urca.get_mut(), {
+    //                 return Err(HErr::ExclusivityRequired {
+    //                     path: "".into(),
+    //                     op: "set_value",
+    //                 });
+    //             });
+    //             let x = guard_some!(a.get_mut(self.pos), {
+    //                 return fault("bad pos");
+    //             });
+    //             *x = owned_value_to_node(v)?;
+    //         }
 
-            NodeGroup::Object(ref mut ro) => {
-                let mut urco = ro.urc();
-                let o = guard_some!(urco.get_mut(), {
-                    return Err(HErr::ExclusivityRequired {
-                        path: "".into(),
-                        op: "set_value",
-                    });
-                });
-                let x = guard_some!(o.at_mut(self.pos), {
-                    return fault("bad pos");
-                });
-                let nv = owned_value_to_node(v)?;
-                *x.1 = nv;
-            }
-        };
+    //         NodeGroup::Object(ref mut ro) => {
+    //             let mut urco = ro.urc();
+    //             let o = guard_some!(urco.get_mut(), {
+    //                 return Err(HErr::ExclusivityRequired {
+    //                     path: "".into(),
+    //                     op: "set_value",
+    //                 });
+    //             });
+    //             let x = guard_some!(o.at_mut(self.pos), {
+    //                 return fault("bad pos");
+    //             });
+    //             let nv = owned_value_to_node(v)?;
+    //             *x.1 = nv;
+    //         }
+    //     };
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    fn delete(&mut self) -> Res<()> {
-        match self.group.nodes {
-            NodeGroup::Array(ref mut a) => {
-                let mut urca = a.urc();
-                let v = guard_some!(urca.get_mut(), {
-                    return Err(HErr::ExclusivityRequired {
-                        path: "".into(),
-                        op: "delete",
-                    });
-                });
-                v.remove(self.pos);
-            }
-            NodeGroup::Object(ref mut o) => {
-                let mut urco = o.urc();
-                let v = guard_some!(urco.get_mut(), {
-                    return Err(HErr::ExclusivityRequired {
-                        path: "".into(),
-                        op: "delete",
-                    });
-                });
-                v.remove(self.pos);
-            }
-        };
-        Ok(())
-    }
+    // fn delete(&mut self) -> Res<()> {
+    //     match self.group.nodes {
+    //         NodeGroup::Array(ref mut a) => {
+    //             let mut urca = a.urc();
+    //             let v = guard_some!(urca.get_mut(), {
+    //                 return Err(HErr::ExclusivityRequired {
+    //                     path: "".into(),
+    //                     op: "delete",
+    //                 });
+    //             });
+    //             v.remove(self.pos);
+    //         }
+    //         NodeGroup::Object(ref mut o) => {
+    //             let mut urco = o.urc();
+    //             let v = guard_some!(urco.get_mut(), {
+    //                 return Err(HErr::ExclusivityRequired {
+    //                     path: "".into(),
+    //                     op: "delete",
+    //                 });
+    //             });
+    //             v.remove(self.pos);
+    //         }
+    //     };
+    //     Ok(())
+    // }
 }
 
 fn get_typ(node: &Node) -> &'static str {
@@ -297,8 +294,8 @@ fn get_typ(node: &Node) -> &'static str {
     }
 }
 
-impl InGroup for Group {
-    type Domain = Domain;
+impl GroupTrait for Group {
+    type Cell = Cell;
 
     fn label_type(&self) -> LabelType {
         LabelType {

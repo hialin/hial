@@ -1,18 +1,18 @@
-use std::rc::Rc;
-
-use reqwest::Url;
-use url::ParseError;
+use std::{
+    path::{Path, PathBuf},
+    rc::Rc,
+};
 
 use crate::base::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Domain(Rc<Url>);
+pub struct Domain(Rc<(PathBuf, String)>);
 
 impl DomainTrait for Domain {
     type Cell = Cell;
 
     fn interpretation(&self) -> &str {
-        "url"
+        "path"
     }
 
     fn root(&self) -> Res<Self::Cell> {
@@ -30,22 +30,21 @@ pub struct CellReader(Domain);
 pub struct CellWriter {}
 impl CellWriterTrait for CellWriter {}
 
-#[derive(Debug)]
-pub struct ValueRef(Domain, bool);
-
-pub fn from_string(s: &str) -> Res<Domain> {
-    Ok(Domain(Rc::new(Url::parse(s)?)))
+pub fn from_string(s: impl Into<String>) -> Res<Domain> {
+    let s = s.into();
+    let data = (PathBuf::from(&s), s);
+    Ok(Domain(Rc::new(data)))
 }
 
 impl Cell {
-    pub fn as_str(&self) -> &str {
-        self.0 .0.as_str()
+    pub fn as_path(&self) -> Res<&Path> {
+        Ok(self.0 .0 .0.as_path())
     }
 }
 
 impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
-        Ok(Value::Str(self.0 .0.as_str()))
+        Ok(Value::Str(&self.0 .0 .1))
     }
 }
 
@@ -64,11 +63,5 @@ impl CellTrait for Cell {
 
     fn write(&self) -> Res<Self::CellWriter> {
         Ok(CellWriter {})
-    }
-}
-
-impl From<ParseError> for HErr {
-    fn from(e: ParseError) -> HErr {
-        HErr::Url(format!("{}", e))
     }
 }

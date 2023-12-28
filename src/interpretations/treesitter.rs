@@ -11,9 +11,8 @@ pub struct Domain {
     tree: Tree,
 }
 
-impl InDomain for Domain {
+impl DomainTrait for Domain {
     type Cell = Cell;
-    type Group = Group;
 
     fn interpretation(&self) -> &str {
         self.language
@@ -55,6 +54,10 @@ pub struct CellReader {
     group: Group,
     pos: usize,
 }
+
+#[derive(Debug)]
+pub struct CellWriter {}
+impl CellWriterTrait for CellWriter {}
 
 #[derive(Clone, Debug)]
 pub struct CNode {
@@ -194,7 +197,7 @@ fn reshape_subs(value: &mut String, typ: &str, subs: &mut Vec<CNode>, source: &s
     }
 }
 
-impl InCellReader for CellReader {
+impl CellReaderTrait for CellReader {
     fn index(&self) -> Res<usize> {
         Ok(self.pos)
     }
@@ -217,13 +220,10 @@ impl InCellReader for CellReader {
     }
 }
 
-impl InCell for Cell {
-    type Domain = Domain;
+impl CellTrait for Cell {
+    type Group = Group;
     type CellReader = CellReader;
-
-    fn domain(&self) -> &Domain {
-        &self.group.domain
-    }
+    type CellWriter = CellWriter;
 
     fn typ(&self) -> Res<&str> {
         Ok(self.group.nodes[self.pos].typ)
@@ -236,6 +236,10 @@ impl InCell for Cell {
         })
     }
 
+    fn write(&self) -> Res<Self::CellWriter> {
+        Ok(CellWriter {})
+    }
+
     fn sub(&self) -> Res<Group> {
         let cnode = &self.group.nodes[self.pos];
         let mut group = self.group.clone();
@@ -244,8 +248,8 @@ impl InCell for Cell {
     }
 }
 
-impl InGroup for Group {
-    type Domain = Domain;
+impl GroupTrait for Group {
+    type Cell = Cell;
 
     fn label_type(&self) -> LabelType {
         LabelType {

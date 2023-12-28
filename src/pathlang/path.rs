@@ -1,5 +1,4 @@
 use std::fmt::{Display, Formatter};
-use std::rc::Rc;
 
 use crate::{
     base::*,
@@ -11,7 +10,7 @@ use crate::{
 pub struct Path<'a>(pub(crate) Vec<PathItem<'a>>);
 
 #[derive(Clone, Debug)]
-pub enum CellRepresentation<'a> {
+pub enum PathStart<'a> {
     Url(Url<'a>),
     File(&'a str),
     String(&'a str),
@@ -46,17 +45,17 @@ impl Display for Path<'_> {
 
 impl Display for PathItem<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        fmt_path_item(&self, f)?;
+        fmt_path_item(self, f)?;
         Ok(())
     }
 }
 
-impl Display for CellRepresentation<'_> {
+impl Display for PathStart<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
-            CellRepresentation::Url(x) => write!(f, "{}", x)?,
-            CellRepresentation::File(x) => write!(f, "{}", x)?,
-            CellRepresentation::String(x) => write!(f, "'{}'", x)?,
+            PathStart::Url(x) => write!(f, "{}", x)?,
+            PathStart::File(x) => write!(f, "{}", x)?,
+            PathStart::String(x) => write!(f, "'{}'", x)?,
         }
         Ok(())
     }
@@ -121,48 +120,44 @@ fn fmt_path_item(path_item: &PathItem, f: &mut Formatter<'_>) -> std::fmt::Resul
     Ok(())
 }
 
-impl<'a> CellRepresentation<'a> {
+impl<'a> PathStart<'a> {
     pub fn eval(&self) -> Res<Cell> {
         match self {
-            CellRepresentation::Url(u) => {
+            PathStart::Url(u) => {
                 let domain = url::from_string(&u.to_string())?;
                 let root = domain.root()?;
                 Cell {
-                    domain: Rc::new(Domain {
-                        this: DynDomain::from(domain),
-                        source: None,
-                    }),
+                    // domain: Rc::new(Domain {
+                    //     this: DynDomain::from(domain),
+                    //     source: None,
+                    // }),
                     this: DynCell::Url(root),
-                    prev: None,
                 }
                 .elevate()?
                 .get("url")
             }
-            CellRepresentation::File(f) => {
-                let path = std::path::Path::new(f).to_path_buf();
+            PathStart::File(f) => {
+                let path = std::path::Path::new(f);
                 let domain = file::from_path(path)?;
                 let root = domain.root()?;
                 Cell {
-                    domain: Rc::new(Domain {
-                        this: DynDomain::from(domain),
-                        source: None,
-                    }),
+                    // domain: Rc::new(Domain {
+                    //     this: DynDomain::from(domain),
+                    //     source: None,
+                    // }),
                     this: DynCell::File(root),
-                    prev: None,
                 }
                 .elevate()?
                 .get("file")
             }
-            CellRepresentation::String(str) => {
-                let root = ownedvalue::Cell::from(str.to_string());
-                let domain = root.domain().clone();
+            PathStart::String(str) => {
+                let root = ownedvalue::Domain::from(str.to_string()).root()?;
                 Ok(Cell {
-                    domain: Rc::new(Domain {
-                        this: DynDomain::from(domain),
-                        source: None,
-                    }),
+                    // domain: Rc::new(Domain {
+                    //     this: DynDomain::from(domain),
+                    //     source: None,
+                    // }),
                     this: DynCell::from(root),
-                    prev: None,
                 })
             }
         }

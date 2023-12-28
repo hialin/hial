@@ -4,9 +4,8 @@ use crate::utils::orc::{Orc, Urc};
 #[derive(Clone, Debug)]
 pub struct Domain(Orc<OwnedValue>);
 
-impl InDomain for Domain {
+impl DomainTrait for Domain {
     type Cell = Cell;
-    type Group = VoidGroup<Domain>;
 
     fn interpretation(&self) -> &str {
         "value"
@@ -24,39 +23,40 @@ pub struct Cell(Domain);
 pub struct CellReader(Urc<OwnedValue>);
 
 #[derive(Debug)]
+pub struct CellWriter(Urc<OwnedValue>);
+impl CellWriterTrait for CellWriter {}
+
+#[derive(Debug)]
 pub struct ValueRef(Urc<OwnedValue>, bool);
 
-impl From<OwnedValue> for Cell {
+impl From<OwnedValue> for Domain {
     fn from(ov: OwnedValue) -> Self {
-        Cell(Domain(Orc::new(ov)))
+        Domain(Orc::new(ov))
     }
 }
 
-impl From<Value<'_>> for Cell {
+impl From<Value<'_>> for Domain {
     fn from(v: Value) -> Self {
-        Cell(Domain(Orc::new(v.to_owned_value())))
+        Domain(Orc::new(v.to_owned_value()))
     }
 }
 
-impl From<String> for Cell {
+impl From<String> for Domain {
     fn from(s: String) -> Self {
-        Cell(Domain(Orc::new(OwnedValue::String(s))))
+        Domain(Orc::new(OwnedValue::String(s)))
     }
 }
 
-impl InCellReader for CellReader {
+impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
         Ok(self.0.as_value())
     }
 }
 
-impl InCell for Cell {
-    type Domain = Domain;
+impl CellTrait for Cell {
+    type Group = VoidGroup<Self>;
     type CellReader = CellReader;
-
-    fn domain(&self) -> &Self::Domain {
-        &self.0
-    }
+    type CellWriter = CellWriter;
 
     fn typ(&self) -> Res<&str> {
         Ok("value")
@@ -66,31 +66,7 @@ impl InCell for Cell {
         Ok(CellReader(self.0 .0.urc()))
     }
 
-    fn raw(&self) -> Res<RawDataContainer> {
-        let vref = self.0 .0.urc();
-        if let Value::Str(s) = vref.as_value() {
-            Ok(RawDataContainer::String(s.to_owned()))
-        } else {
-            nores()
-        }
-    }
-
-    fn set_raw(&self, raw: RawDataContainer) -> Res<()> {
-        let mut vref = self.0 .0.urc();
-        if let Some(v) = vref.get_mut() {
-            match raw {
-                RawDataContainer::String(s) => *v = OwnedValue::from(s),
-                RawDataContainer::File(pathbuf) => {
-                    let s = std::fs::read_to_string(pathbuf)?;
-                    *v = OwnedValue::from(s)
-                }
-            }
-            Ok(())
-        } else {
-            Err(HErr::ExclusivityRequired {
-                path: "".into(),
-                op: "set_raw",
-            })
-        }
+    fn write(&self) -> Res<Self::CellWriter> {
+        Ok(CellWriter(self.0 .0.urc()))
     }
 }
