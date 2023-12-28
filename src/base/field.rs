@@ -110,7 +110,7 @@ impl CellReaderTrait for FieldReader {
             FieldType::Value => self.reader.value(),
             FieldType::Label => self.reader.label(),
             FieldType::Type => Ok(Value::Str(self.cell.typ()?)),
-            FieldType::Index => Ok(Value::Int(Int::U64(self.reader.index()? as u64))),
+            FieldType::Index => Ok(Value::from(self.reader.index()? as u64)),
         }
     }
 }

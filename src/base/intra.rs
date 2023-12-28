@@ -49,11 +49,11 @@ pub trait CellReaderTrait: Debug {
 }
 
 pub trait CellWriterTrait: Debug {
-    fn set_value(&mut self, value: OwnedValue) -> Res<()> {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
         todo!();
     }
 
-    fn set_label(&mut self, value: OwnedValue) -> Res<()> {
+    fn set_label(&mut self, value: OwnValue) -> Res<()> {
         todo!();
     }
 

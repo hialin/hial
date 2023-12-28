@@ -57,7 +57,7 @@ fn mutate_and_write_json() -> Res<()> {
     json.search(path2)?
         .first()?
         .write()?
-        .set_value(OwnedValue::None)?;
+        .set_value(OwnValue::None)?;
 
     // pprint::pprint(&json, 0, 0);
 

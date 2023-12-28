@@ -42,7 +42,7 @@ pub extern "C" fn cell_str(s: *const c_char) -> CResult<Cell, HErr> {
     CResult::Ok(Cell::from(s.to_string()))
 }
 
-pub extern "C" fn cell_value(ov: OwnedValue) -> Cell {
+pub extern "C" fn cell_value(ov: OwnValue) -> Cell {
     Cell::from(ov)
 }
 

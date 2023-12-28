@@ -75,7 +75,7 @@ impl<'a> Display for Selector<'a> {
     }
 }
 
-impl PartialEq<Selector<'_>> for OwnedValue {
+impl PartialEq<Selector<'_>> for OwnValue {
     fn eq(&self, other: &Selector) -> bool {
         match other {
             Selector::Str(svalue) => self.eq(svalue),

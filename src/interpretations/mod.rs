@@ -2,7 +2,7 @@
 pub mod file;
 pub mod http;
 pub mod json;
-pub mod ownedvalue;
+pub mod ownvalue;
 pub mod path;
 pub mod toml;
 pub mod treesitter;

@@ -185,7 +185,7 @@ fn rust_elevation_map() -> VecMap<&'static str, ElevateFn> {
     }
     add_elevation!(ret, "string", |cell, s| {
         let s = ts_as_string(&cell)?;
-        let domain = ownedvalue::Domain::from(s);
+        let domain = ownvalue::Domain::from(s);
         Res::Ok(domain)
     });
     ret

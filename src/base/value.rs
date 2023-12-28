@@ -5,8 +5,6 @@ use core::{
 };
 use std::borrow::Borrow;
 
-use crate::guard_variant;
-
 pub const DISPLAY_VALUE_NONE: &str = "ø"; // ø❍•⸰·
 
 #[derive(Copy, Clone, Debug)]
@@ -17,45 +15,16 @@ pub enum Int {
     U32(u32),
 }
 
-impl Int {
-    pub fn as_i128(&self) -> i128 {
-        match *self {
-            Int::I64(a) => a as i128,
-            Int::U64(a) => a as i128,
-            Int::I32(a) => a as i128,
-            Int::U32(a) => a as i128,
-        }
+impl Hash for Int {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        embiggen(*self).hash(state);
     }
 }
 
 impl PartialEq for Int {
     fn eq(&self, other: &Self) -> bool {
-        match *self {
-            Int::I64(a) => match *other {
-                Int::I64(b) => a == b,
-                Int::U64(b) => a >= 0 && a as u64 == b,
-                Int::I32(b) => a == b as i64,
-                Int::U32(b) => a >= 0 && a as u64 == b as u64,
-            },
-            Int::U64(a) => match *other {
-                Int::I64(b) => b >= 0 && a == b as u64,
-                Int::U64(b) => a == b,
-                Int::I32(b) => b >= 0 && a == b as u64,
-                Int::U32(b) => a == b as u64,
-            },
-            Int::I32(a) => match *other {
-                Int::I64(b) => a as i64 == b,
-                Int::U64(b) => a >= 0 && a as u64 == b,
-                Int::I32(b) => a == b,
-                Int::U32(b) => a >= 0 && a as u32 == b,
-            },
-            Int::U32(a) => match *other {
-                Int::I64(b) => b >= 0 && a as u64 == b as u64,
-                Int::U64(b) => a as u64 == b,
-                Int::I32(b) => b >= 0 && a == b as u32,
-                Int::U32(b) => a == b,
-            },
-        }
+        embiggen(*self) == embiggen(*other)
     }
 }
 
@@ -63,18 +32,22 @@ impl Eq for Int {}
 
 impl PartialOrd for Int {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.as_i128().partial_cmp(&other.as_i128())
-    }
-}
-impl Ord for Int {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.as_i128().cmp(&other.as_i128())
+        embiggen(*self).partial_cmp(&embiggen(*other))
     }
 }
 
-impl Hash for Int {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_i128().hash(state)
+impl Ord for Int {
+    fn cmp(&self, other: &Self) -> Ordering {
+        embiggen(*self).cmp(&embiggen(*other))
+    }
+}
+
+fn embiggen(x: Int) -> i128 {
+    match x {
+        Int::I64(a) => a as i128,
+        Int::U64(a) => a as i128,
+        Int::I32(a) => a as i128,
+        Int::U32(a) => a as i128,
     }
 }
 
@@ -92,6 +65,27 @@ impl Display for Int {
             Int::I64(x) => write!(buf, "{}", x),
             Int::U64(x) => write!(buf, "{}", x),
         }
+    }
+}
+
+impl From<i32> for Int {
+    fn from(x: i32) -> Self {
+        Int::I32(x)
+    }
+}
+impl From<u32> for Int {
+    fn from(x: u32) -> Self {
+        Int::U32(x)
+    }
+}
+impl From<i64> for Int {
+    fn from(x: i64) -> Self {
+        Int::I64(x)
+    }
+}
+impl From<u64> for Int {
+    fn from(x: u64) -> Self {
+        Int::U64(x)
     }
 }
 
@@ -155,7 +149,9 @@ impl Display for StrFloat {
     }
 }
 
-#[derive(Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+// Value is a simple value, either null or a primitive or a string or bytes
+// It implements most of the traits that are useful for a simple value
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum Value<'a> {
     #[default]
     None,
@@ -165,20 +161,6 @@ pub enum Value<'a> {
     Str(&'a str),
     // OsStr(&'a OsStr),
     Bytes(&'a [u8]),
-}
-
-impl<'a> fmt::Debug for Value<'a> {
-    fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Value::None => write!(buf, "{}", DISPLAY_VALUE_NONE),
-            Value::Bool(x) => write!(buf, "{:?}", x),
-            Value::Int(x) => write!(buf, "{:?}", x),
-            Value::Float(x) => write!(buf, "{:?}", x),
-            Value::Str(x) => write!(buf, "{:?}", x),
-            // Value::OsStr(x) => write!(buf, "{:?}", x.to_string_lossy()),
-            Value::Bytes(x) => write!(buf, "Bytes({:?})", String::from_utf8_lossy(x)),
-        }
-    }
 }
 
 impl<'a> Display for Value<'a> {
@@ -207,8 +189,11 @@ where
     }
 }
 
-#[derive(Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum OwnedValue {
+///////////////////////////////////////////////////////////////////////////////
+//  OwnValue
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum OwnValue {
     #[default]
     None,
     Bool(bool),
@@ -219,89 +204,122 @@ pub enum OwnedValue {
     Bytes(Vec<u8>),
 }
 
-impl fmt::Debug for OwnedValue {
+impl Display for OwnValue {
     fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            OwnedValue::None => write!(buf, "{}", DISPLAY_VALUE_NONE),
-            OwnedValue::Bool(x) => write!(buf, "{:?}", x),
-            OwnedValue::Int(x) => write!(buf, "{:?}", x),
-            OwnedValue::Float(x) => write!(buf, "{:?}", x),
-            OwnedValue::String(ref x) => write!(buf, "{:?}", x),
-            OwnedValue::Bytes(x) => write!(buf, "{}", String::from_utf8_lossy(x)),
+            OwnValue::None => write!(buf, "{}", DISPLAY_VALUE_NONE),
+            OwnValue::Bool(x) => write!(buf, "{}", x),
+            OwnValue::Int(x) => write!(buf, "{}", x),
+            OwnValue::Float(x) => write!(buf, "{}", x),
+            OwnValue::String(x) => write!(buf, "{}", x),
+            OwnValue::Bytes(x) => write!(buf, "{}", String::from_utf8_lossy(x)),
         }
     }
 }
 
-impl Display for OwnedValue {
-    fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            OwnedValue::None => write!(buf, "{}", DISPLAY_VALUE_NONE),
-            OwnedValue::Bool(x) => write!(buf, "{}", x),
-            OwnedValue::Int(x) => write!(buf, "{}", x),
-            OwnedValue::Float(x) => write!(buf, "{}", x),
-            OwnedValue::String(x) => write!(buf, "{}", x),
-            OwnedValue::Bytes(x) => write!(buf, "{}", String::from_utf8_lossy(x)),
-        }
-    }
-}
-
-impl<T> PartialEq<T> for OwnedValue
+impl<T> PartialEq<T> for OwnValue
 where
     T: Borrow<str>,
 {
     fn eq(&self, other: &T) -> bool {
         match self {
-            OwnedValue::String(s) => s.eq(&other.borrow()),
+            OwnValue::String(s) => s.eq(&other.borrow()),
             _ => false,
         }
     }
 }
 
-impl From<String> for OwnedValue {
+impl From<String> for OwnValue {
     fn from(s: String) -> Self {
-        OwnedValue::String(s)
+        OwnValue::String(s)
     }
 }
 
-impl<'a> From<&'a OwnedValue> for Value<'a> {
-    fn from(ov: &'a OwnedValue) -> Self {
+impl<'a> From<&'a OwnValue> for Value<'a> {
+    fn from(ov: &'a OwnValue) -> Self {
         match ov {
-            OwnedValue::None => Value::None,
-            OwnedValue::Bool(x) => Value::Bool(*x),
-            OwnedValue::Int(x) => Value::Int(*x),
-            OwnedValue::Float(x) => Value::Float(*x),
-            OwnedValue::String(ref x) => Value::Str(x),
-            OwnedValue::Bytes(ref x) => Value::Bytes(x),
+            OwnValue::None => Value::None,
+            OwnValue::Bool(x) => Value::Bool(*x),
+            OwnValue::Int(x) => Value::Int(*x),
+            OwnValue::Float(x) => Value::Float(*x),
+            OwnValue::String(x) => Value::Str(x.as_str()),
+            OwnValue::Bytes(x) => Value::Bytes(x.as_ref()),
         }
     }
 }
 
-impl OwnedValue {
+impl OwnValue {
     pub fn as_value(&self) -> Value {
         match self {
-            OwnedValue::None => Value::None,
-            OwnedValue::Bool(x) => Value::Bool(*x),
-            OwnedValue::Int(x) => Value::Int(*x),
-            OwnedValue::Float(x) => Value::Float(*x),
-            OwnedValue::String(x) => Value::Str(x.as_str()),
-            OwnedValue::Bytes(x) => Value::Bytes(x.as_ref()),
+            OwnValue::None => Value::None,
+            OwnValue::Bool(x) => Value::Bool(*x),
+            OwnValue::Int(x) => Value::Int(*x),
+            OwnValue::Float(x) => Value::Float(*x),
+            OwnValue::String(x) => Value::Str(x.as_str()),
+            OwnValue::Bytes(x) => Value::Bytes(x.as_ref()),
         }
     }
 }
 
 impl Value<'_> {
-    pub fn to_owned_value(&self) -> OwnedValue {
+    pub fn to_owned_value(&self) -> OwnValue {
         match self {
-            Value::None => OwnedValue::None,
-            Value::Bool(x) => OwnedValue::Bool(*x),
-            Value::Int(x) => OwnedValue::Int(*x),
-            Value::Float(x) => OwnedValue::Float(*x),
-            Value::Str(x) => OwnedValue::String(x.to_string()),
-            Value::Bytes(x) => OwnedValue::Bytes(Vec::from(*x)),
+            Value::None => OwnValue::None,
+            Value::Bool(x) => OwnValue::Bool(*x),
+            Value::Int(x) => OwnValue::Int(*x),
+            Value::Float(x) => OwnValue::Float(*x),
+            Value::Str(x) => OwnValue::String(x.to_string()),
+            Value::Bytes(x) => OwnValue::Bytes(Vec::from(*x)),
         }
     }
 
-    pub fn as_str(&self) -> Option<&str> {
-        guard_variant!(self, Value::Str)
+    // pub fn as_str(&self) -> Option<&str> {
+    //     guard_variant!(self, Value::Str)
+    // }
+}
+
+impl From<bool> for Value<'_> {
+    fn from(b: bool) -> Self {
+        Value::Bool(b)
+    }
+}
+impl From<Int> for Value<'_> {
+    fn from(i: Int) -> Self {
+        Value::Int(i)
+    }
+}
+impl From<i32> for Value<'_> {
+    fn from(x: i32) -> Self {
+        Value::Int(Int::I32(x))
+    }
+}
+impl From<u32> for Value<'_> {
+    fn from(x: u32) -> Self {
+        Value::Int(Int::U32(x))
+    }
+}
+impl From<i64> for Value<'_> {
+    fn from(x: i64) -> Self {
+        Value::Int(Int::I64(x))
+    }
+}
+impl From<u64> for Value<'_> {
+    fn from(x: u64) -> Self {
+        Value::Int(Int::U64(x))
+    }
+}
+impl From<StrFloat> for Value<'_> {
+    fn from(f: StrFloat) -> Self {
+        Value::Float(f)
+    }
+}
+impl From<f64> for Value<'_> {
+    fn from(f: f64) -> Self {
+        Value::Float(StrFloat(f))
+    }
+}
+impl<'a> From<&'a str> for Value<'a> {
+    fn from(s: &'a str) -> Self {
+        Value::Str(s)
     }
 }

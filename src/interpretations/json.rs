@@ -105,17 +105,17 @@ fn from_json_value(json: SerdeValue) -> Res<Domain> {
     Ok(Domain { preroot })
 }
 
-fn owned_value_to_node(v: OwnedValue) -> Res<Node> {
+fn owned_value_to_node(v: OwnValue) -> Res<Node> {
     Ok(match v {
-        OwnedValue::None => Node::Null,
-        OwnedValue::Bool(b) => Node::Bool(b),
-        OwnedValue::Int(Int::I64(i)) => Node::I64(i),
-        OwnedValue::Int(Int::U64(u)) => Node::U64(u),
-        OwnedValue::Int(Int::I32(i)) => Node::I64(i as i64),
-        OwnedValue::Int(Int::U32(u)) => Node::U64(u as u64),
-        OwnedValue::Float(f) => Node::F64(f.0),
-        OwnedValue::String(s) => Node::String(s),
-        OwnedValue::Bytes(_) => {
+        OwnValue::None => Node::Null,
+        OwnValue::Bool(b) => Node::Bool(b),
+        OwnValue::Int(Int::I64(i)) => Node::I64(i),
+        OwnValue::Int(Int::U64(u)) => Node::U64(u),
+        OwnValue::Int(Int::I32(i)) => Node::I64(i as i64),
+        OwnValue::Int(Int::U32(u)) => Node::U64(u as u64),
+        OwnValue::Float(f) => Node::F64(f.0),
+        OwnValue::String(s) => Node::String(s),
+        OwnValue::Bytes(_) => {
             return HErr::Json("Cannot convert bytes to json field".into()).into()
         }
     })
@@ -219,7 +219,7 @@ impl CellTrait for Cell {
         }
     }
 
-    // fn set_value(&mut self, v: OwnedValue) -> Res<()> {
+    // fn set_value(&mut self, v: OwnValue) -> Res<()> {
     //     match self.group.nodes {
     //         NodeGroup::Array(ref mut ra) => {
     //             let mut urca = ra.urc();

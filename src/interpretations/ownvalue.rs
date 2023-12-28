@@ -2,7 +2,7 @@ use crate::base::*;
 use crate::utils::orc::{Orc, Urc};
 
 #[derive(Clone, Debug)]
-pub struct Domain(Orc<OwnedValue>);
+pub struct Domain(Orc<OwnValue>);
 
 impl DomainTrait for Domain {
     type Cell = Cell;
@@ -20,17 +20,17 @@ impl DomainTrait for Domain {
 pub struct Cell(Domain);
 
 #[derive(Debug)]
-pub struct CellReader(Urc<OwnedValue>);
+pub struct CellReader(Urc<OwnValue>);
 
 #[derive(Debug)]
-pub struct CellWriter(Urc<OwnedValue>);
+pub struct CellWriter(Urc<OwnValue>);
 impl CellWriterTrait for CellWriter {}
 
 #[derive(Debug)]
-pub struct ValueRef(Urc<OwnedValue>, bool);
+pub struct ValueRef(Urc<OwnValue>, bool);
 
-impl From<OwnedValue> for Domain {
-    fn from(ov: OwnedValue) -> Self {
+impl From<OwnValue> for Domain {
+    fn from(ov: OwnValue) -> Self {
         Domain(Orc::new(ov))
     }
 }
@@ -43,7 +43,7 @@ impl From<Value<'_>> for Domain {
 
 impl From<String> for Domain {
     fn from(s: String) -> Self {
-        Domain(Orc::new(OwnedValue::String(s)))
+        Domain(Orc::new(OwnValue::String(s)))
     }
 }
 

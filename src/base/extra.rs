@@ -7,7 +7,7 @@ use crate::{
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
     pub(crate) enum DynDomain {
-        OwnedValue(ownedvalue::Domain),
+        OwnValue(ownvalue::Domain),
         File(file::Domain),
         Json(json::Domain),
         Toml(toml::Domain),
@@ -31,7 +31,7 @@ enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
     pub(crate) enum DynCell {
         Field(field::FieldCell),
-        OwnedValue(ownedvalue::Cell),
+        OwnValue(ownvalue::Cell),
         File(file::Cell),
         Json(json::Cell),
         Toml(toml::Cell),
@@ -55,7 +55,7 @@ enumerated_dynamic_type! {
     #[derive(Debug)]
     pub(crate) enum DynCellReader {
         Field(field::FieldReader),
-        OwnedValue(ownedvalue::CellReader),
+        OwnValue(ownvalue::CellReader),
         File(file::CellReader),
         Json(json::CellReader),
         Toml(toml::CellReader),
@@ -76,7 +76,7 @@ enumerated_dynamic_type! {
     #[derive(Debug)]
     pub(crate) enum DynCellWriter {
         Field(field::FieldWriter),
-        OwnedValue(ownedvalue::CellWriter),
+        OwnValue(ownvalue::CellWriter),
         File(file::CellWriter),
         Json(json::CellWriter),
         Toml(toml::CellWriter),
@@ -97,7 +97,7 @@ enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
     pub enum DynGroup {
         Field(field::FieldGroup),
-        OwnedValue(VoidGroup<ownedvalue::Cell>),
+        OwnValue(VoidGroup<ownvalue::Cell>),
         File(file::Group),
         Json(json::Group),
         Toml(toml::Group),
@@ -137,10 +137,10 @@ impl Domain {
     // }
 }
 
-impl From<OwnedValue> for Cell {
-    fn from(ov: OwnedValue) -> Self {
+impl From<OwnValue> for Cell {
+    fn from(ov: OwnValue) -> Self {
         Cell {
-            this: DynCell::from(ownedvalue::Domain::from(ov).root().unwrap()),
+            this: DynCell::from(ownvalue::Domain::from(ov).root().unwrap()),
         }
     }
 }
@@ -153,13 +153,13 @@ impl From<Value<'_>> for Cell {
 
 impl From<&str> for Cell {
     fn from(s: &str) -> Self {
-        Cell::from(OwnedValue::from(s.to_string()))
+        Cell::from(OwnValue::from(s.to_string()))
     }
 }
 
 impl From<String> for Cell {
     fn from(s: String) -> Self {
-        Cell::from(OwnedValue::from(s))
+        Cell::from(OwnValue::from(s))
     }
 }
 
@@ -176,11 +176,11 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn set_label(&mut self, value: OwnedValue) -> Res<()> {
+    fn set_label(&mut self, value: OwnValue) -> Res<()> {
         with_cell_writer!(&mut self.0, |x| { x.set_label(value) })
     }
 
-    fn set_value(&mut self, ov: OwnedValue) -> Res<()> {
+    fn set_value(&mut self, ov: OwnValue) -> Res<()> {
         with_cell_writer!(&mut self.0, |x| { x.set_value(ov) })
     }
 }
@@ -190,7 +190,7 @@ impl Cell {
         // TODO: this is not fully correct
         match &self.this {
             DynCell::Field(_) => "value",
-            DynCell::OwnedValue(_) => "value",
+            DynCell::OwnValue(_) => "value",
             DynCell::File(_) => "file",
             DynCell::Json(_) => "json",
             DynCell::Toml(_) => "toml",
