@@ -93,6 +93,7 @@ fn file_elevation_map() -> IndexMap<&'static str, ElevateFn> {
         fault("elevation: not a file")
     }
     let mut ret: IndexMap<&'static str, ElevateFn> = IndexMap::new();
+    add_elevation!(ret, "path", |cell, s| { path::from_path(get_path(&cell)?) });
     add_elevation!(ret, "json", |cell, s| { json::from_path(get_path(&cell)?) });
     add_elevation!(ret, "toml", |cell, s| { toml::from_path(get_path(&cell)?) });
     add_elevation!(ret, "yaml", |cell, s| { yaml::from_path(get_path(&cell)?) });

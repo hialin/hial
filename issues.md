@@ -2,12 +2,10 @@
 
 ## TODOs
 
-- writing options:
-    1. write policy on domain (interpretation):
-        - read only, write ignore, write back, write to new domain
-    2. explicit write: to origin, to new domain
+- explicit domain save/write: to origin, to new domain
+- write policies on domain (interpretation):
+    - read only, write ignore, write back, write to new domain
 - use anyhow for errors
-- add filepath as attribute to fs interpretation?
 
 
 ### Feature implementation status
@@ -15,10 +13,11 @@
 | *Feature*  | *Readable* | *Writeble* |
 |------------|------------|------------|
 | url        |    yes     |            |
+| path       |    yes     |            |
 | fs         |    yes     |            |
 | http       |    yes     |            |
 | markdown   |            |            |
-| json       |            |            |
+| json       |    yes     |            |
 | rust       |    yes     |            |
 | git        |            |            |
 | database   |            |            |

@@ -36,6 +36,12 @@ pub fn from_string(s: impl Into<String>) -> Res<Domain> {
     Ok(Domain(Rc::new(data)))
 }
 
+pub fn from_path(s: impl Into<PathBuf>) -> Res<Domain> {
+    let path = s.into();
+    let s = path.to_string_lossy().to_string();
+    Ok(Domain(Rc::new((path, s))))
+}
+
 impl Cell {
     pub fn as_path(&self) -> Res<&Path> {
         Ok(self.0 .0 .0.as_path())
@@ -59,7 +65,7 @@ impl CellTrait for Cell {
     }
 
     fn typ(&self) -> Res<&str> {
-        Ok("url")
+        Ok("path")
     }
 
     fn read(&self) -> Res<Self::CellReader> {
