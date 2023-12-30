@@ -4,7 +4,6 @@ use std::rc::Rc;
 
 use quick_xml::{events::Event, Error as XmlError, Reader};
 
-// use crate::vecmap::*;
 use crate::{base::*, debug, guard_some};
 
 #[derive(Clone, Debug)]
@@ -67,8 +66,7 @@ pub struct AttrList(Rc<Vec<Attribute>>);
 #[derive(Debug)]
 enum Node {
     Document(Rc<Vec<Node>>),
-    Decl(Rc<Vec<Attribute>>),
-    // version, encoding, standalone
+    Decl(Rc<Vec<Attribute>>), // version, encoding, standalone
     DocType(String),
     PI(String),
     Element((String, Rc<Vec<Attribute>>, Rc<Vec<Node>>)),
@@ -121,34 +119,39 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
     let mut stack: Vec<Vec<Node>> = vec![vec![]];
     let mut attribute_stack: Vec<Vec<Attribute>> = vec![vec![]];
     let mut buf = Vec::new();
+    let decoder = reader.decoder();
 
     loop {
-        match reader.read_event(&mut buf) {
+        if !decoder.encoding().is_ascii_compatible() {
+            return Err(HErr::Xml("not ascii compatible".to_string()));
+        }
+        match reader.read_event_into(&mut buf) {
             Ok(Event::Decl(ref e)) => {
+                println!("decl: {:?}", e);
                 counts.count_decl += 1;
                 let mut attrs = vec![];
                 let rawversion = e.version()?;
-                let version = reader.decode(rawversion.as_ref())?;
+                let version = decoder.decode(rawversion.as_ref())?;
                 attrs.push(Attribute::Attribute("version".into(), version.into()));
                 if let Some(encoding) = e.encoding() {
                     let rawencoding = encoding?;
-                    let encoding = reader.decode(rawencoding.as_ref())?;
+                    let encoding = decoder.decode(rawencoding.as_ref())?;
                     attrs.push(Attribute::Attribute("encoding".into(), encoding.into()));
                 }
                 if let Some(standalone) = e.standalone() {
                     let rawstandalone = standalone?;
-                    let standalone = reader.decode(rawstandalone.as_ref())?;
+                    let standalone = decoder.decode(rawstandalone.as_ref())?;
                     attrs.push(Attribute::Attribute("standalone".into(), standalone.into()));
                 }
                 let v = guard_some!(stack.last_mut(), {
                     return Err(HErr::Xml("no element in stack".to_string()));
                 });
+                println!("attrs: {:?}", attrs);
                 v.push(Node::Decl(Rc::new(attrs)));
             }
             Ok(Event::DocType(ref e)) => {
                 counts.count_doc_type += 1;
-                let rawdoctype = e.unescaped()?;
-                let doctype = reader.decode(rawdoctype.as_ref())?;
+                let doctype = e.unescape()?;
                 let v = guard_some!(stack.last_mut(), {
                     return Err(HErr::Xml("no element in stack".to_string()));
                 });
@@ -156,7 +159,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
             }
             Ok(Event::PI(ref e)) => {
                 counts.count_pi += 1;
-                let text = reader.decode(e.as_ref())?;
+                let text = decoder.decode(e.as_ref())?;
                 let v = guard_some!(stack.last_mut(), {
                     return Err(HErr::Xml("no element in stack".to_string()));
                 });
@@ -167,8 +170,8 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 for resa in e.attributes().with_checks(false) {
                     match resa {
                         Ok(a) => {
-                            let key = reader.decode(a.key)?;
-                            let value = reader.decode(&a.value)?;
+                            let key = decoder.decode(a.key.0)?;
+                            let value = decoder.decode(&a.value)?;
                             attrs.push(Attribute::Attribute(key.into(), value.into()))
                         }
                         Err(err) => attrs.push(Attribute::Error(format!("{}", err))),
@@ -180,8 +183,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
             }
             Ok(Event::Text(e)) => {
                 counts.count_text += 1;
-                let text = reader.decode(e.as_ref())?;
-                // let text = e.unescape_and_decode(&reader).map_err(generr)?;
+                let text = decoder.decode(e.as_ref())?;
                 let v = &mut stack
                     .last_mut()
                     .ok_or(HErr::Xml("no element in stack".to_string()))?;
@@ -189,8 +191,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
             }
             Ok(Event::Comment(e)) => {
                 counts.count_comment += 1;
-                // let text = e.unescape_and_decode(&reader).map_err(generr)?;
-                let text = reader.decode(e.as_ref())?;
+                let text = decoder.decode(e.as_ref())?;
                 let v = &mut stack
                     .last_mut()
                     .ok_or(HErr::Xml("no element in stack".to_string()))?;
@@ -216,7 +217,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                     .ok_or(HErr::Xml("no element in stack".to_string()))?;
                 a.shrink_to_fit();
                 counts.count_attributes += a.len();
-                let name = reader.decode(e.name())?;
+                let name = decoder.decode(e.name().0)?;
                 let x = Node::Element((name.into(), Rc::new(a), Rc::new(v)));
                 let v = &mut stack
                     .last_mut()
@@ -274,7 +275,7 @@ impl CellReaderTrait for CellReader {
         match &self.group.nodes {
             NodeGroup::Node(group) => match &group.0[self.pos] {
                 Node::Document(_) => Ok(Value::None),
-                Node::Decl(_) => Ok(Value::Str("xml")),
+                Node::Decl(_) => Ok(Value::None),
                 Node::DocType(x) => Ok(Value::Str(x.trim())),
                 Node::PI(x) => Ok(Value::Str(x)),
                 Node::Element((x, _, _)) => Ok(Value::Str(x)),
@@ -349,6 +350,10 @@ impl CellTrait for Cell {
     fn attr(&self) -> Res<Group> {
         match &self.group.nodes {
             NodeGroup::Node(group) => match &group.0[self.pos] {
+                Node::Decl(x) => Ok(Group {
+                    domain: self.group.domain.clone(),
+                    nodes: NodeGroup::Attr(AttrList(x.clone())),
+                }),
                 Node::Element((_, x, _)) => Ok(Group {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Attr(AttrList(x.clone())),

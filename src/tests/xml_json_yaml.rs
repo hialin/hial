@@ -90,7 +90,21 @@ fn test_xml() -> Res<()> {
         "#;
     let xml = Cell::from(xml.to_string()).be("xml")?;
     // pprint::pprint(&xml, 0, 0);
+
     let decl = xml.sub()?.at(0)?;
+    assert_eq!(decl.read()?.label()?, "xml");
+    assert_eq!(decl.attr()?.len(), 1);
+    let decl_reader = decl.attr()?.at(0)?.read()?;
+    assert_eq!(decl_reader.label()?, "version");
+    assert_eq!(decl_reader.value()?, Value::Str("1.0"));
+
+    let doctype = xml.sub()?.at(1)?;
+    assert_eq!(doctype.read()?.label()?, "DOCTYPE");
+    assert_eq!(
+        doctype.read()?.value()?,
+        "entity PUBLIC \"-//no idea//EN\" \"http://example.com/dtd\""
+    );
+
     let doc = xml.sub()?.at(2)?;
     assert_eq!(doc.sub()?.len(), 4);
     assert_eq!(doc.sub()?.get("first")?.read()?.label()?, "first");

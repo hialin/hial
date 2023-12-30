@@ -9,20 +9,16 @@ publish = false
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
+clap = "2.1"
 lazy_static = "1.4"
-linked-hash-map = "0.5" # TODO: replace this package
-yaml-rust = "0.4"
-quick-xml = "0.23" # TODO: update to 0.31
-url = "2.1"
-reqwest = { version = "0.10", features = [
-    "blocking",
-    "json",
-] } # TODO: update to 0.11
-tree-sitter = "0.19" # TODO: update to 0.20
 nom = "7.1"
-clap = "2.1" # TODO: update to 4.4
-rand = "0.8"
 paste = "1.0"
+rand = "0.8"
+reqwest = { version = "0.10", features = ["blocking", "json"] }
+tree-sitter = "0.19"
+url = "2.1"
+quick-xml = { version = "0.31", features = ["encoding"] }
+yaml-rust = "0.4"
 
 [dependencies.serde_json]
 version = "1.0"

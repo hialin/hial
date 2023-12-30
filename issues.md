@@ -2,12 +2,14 @@
 
 ## TODOs
 
-- how to save changes? explicit or implicit, policies, subtree writes
-- replace linked-hash-map
-- update quick-xml
+- update reqwest
+- replace vecmap with indexmap
+- writing options:
+    1. write policy on domain (interpretation):
+        - read only, write ignore, write back, write to new domain
+    2. explicit write: to origin, to new domain
 - update tree-sitter
 - update clap
-- replace vecmap with indexmap
 - remove commented out code
 - add filepath as attribute to fs interpretation?
 
