@@ -1,12 +1,10 @@
 use std::{fs::File, path::Path};
 
+use indexmap::IndexMap;
 use serde_json::Value as SerdeValue;
 
 use crate::utils::orc::Urc;
-use crate::{
-    base::*,
-    utils::{orc::*, vecmap::*},
-};
+use crate::{base::*, utils::orc::*};
 
 #[derive(Clone, Debug)]
 pub struct Domain {
@@ -40,7 +38,7 @@ pub enum Node {
     F64(f64),
     String(String),
     Array(Orc<Vec<Node>>),
-    Object(Orc<VecMap<String, Node>>),
+    Object(Orc<IndexMap<String, Node>>),
 }
 
 #[derive(Clone, Debug)]
@@ -64,13 +62,13 @@ pub struct Group {
 #[derive(Clone, Debug)]
 pub enum NodeGroup {
     Array(Orc<Vec<Node>>),
-    Object(Orc<VecMap<String, Node>>),
+    Object(Orc<IndexMap<String, Node>>),
 }
 
 #[derive(Debug)]
 pub enum UrcNodeGroup {
     Array(Urc<Vec<Node>>),
-    Object(Urc<VecMap<String, Node>>),
+    Object(Urc<IndexMap<String, Node>>),
 }
 
 #[derive(Debug)]
@@ -123,7 +121,7 @@ impl CellReaderTrait for CellReader {
 
     fn label(&self) -> Res<Value> {
         if let UrcNodeGroup::Object(ref o) = self.group {
-            if let Some(x) = o.at(self.pos) {
+            if let Some(x) = o.get_index(self.pos) {
                 return Ok(Value::Str(x.0));
             } else {
                 return fault("bad pos");
@@ -151,7 +149,7 @@ impl CellReaderTrait for CellReader {
                 Some(x) => Ok(get_value(x)),
                 None => fault(""),
             },
-            UrcNodeGroup::Object(ref o) => match o.at(self.pos) {
+            UrcNodeGroup::Object(ref o) => match o.get_index(self.pos) {
                 Some(x) => Ok(get_value(x.1)),
                 None => fault(""),
             },
@@ -175,7 +173,7 @@ impl CellTrait for Cell {
                 Some(n) => Ok(get_typ(n)),
                 None => fault(format!("bad index {}", self.pos)),
             },
-            NodeGroup::Object(ref o) => match o.urc().at(self.pos) {
+            NodeGroup::Object(ref o) => match o.urc().get_index(self.pos) {
                 Some(x) => Ok(get_typ(x.1)),
                 None => fault(format!("bad index {}", self.pos)),
             },
@@ -209,7 +207,7 @@ impl CellTrait for Cell {
                 }),
                 _ => nores(),
             },
-            NodeGroup::Object(ref object) => match object.urc().at(self.pos) {
+            NodeGroup::Object(ref object) => match object.urc().get_index(self.pos) {
                 Some((_, Node::Array(a))) => Ok(Group {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Array(a.clone()),
@@ -223,6 +221,7 @@ impl CellTrait for Cell {
         }
     }
 
+    // TODO: remove this after implementing writer
     // fn set_value(&mut self, v: OwnValue) -> Res<()> {
     //     match self.group.nodes {
     //         NodeGroup::Array(ref mut ra) => {
@@ -258,6 +257,7 @@ impl CellTrait for Cell {
     //     Ok(())
     // }
 
+    // TODO: remove this after implementing writer
     // fn delete(&mut self) -> Res<()> {
     //     match self.group.nodes {
     //         NodeGroup::Array(ref mut a) => {
@@ -313,8 +313,8 @@ impl GroupTrait for Group {
             NodeGroup::Array(a) => nores(),
             NodeGroup::Object(o) => match key.into() {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
-                Selector::Str(k) => match o.urc().get(k) {
-                    Some((pos, _, _)) => Ok(Cell {
+                Selector::Str(k) => match o.urc().get_index_of(k) {
+                    Some(pos) => Ok(Cell {
                         group: self.clone(),
                         pos,
                     }),
@@ -368,9 +368,9 @@ fn node_from_json(sv: SerdeValue) -> Node {
             Node::Array(Orc::new(na))
         }
         SerdeValue::Object(o) => {
-            let mut no = VecMap::new();
+            let mut no = IndexMap::new();
             for (k, v) in o {
-                no.put(k, node_from_json(v));
+                no.insert(k, node_from_json(v));
             }
             Node::Object(Orc::new(no))
         }

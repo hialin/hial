@@ -127,10 +127,6 @@ impl<'a> PathStart<'a> {
                 let domain = url::from_string(&u.to_string())?;
                 let root = domain.root()?;
                 Cell {
-                    // domain: Rc::new(Domain {
-                    //     this: DynDomain::from(domain),
-                    //     source: None,
-                    // }),
                     this: DynCell::Url(root),
                 }
                 .elevate()?
@@ -141,10 +137,6 @@ impl<'a> PathStart<'a> {
                 let domain = file::from_path(path)?;
                 let root = domain.root()?;
                 Cell {
-                    // domain: Rc::new(Domain {
-                    //     this: DynDomain::from(domain),
-                    //     source: None,
-                    // }),
                     this: DynCell::File(root),
                 }
                 .elevate()?
@@ -153,10 +145,6 @@ impl<'a> PathStart<'a> {
             PathStart::String(str) => {
                 let root = ownvalue::Cell::from(str.to_string());
                 Ok(Cell {
-                    // domain: Rc::new(Domain {
-                    //     this: DynDomain::from(domain),
-                    //     source: None,
-                    // }),
                     this: DynCell::from(root),
                 })
             }

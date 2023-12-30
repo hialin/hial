@@ -82,7 +82,7 @@ fn sitter_from_source(source: String, language: &'static str) -> Res<Domain> {
         return Err(HErr::Sitter(format!("unsupported language: {}", language)));
     });
 
-    // println!("sitter language: {}", language);
+    debug!("sitter language: {}", language);
     // println!("node kinds:");
     // let mut nk = vec![];
     // for i in 0..sitter_language.node_kind_count() {

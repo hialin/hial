@@ -1,9 +1,10 @@
 use std::io::Read;
 use std::{fs::File, path::Path, rc::Rc};
 
+use indexmap::IndexMap;
 use yaml_rust::{ScanError, Yaml, YamlLoader};
 
-use crate::{base::*, utils::vecmap::*};
+use crate::base::*;
 
 #[derive(Clone, Debug)]
 pub struct Domain {
@@ -52,7 +53,7 @@ pub struct Group {
 #[derive(Clone, Debug)]
 pub enum NodeGroup {
     Array(Rc<Vec<Node>>),
-    Object(Rc<VecMap<String, Node>>),
+    Object(Rc<IndexMap<String, Node>>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -69,7 +70,7 @@ pub enum Scalar {
 pub enum Node {
     Scalar(Scalar),
     Array(Rc<Vec<Node>>),
-    Object(Rc<VecMap<String, Node>>),
+    Object(Rc<IndexMap<String, Node>>),
 }
 
 impl From<ScanError> for HErr {
@@ -99,7 +100,7 @@ impl CellReaderTrait for CellReader {
     fn label(&self) -> Res<Value> {
         match self.group.nodes {
             NodeGroup::Array(ref a) => nores(),
-            NodeGroup::Object(ref o) => match o.at(self.pos) {
+            NodeGroup::Object(ref o) => match o.get_index(self.pos) {
                 Some(x) => Ok(Value::Str(x.0)),
                 None => fault(""),
             },
@@ -112,7 +113,7 @@ impl CellReaderTrait for CellReader {
                 Some(x) => Ok(get_value(x)),
                 None => fault(""),
             },
-            NodeGroup::Object(ref o) => match o.at(self.pos) {
+            NodeGroup::Object(ref o) => match o.get_index(self.pos) {
                 Some(x) => Ok(get_value(x.1)),
                 None => fault(""),
             },
@@ -136,7 +137,7 @@ impl CellTrait for Cell {
                 Some(n) => Ok(get_typ(n)),
                 None => fault(""),
             },
-            NodeGroup::Object(ref o) => match o.at(self.pos) {
+            NodeGroup::Object(ref o) => match o.get_index(self.pos) {
                 Some(x) => Ok(get_typ(x.1)),
                 None => fault(""),
             },
@@ -167,7 +168,7 @@ impl CellTrait for Cell {
                 }),
                 _ => nores(),
             },
-            NodeGroup::Object(ref object) => match object.at(self.pos) {
+            NodeGroup::Object(ref object) => match object.get_index(self.pos) {
                 Some((_, Node::Array(a))) => Ok(Group {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Array(a.clone()),
@@ -229,8 +230,8 @@ impl GroupTrait for Group {
             NodeGroup::Array(a) => nores(),
             NodeGroup::Object(o) => match key.into() {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
-                Selector::Str(k) => match o.get(k) {
-                    Some((pos, _, _)) => Ok(Cell {
+                Selector::Str(k) => match o.get_index_of(k) {
+                    Some(pos) => Ok(Cell {
                         group: self.clone(),
                         pos,
                     }),
@@ -284,12 +285,12 @@ fn node_from_yaml(y: &Yaml) -> Res<Node> {
             Node::Array(Rc::new(na))
         }
         Yaml::Hash(o) => {
-            let mut no = VecMap::new();
+            let mut no = IndexMap::new();
             for (yk, yv) in o {
                 let knode = node_from_yaml(yk)?;
                 if let Node::Scalar(Scalar::String(sk)) = knode {
                     let v = node_from_yaml(yv)?;
-                    no.put(sk, v);
+                    no.insert(sk, v);
                 } else {
                     return Err(HErr::Yaml(format!(
                         "bad yaml label (must be string): {:?}",

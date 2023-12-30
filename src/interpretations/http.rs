@@ -1,7 +1,7 @@
+use indexmap::IndexMap;
 use reqwest::{blocking::Client, Error as ReqwestError};
 
-use crate::utils::orc::{Orc, Urc};
-use crate::{base::*, utils::vecmap::VecMap};
+use crate::{base::*, utils::orc::*};
 
 // ^http .value -> bytes
 //       @status
@@ -16,7 +16,7 @@ pub struct Domain(Orc<Response>);
 pub struct Response {
     status: i16,
     reason: String,
-    headers: VecMap<String, Vec<String>>,
+    headers: IndexMap<String, Vec<String>>,
     body: Vec<u8>,
 }
 
@@ -58,13 +58,13 @@ pub fn from_string(url: &str) -> Res<Domain> {
         .get(url)
         .send()?;
 
-    let mut headers = VecMap::<String, Vec<String>>::new();
+    let mut headers = IndexMap::<String, Vec<String>>::new();
     for (k, v) in response.headers().iter() {
         let valueheader = v.to_str().map_or(String::from("<blob>"), |x| x.to_string());
         if let Some(header) = headers.get_mut(k.as_str()) {
             header.push(valueheader);
         } else {
-            headers.put(k.as_str().to_string(), vec![valueheader]);
+            headers.insert(k.as_str().to_string(), vec![valueheader]);
         }
     }
     let status = response.status().as_u16() as i16;
@@ -184,7 +184,7 @@ impl CellReaderTrait for CellReader {
             (GroupKind::Status, 0) => Ok(Value::Str("code")),
             (GroupKind::Status, 1) => Ok(Value::Str("reason")),
             (GroupKind::Headers, _) => {
-                if let Some((k, _)) = self.response.headers.at(self.pos) {
+                if let Some((k, _)) = self.response.headers.get_index(self.pos) {
                     return Ok(Value::Str(k));
                 }
                 fault(format!("bad pos in headers: {}", self.pos))
@@ -205,7 +205,7 @@ impl CellReaderTrait for CellReader {
                 Value::Str(&self.response.reason)
             }),
             (GroupKind::Headers, _) => {
-                let header_values = if let Some(hv) = self.response.headers.at(self.pos) {
+                let header_values = if let Some(hv) = self.response.headers.get_index(self.pos) {
                     hv.1
                 } else {
                     return Err(HErr::Http("logic error".to_string()));
@@ -277,7 +277,7 @@ impl GroupTrait for Group {
             (GroupKind::Headers, sel) => match sel {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
                 Selector::Str(k) => {
-                    if let Some((i, _, _)) = self.response.0.urc().headers.get(k) {
+                    if let Some((i, _, _)) = self.response.0.urc().headers.get_full(k) {
                         Ok(Cell {
                             group: self.clone(),
                             pos: i,

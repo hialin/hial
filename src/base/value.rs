@@ -151,7 +151,7 @@ impl Display for StrFloat {
 
 // Value is a simple value, either null or a primitive or a string or bytes
 // It implements most of the traits that are useful for a simple value
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum Value<'a> {
     #[default]
     None,
@@ -173,6 +173,28 @@ impl<'a> Display for Value<'a> {
             Value::Str(x) => write!(buf, "{}", x),
             // Value::OsStr(x) => write!(buf, "{}", x.to_string_lossy()),
             Value::Bytes(x) => write!(buf, "{}", String::from_utf8_lossy(x)),
+        }
+    }
+}
+
+impl<'a> fmt::Debug for Value<'a> {
+    fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Value::None => write!(buf, "Value::None"),
+            Value::Bool(x) => write!(buf, "Value::Bool({})", x),
+            Value::Int(x) => write!(buf, "Value::Int({})", x),
+            Value::Float(x) => write!(buf, "Value::Float({})", x),
+            Value::Str(x) => write!(buf, "Value::Str(\"{}\")", x),
+            // Value::OsStr(x) => write!(buf, "{}", x.to_string_lossy()),
+            Value::Bytes(x) => {
+                let sb = String::from_utf8_lossy(x);
+                let s = sb.as_ref();
+                if s.len() > 120 {
+                    write!(buf, "Value::Bytes(len {}, \"{}\"...)", s.len(), &s[..120])
+                } else {
+                    write!(buf, "Value::Bytes(len {}, \"{}\")", s.len(), s)
+                }
+            }
         }
     }
 }

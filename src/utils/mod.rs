@@ -3,4 +3,3 @@ pub mod guards;
 // pub mod mound;
 pub mod log;
 pub mod orc;
-pub mod vecmap;

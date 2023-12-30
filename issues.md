@@ -2,13 +2,11 @@
 
 ## TODOs
 
-- replace vecmap with indexmap
-- use anyhow for errors
 - writing options:
     1. write policy on domain (interpretation):
         - read only, write ignore, write back, write to new domain
     2. explicit write: to origin, to new domain
-- remove commented out code
+- use anyhow for errors
 - add filepath as attribute to fs interpretation?
 
 

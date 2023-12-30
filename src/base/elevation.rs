@@ -1,19 +1,17 @@
 use std::path::{Path, PathBuf};
 
+use indexmap::IndexMap;
 use lazy_static::lazy_static;
 
-use crate::{
-    base::*, debug, guard_ok, guard_some, interpretations::*, utils::log::verbose_error,
-    utils::vecmap::VecMap,
-};
+use crate::{base::*, debug, guard_ok, guard_some, interpretations::*, utils::log::verbose_error};
 
 type ElevateFn = fn(Cell) -> Res<Cell>;
-type VecMapOfElevateFn = VecMap<&'static str, ElevateFn>;
+type VecMapOfElevateFn = IndexMap<&'static str, ElevateFn>;
 
 fn get_elevation_map_for(interpretation: &str) -> Option<VecMapOfElevateFn> {
     use std::sync::RwLock;
     lazy_static! {
-        static ref ELEVATION_MAP: RwLock<Option<VecMap<&'static str, VecMapOfElevateFn>>> =
+        static ref ELEVATION_MAP: RwLock<Option<IndexMap<&'static str, VecMapOfElevateFn>>> =
             RwLock::new(None);
     }
 
@@ -24,11 +22,7 @@ fn get_elevation_map_for(interpretation: &str) -> Option<VecMapOfElevateFn> {
             return None;
         });
         if let Some(reader) = reader_opt.as_ref() {
-            return if let Some((_, _, e)) = reader.get(interpretation).as_ref() {
-                Some((**e).clone())
-            } else {
-                None
-            };
+            return reader.get(interpretation).as_ref().map(|e| (**e).clone());
         }
     }
 
@@ -38,36 +32,32 @@ fn get_elevation_map_for(interpretation: &str) -> Option<VecMapOfElevateFn> {
     });
     if writer.is_none() {
         // could have been initialized inbetween
-        let mut map = VecMap::new();
-        map.put("value", value_elevation_map());
-        map.put("file", file_elevation_map());
-        map.put("url", url_elevation_map());
-        map.put("path", path_elevation_map());
-        map.put("http", http_elevation_map());
-        map.put("rust", rust_elevation_map());
+        let mut map = IndexMap::new();
+        map.insert("value", value_elevation_map());
+        map.insert("file", file_elevation_map());
+        map.insert("url", url_elevation_map());
+        map.insert("path", path_elevation_map());
+        map.insert("http", http_elevation_map());
+        map.insert("rust", rust_elevation_map());
 
         *writer = Some(map);
     }
-    if let Some((_, _, e)) = writer.as_ref().unwrap().get(interpretation) {
-        Some((*e).clone())
-    } else {
-        None
-    }
+    writer
+        .as_ref()
+        .unwrap()
+        .get(interpretation)
+        .map(|e| (*e).clone())
 }
 
 macro_rules! add_elevation {
     ($ret:ident, $interp:literal, |$cellname:ident, $strname:ident| $body:block) => {
-        $ret.put($interp, |$cellname: Cell| -> Res<Cell> {
+        $ret.insert($interp, |$cellname: Cell| -> Res<Cell> {
             let reader = $cellname.read()?;
             println!("••• {:?}", reader.value());
             if let Value::Str($strname) = reader.value()? {
                 let domain = ($body)?;
                 let root = domain.root()?;
                 return Ok(Cell {
-                    // domain: Rc::new(Domain {
-                    //     this: DynDomain::from(domain),
-                    //     source: Some($cellname.clone()),
-                    // }),
                     this: DynCell::from(root),
                 });
             }
@@ -76,8 +66,8 @@ macro_rules! add_elevation {
     };
 }
 
-fn value_elevation_map() -> VecMap<&'static str, ElevateFn> {
-    let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
+fn value_elevation_map() -> IndexMap<&'static str, ElevateFn> {
+    let mut ret: IndexMap<&'static str, ElevateFn> = IndexMap::new();
     add_elevation!(ret, "url", |cell, s| { url::from_string(s) });
     add_elevation!(ret, "path", |cell, s| { path::from_string(s) });
     add_elevation!(ret, "json", |cell, s| { json::from_string(s) });
@@ -91,7 +81,7 @@ fn value_elevation_map() -> VecMap<&'static str, ElevateFn> {
     ret
 }
 
-fn file_elevation_map() -> VecMap<&'static str, ElevateFn> {
+fn file_elevation_map() -> IndexMap<&'static str, ElevateFn> {
     fn get_path(cell: &Cell) -> Res<&std::path::Path> {
         if let Cell {
             this: DynCell::File(ref file),
@@ -102,7 +92,7 @@ fn file_elevation_map() -> VecMap<&'static str, ElevateFn> {
         }
         fault("elevation: not a file")
     }
-    let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
+    let mut ret: IndexMap<&'static str, ElevateFn> = IndexMap::new();
     add_elevation!(ret, "json", |cell, s| { json::from_path(get_path(&cell)?) });
     add_elevation!(ret, "toml", |cell, s| { toml::from_path(get_path(&cell)?) });
     add_elevation!(ret, "yaml", |cell, s| { yaml::from_path(get_path(&cell)?) });
@@ -113,7 +103,7 @@ fn file_elevation_map() -> VecMap<&'static str, ElevateFn> {
     ret
 }
 
-fn url_elevation_map() -> VecMap<&'static str, ElevateFn> {
+fn url_elevation_map() -> IndexMap<&'static str, ElevateFn> {
     fn get_url_as_string(cell: &Cell) -> Res<&str> {
         if let Cell {
             this: DynCell::Url(ref url),
@@ -124,7 +114,7 @@ fn url_elevation_map() -> VecMap<&'static str, ElevateFn> {
         }
         fault("elevation: not a url")
     }
-    let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
+    let mut ret: IndexMap<&'static str, ElevateFn> = IndexMap::new();
     add_elevation!(ret, "file", |cell, s| {
         let path = PathBuf::from(get_url_as_string(&cell)?);
         file::from_path(&path)
@@ -132,7 +122,7 @@ fn url_elevation_map() -> VecMap<&'static str, ElevateFn> {
     ret
 }
 
-fn path_elevation_map() -> VecMap<&'static str, ElevateFn> {
+fn path_elevation_map() -> IndexMap<&'static str, ElevateFn> {
     fn get_path(cell: &Cell) -> Res<&Path> {
         if let Cell {
             this: DynCell::Path(ref path),
@@ -143,12 +133,12 @@ fn path_elevation_map() -> VecMap<&'static str, ElevateFn> {
         }
         fault("elevation: not a url")
     }
-    let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
+    let mut ret: IndexMap<&'static str, ElevateFn> = IndexMap::new();
     add_elevation!(ret, "file", |cell, s| { file::from_path(get_path(&cell)?) });
     ret
 }
 
-fn http_elevation_map() -> VecMap<&'static str, ElevateFn> {
+fn http_elevation_map() -> IndexMap<&'static str, ElevateFn> {
     fn http_as_string(cell: &Cell) -> Res<String> {
         if let Cell {
             this: DynCell::Http(ref h),
@@ -159,7 +149,7 @@ fn http_elevation_map() -> VecMap<&'static str, ElevateFn> {
         }
         fault("elevation: not a http cell")
     }
-    let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
+    let mut ret: IndexMap<&'static str, ElevateFn> = IndexMap::new();
     add_elevation!(ret, "json", |cell, s| {
         json::from_string(&http_as_string(&cell)?)
     });
@@ -169,8 +159,8 @@ fn http_elevation_map() -> VecMap<&'static str, ElevateFn> {
     ret
 }
 
-fn rust_elevation_map() -> VecMap<&'static str, ElevateFn> {
-    let mut ret: VecMap<&'static str, ElevateFn> = VecMap::new();
+fn rust_elevation_map() -> IndexMap<&'static str, ElevateFn> {
+    let mut ret: IndexMap<&'static str, ElevateFn> = IndexMap::new();
     fn ts_as_string(cell: &Cell) -> Res<String> {
         if let Cell {
             this: DynCell::TreeSitter(ref ts),
@@ -253,7 +243,7 @@ impl ElevationGroup {
     pub fn at(&self, index: usize) -> Res<Cell> {
         let interp = self.0.interpretation();
         if let Some(e) = get_elevation_map_for(interp) {
-            if let Some(func_tuple) = e.at(index) {
+            if let Some(func_tuple) = e.get_index(index) {
                 func_tuple.1(self.0.clone())
             } else {
                 nores()
@@ -278,9 +268,9 @@ impl ElevationGroup {
             return Ok(self.0.clone());
         }
         if let Some(e) = get_elevation_map_for(old_interp) {
-            if let Some(func_tuple) = e.get(interp) {
+            if let Some(func) = e.get(interp) {
                 debug!("elevate {} to {}", old_interp, key);
-                return func_tuple.2(self.0.clone());
+                return func(self.0.clone());
             }
         }
         debug!("no elevation from {} to {}", old_interp, interp);

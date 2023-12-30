@@ -73,14 +73,3 @@ impl<T> From<HErr> for Res<T> {
         Err(e)
     }
 }
-
-// impl HErr {
-//     pub fn internal<T: Into<String>>(msg: T) -> HErr {
-//         if cfg!(debug_assertions) {
-//             eprintln!("{}", msg.into());
-//             panic!("internal error");
-//         } else {
-//             HErr::Internal(msg.into())
-//         }
-//     }
-// }

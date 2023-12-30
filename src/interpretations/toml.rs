@@ -1,9 +1,9 @@
 use std::{path::Path, rc::Rc};
 
-use toml;
-use toml::Value as TomlValue;
+use indexmap::IndexMap;
+use {toml, toml::Value as TomlValue};
 
-use crate::{base::*, utils::vecmap::*};
+use crate::base::*;
 
 #[derive(Clone, Debug)]
 pub struct Domain {
@@ -53,7 +53,7 @@ pub struct Group {
 #[derive(Clone, Debug)]
 pub enum NodeGroup {
     Array(Rc<Vec<Node>>),
-    Table(Rc<VecMap<String, Node>>),
+    Table(Rc<IndexMap<String, Node>>),
 }
 #[derive(Clone, Debug)]
 pub enum Node {
@@ -63,7 +63,7 @@ pub enum Node {
     String(String),
     Datetime(String),
     Array(Rc<Vec<Node>>),
-    Table(Rc<VecMap<String, Node>>),
+    Table(Rc<IndexMap<String, Node>>),
 }
 
 impl From<toml::de::Error> for HErr {
@@ -94,7 +94,7 @@ impl CellReaderTrait for CellReader {
     fn label(&self) -> Res<Value> {
         match self.group.nodes {
             NodeGroup::Array(ref a) => nores(),
-            NodeGroup::Table(ref t) => match t.at(self.pos) {
+            NodeGroup::Table(ref t) => match t.get_index(self.pos) {
                 Some(x) => Ok(Value::Str(x.0)),
                 None => fault(""),
             },
@@ -107,7 +107,7 @@ impl CellReaderTrait for CellReader {
                 Some(x) => Ok(get_value(x)),
                 None => fault(""),
             },
-            NodeGroup::Table(ref t) => match t.at(self.pos) {
+            NodeGroup::Table(ref t) => match t.get_index(self.pos) {
                 Some(x) => Ok(get_value(x.1)),
                 None => fault(""),
             },
@@ -131,7 +131,7 @@ impl CellTrait for Cell {
                 Some(n) => Ok(get_typ(n)),
                 None => fault(""),
             },
-            NodeGroup::Table(ref t) => match t.at(self.pos) {
+            NodeGroup::Table(ref t) => match t.get_index(self.pos) {
                 Some(x) => Ok(get_typ(x.1)),
                 None => fault(""),
             },
@@ -162,7 +162,7 @@ impl CellTrait for Cell {
                 }),
                 _ => nores(),
             },
-            NodeGroup::Table(ref table) => match table.at(self.pos) {
+            NodeGroup::Table(ref table) => match table.get_index(self.pos) {
                 Some((_, Node::Array(a))) => Ok(Group {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Array(a.clone()),
@@ -220,8 +220,8 @@ impl GroupTrait for Group {
             NodeGroup::Array(a) => nores(),
             NodeGroup::Table(t) => match key.into() {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
-                Selector::Str(k) => match t.get(k) {
-                    Some((pos, _, _)) => Ok(Cell {
+                Selector::Str(k) => match t.get_index_of(k) {
+                    Some(pos) => Ok(Cell {
                         group: self.clone(),
                         pos,
                     }),
@@ -268,9 +268,9 @@ fn node_from_toml(tv: TomlValue) -> Node {
             Node::Array(Rc::new(na))
         }
         TomlValue::Table(t) => {
-            let mut nt = VecMap::new();
+            let mut nt = IndexMap::new();
             for (k, v) in t {
-                nt.put(k, node_from_toml(v));
+                nt.insert(k, node_from_toml(v));
             }
             Node::Table(Rc::new(nt))
         }
