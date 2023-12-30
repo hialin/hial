@@ -29,6 +29,7 @@ fn main() {
         let srcdir = format!("{}/src", package);
         let mut build = cc::Build::new();
         build.flag("-Wno-unused-parameter");
+        build.flag("-Wno-unused-but-set-variable");
         for file in *files {
             let srcfile = format!("{}/{}", srcdir, file);
             println!("cargo:rerun-if-changed={}", srcfile);

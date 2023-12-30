@@ -14,8 +14,8 @@ lazy_static = "1.4"
 nom = "7.1"
 paste = "1.0"
 rand = "0.8"
-reqwest = { version = "0.10", features = ["blocking", "json"] }
-tree-sitter = "0.19"
+reqwest = { version = "0.11", features = ["blocking", "json"] }
+tree-sitter = "0.20"
 url = "2.1"
 quick-xml = { version = "0.31", features = ["encoding"] }
 yaml-rust = "0.4"

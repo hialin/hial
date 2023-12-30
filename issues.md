@@ -2,14 +2,12 @@
 
 ## TODOs
 
-- update reqwest
 - replace vecmap with indexmap
+- update clap
 - writing options:
     1. write policy on domain (interpretation):
         - read only, write ignore, write back, write to new domain
     2. explicit write: to origin, to new domain
-- update tree-sitter
-- update clap
 - remove commented out code
 - add filepath as attribute to fs interpretation?
 
