@@ -9,7 +9,9 @@ publish = false
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-clap = "2.1"
+anyhow = { version = "1", features = ["backtrace"] }
+clap = { version = "4.4", features = ["suggestions", "derive"] }
+indexmap = "2.1"
 lazy_static = "1.4"
 nom = "7.1"
 paste = "1.0"

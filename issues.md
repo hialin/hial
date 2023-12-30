@@ -3,7 +3,7 @@
 ## TODOs
 
 - replace vecmap with indexmap
-- update clap
+- use anyhow for errors
 - writing options:
     1. write policy on domain (interpretation):
         - read only, write ignore, write back, write to new domain
