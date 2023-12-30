@@ -43,13 +43,6 @@ pub struct Cell {
 }
 
 #[derive(Debug)]
-pub struct ValueRef {
-    group: Group,
-    pos: usize,
-    pub is_label: bool,
-}
-
-#[derive(Debug)]
 pub struct CellReader {
     group: Group,
     pos: usize,
@@ -69,7 +62,7 @@ pub struct CNode {
 }
 
 pub fn from_path(path: &Path, language: &'static str) -> Res<Domain> {
-    let source = std::fs::read_to_string(&path)?;
+    let source = std::fs::read_to_string(path)?;
     sitter_from_source(source, language)
 }
 
@@ -113,7 +106,7 @@ fn sitter_from_source(source: String, language: &'static str) -> Res<Domain> {
     });
 
     let tree = guard_some!(parser.parse(&source, None), {
-        return Err(HErr::Sitter(format!("cannot get parse tree")));
+        return Err(HErr::Sitter("cannot get parse tree".to_string()));
     });
     Ok(Domain {
         language,
@@ -221,9 +214,14 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellTrait for Cell {
+    type Domain = Domain;
     type Group = Group;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
+
+    fn domain(&self) -> Res<Domain> {
+        Ok(self.group.domain.clone())
+    }
 
     fn typ(&self) -> Res<&str> {
         Ok(self.group.nodes[self.pos].typ)

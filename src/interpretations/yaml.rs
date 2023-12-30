@@ -43,13 +43,6 @@ pub struct CellReader {
 pub struct CellWriter {}
 impl CellWriterTrait for CellWriter {}
 
-#[derive(Debug)]
-pub struct ValueRef {
-    group: Group,
-    pos: usize,
-    pub is_label: bool,
-}
-
 #[derive(Clone, Debug)]
 pub struct Group {
     domain: Domain,
@@ -128,9 +121,14 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellTrait for Cell {
+    type Domain = Domain;
     type Group = Group;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
+
+    fn domain(&self) -> Res<Domain> {
+        Ok(self.group.domain.clone())
+    }
 
     fn typ(&self) -> Res<&str> {
         match self.group.nodes {
@@ -139,7 +137,7 @@ impl CellTrait for Cell {
                 None => fault(""),
             },
             NodeGroup::Object(ref o) => match o.at(self.pos) {
-                Some(x) => Ok(get_typ(&x.1)),
+                Some(x) => Ok(get_typ(x.1)),
                 None => fault(""),
             },
         }
@@ -253,11 +251,11 @@ impl GroupTrait for Group {
         match &self.nodes {
             NodeGroup::Array(array) if index < array.len() => Ok(Cell {
                 group: self.clone(),
-                pos: index as usize,
+                pos: index,
             }),
             NodeGroup::Object(o) if index < o.len() => Ok(Cell {
                 group: self.clone(),
-                pos: index as usize,
+                pos: index,
             }),
             _ => nores(),
         }

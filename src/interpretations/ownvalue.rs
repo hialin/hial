@@ -2,9 +2,9 @@ use crate::base::*;
 use crate::utils::orc::{Orc, Urc};
 
 #[derive(Clone, Debug)]
-pub struct Domain(Orc<OwnValue>);
+pub struct Cell(Orc<OwnValue>);
 
-impl DomainTrait for Domain {
+impl DomainTrait for Cell {
     type Cell = Cell;
 
     fn interpretation(&self) -> &str {
@@ -12,12 +12,9 @@ impl DomainTrait for Domain {
     }
 
     fn root(&self) -> Res<Self::Cell> {
-        Ok(Cell(self.clone()))
+        Ok(self.clone())
     }
 }
-
-#[derive(Clone, Debug)]
-pub struct Cell(Domain);
 
 #[derive(Debug)]
 pub struct CellReader(Urc<OwnValue>);
@@ -26,24 +23,21 @@ pub struct CellReader(Urc<OwnValue>);
 pub struct CellWriter(Urc<OwnValue>);
 impl CellWriterTrait for CellWriter {}
 
-#[derive(Debug)]
-pub struct ValueRef(Urc<OwnValue>, bool);
-
-impl From<OwnValue> for Domain {
+impl From<OwnValue> for Cell {
     fn from(ov: OwnValue) -> Self {
-        Domain(Orc::new(ov))
+        Cell(Orc::new(ov))
     }
 }
 
-impl From<Value<'_>> for Domain {
+impl From<Value<'_>> for Cell {
     fn from(v: Value) -> Self {
-        Domain(Orc::new(v.to_owned_value()))
+        Cell(Orc::new(v.to_owned_value()))
     }
 }
 
-impl From<String> for Domain {
+impl From<String> for Cell {
     fn from(s: String) -> Self {
-        Domain(Orc::new(OwnValue::String(s)))
+        Cell(Orc::new(OwnValue::String(s)))
     }
 }
 
@@ -54,19 +48,24 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellTrait for Cell {
+    type Domain = Cell;
     type Group = VoidGroup<Self>;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
+
+    fn domain(&self) -> Res<Cell> {
+        Ok(self.clone())
+    }
 
     fn typ(&self) -> Res<&str> {
         Ok("value")
     }
 
     fn read(&self) -> Res<Self::CellReader> {
-        Ok(CellReader(self.0 .0.urc()))
+        Ok(CellReader(self.0.urc()))
     }
 
     fn write(&self) -> Res<Self::CellWriter> {
-        Ok(CellWriter(self.0 .0.urc()))
+        Ok(CellWriter(self.0.urc()))
     }
 }

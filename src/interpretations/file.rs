@@ -128,9 +128,14 @@ impl CellReaderTrait for CellReader {
 impl CellWriterTrait for CellWriter {}
 
 impl CellTrait for Cell {
+    type Domain = Domain;
     type Group = Group;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
+
+    fn domain(&self) -> Res<Domain> {
+        Ok(self.group.domain.clone())
+    }
 
     fn typ(&self) -> Res<&str> {
         if self.group.attribute_group_file_pos == u32::MAX {
@@ -352,12 +357,12 @@ fn read_files(path: &Path, entries: &mut Vec<Res<FileEntry>>) -> Res<()> {
             (Ok(md1), Ok(md2)) => md1.name.cmp(&md2.name),
             (Ok(_), Err(_)) => Ordering::Less,
             (Err(_), Ok(_)) => Ordering::Greater,
-            (Err(HErr::IO(ek1, es1)), Err(HErr::IO(ek2, es2))) => ek1.cmp(&ek2),
+            (Err(HErr::IO(ek1, es1)), Err(HErr::IO(ek2, es2))) => ek1.cmp(ek2),
             (Err(e1), Err(e2)) => format!("{:?}", e1).cmp(&format!("{:?}", e2)),
         },
         (Ok(_), Err(_)) => Ordering::Less,
         (Err(_), Ok(_)) => Ordering::Greater,
-        (Err(HErr::IO(ek1, es1)), Err(HErr::IO(ek2, es2))) => ek1.cmp(&ek2),
+        (Err(HErr::IO(ek1, es1)), Err(HErr::IO(ek2, es2))) => ek1.cmp(ek2),
         (Err(e1), Err(e2)) => format!("{:?}", e1).cmp(&format!("{:?}", e2)),
     });
     Ok(())

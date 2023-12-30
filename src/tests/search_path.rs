@@ -155,9 +155,10 @@ fn path_double_kleene_simple() -> Res<()> {
     let root = Cell::from(TREE_SIMPLE.to_string()).be("yaml")?;
 
     crate::pprint::pprint(&root, 0, 0);
-    println!("\npath: {}\n", "/**/m");
 
-    let eval = str_eval(root.clone(), "/**/m")?;
+    let path = "/**/m";
+    println!("\npath: {}\n", path);
+    let eval = str_eval(root.clone(), path)?;
     assert_eq!(eval, ["m:mval"]);
 
     Ok(())

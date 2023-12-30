@@ -49,9 +49,14 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellTrait for Cell {
+    type Domain = Domain;
     type Group = VoidGroup<Self>;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
+
+    fn domain(&self) -> Res<Domain> {
+        Ok(self.0.clone())
+    }
 
     fn typ(&self) -> Res<&str> {
         Ok("url")

@@ -10,8 +10,6 @@ macro_rules! enumerated_dynamic_type {
         {
             $( $subtypename:ident ($subtypetype:path) ,)+
         }
-        $macroname:ident
-
     ) => {
 
         $(#[$attr])?
@@ -27,15 +25,16 @@ macro_rules! enumerated_dynamic_type {
         }
         )+
 
-        #[allow(unused_macros)]
-        #[macro_export]
-        macro_rules! $macroname {
-            ($on:expr, |$argname:ident| $body:block) => {
-                match $on {
-                    $($enumname::$subtypename($argname) => $body )*
+        paste::paste! {
+            #[allow(unused_macros)]
+            #[macro_export]
+            macro_rules! [<dispatch_ $enumname:snake>]  {
+                ($on:expr, |$argname:ident| $body:block) => {
+                    match $on {
+                        $($enumname::$subtypename($argname) => $body )*
+                    }
                 }
             }
         }
-
     };
 }

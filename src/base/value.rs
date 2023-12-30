@@ -32,7 +32,7 @@ impl Eq for Int {}
 
 impl PartialOrd for Int {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        embiggen(*self).partial_cmp(&embiggen(*other))
+        Some(embiggen(*self).cmp(&embiggen(*other)))
     }
 }
 

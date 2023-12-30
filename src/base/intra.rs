@@ -3,24 +3,29 @@ use std::marker::PhantomData;
 
 use crate::base::*;
 
-pub trait DomainTrait: Clone + Debug {
+pub trait DomainTrait: Debug {
     type Cell: CellTrait;
 
     fn interpretation(&self) -> &str;
 
     fn root(&self) -> Res<Self::Cell>;
 
-    // fn origin(&self) -> Res<Path>;
+    fn origin(&self) -> Res<Self::Cell> {
+        todo!();
+    }
     // fn save_to_origin(&self) -> Res<()>;
     // fn save_to(&self, target: &InDomain>) -> Res<()>;
 }
 
 pub trait CellTrait: Clone + Debug {
+    type Domain: DomainTrait;
     type Group: GroupTrait;
     type CellReader: CellReaderTrait;
     type CellWriter: CellWriterTrait;
 
+    fn domain(&self) -> Res<Self::Domain>;
     fn typ(&self) -> Res<&str>;
+
     fn read(&self) -> Res<Self::CellReader>;
     fn write(&self) -> Res<Self::CellWriter>;
 

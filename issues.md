@@ -2,8 +2,7 @@
 
 ## TODOs
 
-- use enum-dispatch for all types
-- remove domain? make cell return domain? how to save changes?
+- how to save changes? explicit or implicit, policies, subtree writes
 - replace linked-hash-map
 - update quick-xml
 - update tree-sitter

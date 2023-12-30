@@ -36,7 +36,7 @@ fn random_sizes(sizes: &mut [usize], max_size_in_words: usize) {
     }
 }
 
-fn make_allocations(sizes: &Vec<usize>, allocations: &mut [Vec<u8>]) {
+fn make_allocations(sizes: &[usize], allocations: &mut [Vec<u8>]) {
     for (i, size) in sizes.iter().enumerate() {
         // let x = vec![*size as u8; *size];
         let x = Vec::with_capacity(*size);
@@ -46,7 +46,7 @@ fn make_allocations(sizes: &Vec<usize>, allocations: &mut [Vec<u8>]) {
 
 fn use_allocations(allocations: &mut [Vec<u8>]) {
     for (i, a) in allocations.iter_mut().enumerate() {
-        a.push(1 as u8);
+        a.push(1_u8);
         // a[0] = i as u8;
     }
 
@@ -57,7 +57,7 @@ fn use_allocations(allocations: &mut [Vec<u8>]) {
     println!("---\nsum = {}", sum);
 }
 
-fn measure(alloc_count: usize, sizes: &Vec<usize>, allocations: &mut [Vec<u8>]) {
+fn measure(alloc_count: usize, sizes: &[usize], allocations: &mut [Vec<u8>]) {
     println!(
         "sizes: {:?}\ntotal allocated size: {}MB\nmaximum size: {}B",
         &sizes[0..100],

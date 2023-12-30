@@ -151,7 +151,7 @@ impl<'a> PathStart<'a> {
                 .get("file")
             }
             PathStart::String(str) => {
-                let root = ownvalue::Domain::from(str.to_string()).root()?;
+                let root = ownvalue::Cell::from(str.to_string());
                 Ok(Cell {
                     // domain: Rc::new(Domain {
                     //     this: DynDomain::from(domain),

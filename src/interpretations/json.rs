@@ -23,6 +23,7 @@ impl DomainTrait for Domain {
     fn root(&self) -> Res<Self::Cell> {
         Ok(Cell {
             group: Group {
+                domain: self.clone(),
                 nodes: NodeGroup::Array(self.preroot.clone()),
             },
             pos: 0,
@@ -54,15 +55,9 @@ pub struct CellReader {
     pos: usize,
 }
 
-#[derive(Debug)]
-pub struct ValueRef {
-    group: UrcNodeGroup,
-    pos: usize,
-    pub is_label: bool,
-}
-
 #[derive(Clone, Debug)]
 pub struct Group {
+    domain: Domain,
     nodes: NodeGroup,
 }
 
@@ -153,11 +148,11 @@ impl CellReaderTrait for CellReader {
 
         match self.group {
             UrcNodeGroup::Array(ref a) => match a.get(self.pos) {
-                Some(ref x) => Ok(get_value(x)),
+                Some(x) => Ok(get_value(x)),
                 None => fault(""),
             },
             UrcNodeGroup::Object(ref o) => match o.at(self.pos) {
-                Some(x) => Ok(get_value(&x.1)),
+                Some(x) => Ok(get_value(x.1)),
                 None => fault(""),
             },
         }
@@ -165,9 +160,14 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellTrait for Cell {
+    type Domain = Domain;
     type Group = Group;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
+
+    fn domain(&self) -> Res<Domain> {
+        Ok(self.group.domain.clone())
+    }
 
     fn typ(&self) -> Res<&str> {
         match self.group.nodes {
@@ -176,7 +176,7 @@ impl CellTrait for Cell {
                 None => fault(format!("bad index {}", self.pos)),
             },
             NodeGroup::Object(ref o) => match o.urc().at(self.pos) {
-                Some(x) => Ok(get_typ(&x.1)),
+                Some(x) => Ok(get_typ(x.1)),
                 None => fault(format!("bad index {}", self.pos)),
             },
         }
@@ -200,18 +200,22 @@ impl CellTrait for Cell {
         match self.group.nodes {
             NodeGroup::Array(ref array) => match &array.urc().get(self.pos) {
                 Some(Node::Array(a)) => Ok(Group {
+                    domain: self.group.domain.clone(),
                     nodes: NodeGroup::Array(a.clone()),
                 }),
                 Some(Node::Object(o)) => Ok(Group {
+                    domain: self.group.domain.clone(),
                     nodes: NodeGroup::Object(o.clone()),
                 }),
                 _ => nores(),
             },
             NodeGroup::Object(ref object) => match object.urc().at(self.pos) {
                 Some((_, Node::Array(a))) => Ok(Group {
+                    domain: self.group.domain.clone(),
                     nodes: NodeGroup::Array(a.clone()),
                 }),
                 Some((_, Node::Object(o))) => Ok(Group {
+                    domain: self.group.domain.clone(),
                     nodes: NodeGroup::Object(o.clone()),
                 }),
                 _ => nores(),
@@ -331,11 +335,11 @@ impl GroupTrait for Group {
         match &self.nodes {
             NodeGroup::Array(ref array) if index < array.urc().len() => Ok(Cell {
                 group: self.clone(),
-                pos: index as usize,
+                pos: index,
             }),
             NodeGroup::Object(ref o) if index < o.urc().len() => Ok(Cell {
                 group: self.clone(),
-                pos: index as usize,
+                pos: index,
             }),
             _ => nores(),
         }

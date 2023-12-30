@@ -51,7 +51,7 @@ impl<'s> EvalIter<'s> {
         eval_iter
     }
 
-    fn is_doublestar_match(cell: &Cell, path_index: usize, path: &Vec<PathItem<'s>>) -> bool {
+    fn is_doublestar_match(cell: &Cell, path_index: usize, path: &[PathItem<'s>]) -> bool {
         eval_debug!({
             // println!(
             //     "is_doublestar_match: {} index {}",
@@ -178,7 +178,7 @@ impl<'s> EvalIter<'s> {
     fn push_interpretations(
         group: &Group,
         path_indices: &HashSet<usize>,
-        path: &Vec<PathItem<'s>>,
+        path: &[PathItem<'s>],
         stack: &mut Vec<CellNode>,
     ) {
         for path_index in path_indices {
@@ -317,7 +317,7 @@ impl<'s> EvalIter<'s> {
     fn push_field(
         group: &Group,
         path_indices: &HashSet<usize>,
-        path: &Vec<PathItem<'s>>,
+        path: &[PathItem<'s>],
         stack: &mut Vec<CellNode>,
     ) {
         for path_index in path_indices {
@@ -358,7 +358,7 @@ impl<'s> EvalIter<'s> {
     fn has_stars(
         relation: Relation,
         path_indices: &HashSet<usize>,
-        path: &Vec<PathItem<'s>>,
+        path: &[PathItem<'s>],
     ) -> (bool, bool) {
         let (mut star, mut doublestar) = (false, false);
         for i in path_indices {

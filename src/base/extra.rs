@@ -7,7 +7,10 @@ use crate::{
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
     pub(crate) enum DynDomain {
-        OwnValue(ownvalue::Domain),
+        // field is only declared for type completeness, not actually used
+        Field(field::FieldGroup),
+        // own value cell is its own domain
+        OwnValue(ownvalue::Cell),
         File(file::Domain),
         Json(json::Domain),
         Toml(toml::Domain),
@@ -15,16 +18,16 @@ enumerated_dynamic_type! {
         Xml(xml::Domain),
         Url(url::Domain),
         Path(path::Domain),
-        Http (http::Domain),
-        TreeSitter (treesitter::Domain),
+        Http(http::Domain),
+        TreeSitter(treesitter::Domain),
     }
-    with_dyn_domain
 }
 
 #[derive(Clone, Debug)]
 pub struct Domain {
     pub(crate) this: DynDomain,
-    pub(crate) source: Option<Cell>,
+    // TODO: add domain source
+    // pub(crate) source: Option<Cell>,
 }
 
 enumerated_dynamic_type! {
@@ -42,7 +45,6 @@ enumerated_dynamic_type! {
         Http(http::Cell),
         TreeSitter(treesitter::Cell),
     }
-    with_dyn_cell
 }
 
 #[derive(Clone, Debug)]
@@ -66,7 +68,6 @@ enumerated_dynamic_type! {
         Http(http::CellReader),
         TreeSitter(treesitter::CellReader),
     }
-    with_cell_reader
 }
 
 #[derive(Debug)]
@@ -87,7 +88,6 @@ enumerated_dynamic_type! {
         Http(http::CellWriter),
         TreeSitter(treesitter::CellWriter),
     }
-    with_cell_writer
 }
 
 #[derive(Debug)]
@@ -108,7 +108,6 @@ enumerated_dynamic_type! {
         Http(http::Group),
         TreeSitter(treesitter::Group),
     }
-    with_dyn_group
 }
 
 #[derive(Clone, Debug)]
@@ -120,11 +119,11 @@ pub enum Group {
 
 impl Domain {
     pub fn interpretation(&self) -> &str {
-        with_dyn_domain!(&self.this, |x| { x.interpretation() })
+        dispatch_dyn_domain!(&self.this, |x| { x.interpretation() })
     }
 
     pub fn root(&self) -> Res<Cell> {
-        with_dyn_domain!(&self.this, |x| {
+        dispatch_dyn_domain!(&self.this, |x| {
             Ok(Cell {
                 // domain: Rc::new(self.clone()),
                 this: DynCell::from(x.root()?),
@@ -140,7 +139,7 @@ impl Domain {
 impl From<OwnValue> for Cell {
     fn from(ov: OwnValue) -> Self {
         Cell {
-            this: DynCell::from(ownvalue::Domain::from(ov).root().unwrap()),
+            this: DynCell::from(ownvalue::Cell::from(ov).root().unwrap()),
         }
     }
 }
@@ -165,23 +164,23 @@ impl From<String> for Cell {
 
 impl CellReaderTrait for CellReader {
     fn index(&self) -> Res<usize> {
-        with_cell_reader!(&self.0, |x| { Ok(x.index()?) })
+        dispatch_dyn_cell_reader!(&self.0, |x| { Ok(x.index()?) })
     }
     fn label(&self) -> Res<Value> {
-        with_cell_reader!(&self.0, |x| { Ok(x.label()?) })
+        dispatch_dyn_cell_reader!(&self.0, |x| { Ok(x.label()?) })
     }
     fn value(&self) -> Res<Value> {
-        with_cell_reader!(&self.0, |x| { Ok(x.value()?) })
+        dispatch_dyn_cell_reader!(&self.0, |x| { Ok(x.value()?) })
     }
 }
 
 impl CellWriterTrait for CellWriter {
     fn set_label(&mut self, value: OwnValue) -> Res<()> {
-        with_cell_writer!(&mut self.0, |x| { x.set_label(value) })
+        dispatch_dyn_cell_writer!(&mut self.0, |x| { x.set_label(value) })
     }
 
     fn set_value(&mut self, ov: OwnValue) -> Res<()> {
-        with_cell_writer!(&mut self.0, |x| { x.set_value(ov) })
+        dispatch_dyn_cell_writer!(&mut self.0, |x| { x.set_value(ov) })
     }
 }
 
@@ -189,7 +188,9 @@ impl Cell {
     pub fn interpretation(&self) -> &str {
         // TODO: this is not fully correct
         match &self.this {
-            DynCell::Field(_) => "value",
+            DynCell::Field(fieldcell) => "value",
+            // TODO: should a field view change the interpretation?
+            // DynCell::Field(fieldcell) => fieldcell.cell.interpretation(),
             DynCell::OwnValue(_) => "value",
             DynCell::File(_) => "file",
             DynCell::Json(_) => "json",
@@ -203,29 +204,37 @@ impl Cell {
         }
     }
 
+    pub fn domain(&self) -> Res<Domain> {
+        if let DynCell::Field(fieldcell) = &self.this {
+            return fieldcell.cell.domain();
+        }
+        let domain = dispatch_dyn_cell!(&self.this, |x| { DynDomain::from(x.domain()?) });
+        Ok(Domain { this: domain })
+    }
+
     pub fn typ(&self) -> Res<&str> {
-        with_dyn_cell!(&self.this, |x| { Ok(x.typ()?) })
+        dispatch_dyn_cell!(&self.this, |x| { x.typ() })
     }
 
     pub fn read(&self) -> Res<CellReader> {
         let reader: DynCellReader =
-            with_dyn_cell!(&self.this, |x| { DynCellReader::from(x.read()?) });
+            dispatch_dyn_cell!(&self.this, |x| { DynCellReader::from(x.read()?) });
         Ok(CellReader(reader))
     }
 
     pub fn write(&self) -> Res<CellWriter> {
         let writer: DynCellWriter =
-            with_dyn_cell!(&self.this, |x| { DynCellWriter::from(x.write()?) });
+            dispatch_dyn_cell!(&self.this, |x| { DynCellWriter::from(x.write()?) });
         Ok(CellWriter(writer))
     }
 
     pub fn sub(&self) -> Res<Group> {
-        let sub = with_dyn_cell!(&self.this, |x| { DynGroup::from(x.sub()?) });
+        let sub = dispatch_dyn_cell!(&self.this, |x| { DynGroup::from(x.sub()?) });
         Ok(Group::Dyn(sub))
     }
 
     pub fn attr(&self) -> Res<Group> {
-        let attr = with_dyn_cell!(&self.this, |x| { DynGroup::from(x.attr()?) });
+        let attr = dispatch_dyn_cell!(&self.this, |x| { DynGroup::from(x.attr()?) });
         Ok(Group::Dyn(attr))
     }
 
@@ -362,7 +371,7 @@ impl Group {
     pub fn label_type(&self) -> LabelType {
         match self {
             Group::Dyn(dyn_group) => {
-                with_dyn_group!(dyn_group, |x| { x.label_type() })
+                dispatch_dyn_group!(dyn_group, |x| { x.label_type() })
             }
             Group::Elevation(elevation_group) => elevation_group.label_type(),
         }
@@ -371,7 +380,7 @@ impl Group {
     pub fn len(&self) -> usize {
         match self {
             Group::Dyn(dyn_group) => {
-                with_dyn_group!(dyn_group, |x| { x.len() })
+                dispatch_dyn_group!(dyn_group, |x| { x.len() })
             }
             Group::Elevation(elevation_group) => elevation_group.len(),
         }
@@ -384,7 +393,7 @@ impl Group {
     pub fn at(&self, index: usize) -> Res<Cell> {
         match self {
             Group::Dyn(dyn_group) => {
-                with_dyn_group!(dyn_group, |x| {
+                dispatch_dyn_group!(dyn_group, |x| {
                     Ok(Cell {
                         // domain: self.domain.clone(),
                         this: DynCell::from(x.at(index)?),
@@ -399,7 +408,7 @@ impl Group {
         let key = key.into();
         match self {
             Group::Dyn(dyn_group) => {
-                with_dyn_group!(dyn_group, |x| {
+                dispatch_dyn_group!(dyn_group, |x| {
                     Ok(Cell {
                         // domain: self.domain.clone(),
                         this: DynCell::from(x.get(key)?),

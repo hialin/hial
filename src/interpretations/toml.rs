@@ -33,12 +33,6 @@ pub struct Cell {
     group: Group,
     pos: usize,
 }
-#[derive(Debug)]
-pub struct ValueRef {
-    group: Group,
-    pos: usize,
-    pub is_label: bool,
-}
 
 #[derive(Debug)]
 pub struct CellReader {
@@ -122,9 +116,14 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellTrait for Cell {
+    type Domain = Domain;
     type Group = Group;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
+
+    fn domain(&self) -> Res<Domain> {
+        Ok(self.group.domain.clone())
+    }
 
     fn typ(&self) -> Res<&str> {
         match self.group.nodes {

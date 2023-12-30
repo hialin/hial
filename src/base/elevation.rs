@@ -177,7 +177,7 @@ fn rust_elevation_map() -> VecMap<&'static str, ElevateFn> {
             ..
         } = cell
         {
-            let s = treesitter::get_underlying_string(&ts)?;
+            let s = treesitter::get_underlying_string(ts)?;
             Ok(s.to_string())
         } else {
             fault("rust to string elevation")
@@ -185,7 +185,7 @@ fn rust_elevation_map() -> VecMap<&'static str, ElevateFn> {
     }
     add_elevation!(ret, "string", |cell, s| {
         let s = ts_as_string(&cell)?;
-        let domain = ownvalue::Domain::from(s);
+        let domain = ownvalue::Cell::from(s);
         Res::Ok(domain)
     });
     ret
@@ -218,7 +218,7 @@ pub(crate) fn standard_interpretation(cell: &Cell) -> Option<&str> {
             if let Ok(Value::Str(s)) = reader.value() {
                 if s.starts_with("http://") || s.starts_with("https://") {
                     return Some("http");
-                } else if s.starts_with(".") || s.starts_with("/") {
+                } else if s.starts_with('.') || s.starts_with('/') {
                     return Some("file");
                 }
             }
@@ -246,6 +246,10 @@ impl ElevationGroup {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn at(&self, index: usize) -> Res<Cell> {
         let interp = self.0.interpretation();
         if let Some(e) = get_elevation_map_for(interp) {
@@ -265,9 +269,9 @@ impl ElevationGroup {
         let interp = match key {
             Selector::Str(k) => k,
             Selector::Top => guard_some!(standard_interpretation(&self.0), { return nores() }),
-            Selector::Star => return HErr::User(format!("no interpretation for '*'")).into(),
+            Selector::Star => return HErr::User("no interpretation for '*'".to_string()).into(),
             Selector::DoubleStar => {
-                return HErr::User(format!("no interpretation for '**'")).into()
+                return HErr::User("no interpretation for '**'".to_string()).into()
             }
         };
         if interp == old_interp {

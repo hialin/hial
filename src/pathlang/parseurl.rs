@@ -29,7 +29,7 @@ pub type Authority<'a> = (&'a str, Option<&'a str>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Host {
-    HOST(String),
+    Host(String),
     IP([u8; 4]),
 }
 
@@ -47,7 +47,7 @@ impl<'a> Display for Url<'a> {
             }
         }
         match &self.host {
-            Host::HOST(s) => f.write_str(&s)?,
+            Host::Host(s) => f.write_str(s)?,
             Host::IP(ip) => f.write_fmt(format_args!("{}.{}.{}.{}", ip[0], ip[1], ip[2], ip[3]))?,
         }
         if let Some(port) = self.port {
@@ -141,14 +141,14 @@ fn host(input: &str) -> NomRes<&str, Host> {
         "host",
         alt((
             tuple((many1(terminated(alphanumerichyphen1, tag("."))), alpha1)),
-            tuple((many_m_n(1, 1, alphanumerichyphen1), take(0 as usize))),
+            tuple((many_m_n(1, 1, alphanumerichyphen1), take(0_usize))),
         )),
     )(input)
     .map(|(next_input, mut res)| {
         if !res.1.is_empty() {
             res.0.push(res.1);
         }
-        (next_input, Host::HOST(res.0.join(".")))
+        (next_input, Host::Host(res.0.join(".")))
     })
 }
 
@@ -242,7 +242,7 @@ where
     i.split_at_position1_complete(
         |item| {
             let char_item = item.as_char();
-            !(char_item == '-') && !char_item.is_alphanum()
+            !(char_item == '-' || char_item.is_alphanum())
         },
         ErrorKind::AlphaNumeric,
     )
@@ -390,19 +390,19 @@ mod tests {
     fn test_host() {
         assert_eq!(
             host("localhost:8080"),
-            Ok((":8080", Host::HOST("localhost".to_string())))
+            Ok((":8080", Host::Host("localhost".to_string())))
         );
         assert_eq!(
             host("example.org:8080"),
-            Ok((":8080", Host::HOST("example.org".to_string())))
+            Ok((":8080", Host::Host("example.org".to_string())))
         );
         assert_eq!(
             host("some-subsite.example.org:8080"),
-            Ok((":8080", Host::HOST("some-subsite.example.org".to_string())))
+            Ok((":8080", Host::Host("some-subsite.example.org".to_string())))
         );
         assert_eq!(
             host("example.123"),
-            Ok((".123", Host::HOST("example".to_string())))
+            Ok((".123", Host::Host("example".to_string())))
         );
         assert_eq!(
             host("$$$.com"),
@@ -526,7 +526,7 @@ mod tests {
                 Url {
                     scheme: Scheme("https".into()),
                     authority: None,
-                    host: Host::HOST("www.zupzup.org".to_string()),
+                    host: Host::Host("www.zupzup.org".to_string()),
                     port: None,
                     path: Some(vec!["about"]),
                     query: None,
@@ -542,7 +542,7 @@ mod tests {
                 Url {
                     scheme: Scheme("http".into()),
                     authority: None,
-                    host: Host::HOST("localhost".to_string()),
+                    host: Host::Host("localhost".to_string()),
                     port: None,
                     path: None,
                     query: None,
@@ -558,7 +558,7 @@ mod tests {
                 Url {
                     scheme: Scheme("https".into()),
                     authority: None,
-                    host: Host::HOST("www.zupzup.org".to_string()),
+                    host: Host::Host("www.zupzup.org".to_string()),
                     port: Some(443),
                     path: Some(vec!["about"]),
                     query: Some(vec![("someVal", "5")]),

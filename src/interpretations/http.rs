@@ -33,14 +33,6 @@ pub struct CellReader {
     pos: usize,
 }
 
-#[derive(Debug)]
-pub struct ValueRef {
-    kind: GroupKind,
-    response: Urc<Response>,
-    pos: usize,
-    is_label: bool,
-}
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum GroupKind {
     Root,
@@ -121,9 +113,14 @@ impl DomainTrait for Domain {
 }
 
 impl CellTrait for Cell {
+    type Domain = Domain;
     type Group = Group;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
+
+    fn domain(&self) -> Res<Domain> {
+        Ok(self.group.response.clone())
+    }
 
     fn typ(&self) -> Res<&str> {
         match (&self.group.kind, self.pos) {
@@ -211,11 +208,11 @@ impl CellReaderTrait for CellReader {
                 let header_values = if let Some(hv) = self.response.headers.at(self.pos) {
                     hv.1
                 } else {
-                    return Err(HErr::Http(format!("logic error")));
+                    return Err(HErr::Http("logic error".to_string()));
                 };
                 Ok(Value::Str(header_values[0].as_str()))
             }
-            _ => Err(HErr::Http(format!("logic error"))),
+            _ => Err(HErr::Http("logic error".to_string())),
         }
     }
 }

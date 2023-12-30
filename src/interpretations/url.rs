@@ -30,9 +30,6 @@ pub struct CellReader(Domain);
 pub struct CellWriter {}
 impl CellWriterTrait for CellWriter {}
 
-#[derive(Debug)]
-pub struct ValueRef(Domain, bool);
-
 pub fn from_string(s: &str) -> Res<Domain> {
     Ok(Domain(Rc::new(Url::parse(s)?)))
 }
@@ -50,9 +47,14 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellTrait for Cell {
+    type Domain = Domain;
     type Group = VoidGroup<Self>;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
+
+    fn domain(&self) -> Res<Domain> {
+        Ok(self.0.clone())
+    }
 
     fn typ(&self) -> Res<&str> {
         Ok("url")

@@ -20,7 +20,7 @@ fn _pprint(
     if depth > 0 && indent > depth {
         return Ok(());
     }
-    print_cell(&cell, prefix, indent, buffer)?;
+    print_cell(cell, prefix, indent, buffer)?;
     if let Ok(attr) = cell.attr() {
         pprint_group("@", attr, depth, breadth, indent, buffer)?;
     }
@@ -66,11 +66,11 @@ fn pprint_group(
 
 fn make_indent(indent: usize, buffer: &mut String) -> Result<(), Error> {
     const SPACE_TO_SEPARATOR: usize = 32;
-    const SEPARATORS: &'static [&'static str] = &["│ ", "╞ ", "┝ ", "├ "];
+    const SEPARATORS: &[&str] = &["│ ", "╞ ", "┝ ", "├ "];
     const INDENT: usize = 4;
 
     while buffer.len() < SPACE_TO_SEPARATOR {
-        buffer.push_str(" ");
+        buffer.push(' ');
     }
 
     let mut visual_correction = 0;
@@ -82,7 +82,7 @@ fn make_indent(indent: usize, buffer: &mut String) -> Result<(), Error> {
 
     let width = buffer.len() - visual_correction + INDENT * indent;
     while buffer.len() < width {
-        buffer.push_str(" ");
+        buffer.push(' ');
     }
 
     Ok(())

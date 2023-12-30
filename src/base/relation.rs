@@ -3,6 +3,7 @@ use std::fmt::Formatter;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 #[repr(u8)]
+#[allow(clippy::char_lit_as_u8)]
 pub enum Relation {
     Attr = '@' as u8,
     Sub = '/' as u8,

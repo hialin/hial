@@ -16,6 +16,18 @@ pub struct FieldGroup {
     pub(crate) cell: Rc<Cell>,
 }
 
+impl DomainTrait for FieldGroup {
+    type Cell = FieldCell;
+
+    fn interpretation(&self) -> &str {
+        self.cell.interpretation()
+    }
+
+    fn root(&self) -> Res<FieldCell> {
+        nores()
+    }
+}
+
 impl GroupTrait for FieldGroup {
     type Cell = FieldCell;
 
@@ -79,9 +91,14 @@ pub struct FieldWriter {
 }
 
 impl CellTrait for FieldCell {
+    type Domain = FieldGroup;
     type Group = FieldGroup;
     type CellReader = FieldReader;
     type CellWriter = FieldWriter;
+
+    fn domain(&self) -> Res<FieldGroup> {
+        nores()
+    }
 
     fn typ(&self) -> Res<&str> {
         Ok("field")

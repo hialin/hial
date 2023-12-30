@@ -37,13 +37,6 @@ pub struct Cell {
 }
 
 #[derive(Debug)]
-pub struct ValueRef {
-    group: Group,
-    pos: usize,
-    pub is_label: bool,
-}
-
-#[derive(Debug)]
 pub struct CellReader {
     group: Group,
     pos: usize,
@@ -148,7 +141,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                     attrs.push(Attribute::Attribute("standalone".into(), standalone.into()));
                 }
                 let v = guard_some!(stack.last_mut(), {
-                    return Err(HErr::Xml(format!("no element in stack")));
+                    return Err(HErr::Xml("no element in stack".to_string()));
                 });
                 v.push(Node::Decl(Rc::new(attrs)));
             }
@@ -157,7 +150,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 let rawdoctype = e.unescaped()?;
                 let doctype = reader.decode(rawdoctype.as_ref())?;
                 let v = guard_some!(stack.last_mut(), {
-                    return Err(HErr::Xml(format!("no element in stack")));
+                    return Err(HErr::Xml("no element in stack".to_string()));
                 });
                 v.push(Node::DocType(doctype.into()));
             }
@@ -165,7 +158,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 counts.count_pi += 1;
                 let text = reader.decode(e.as_ref())?;
                 let v = guard_some!(stack.last_mut(), {
-                    return Err(HErr::Xml(format!("no element in stack")));
+                    return Err(HErr::Xml("no element in stack".to_string()));
                 });
                 v.push(Node::PI(text.into()));
             }
@@ -191,7 +184,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 // let text = e.unescape_and_decode(&reader).map_err(generr)?;
                 let v = &mut stack
                     .last_mut()
-                    .ok_or(HErr::Xml(format!("no element in stack")))?;
+                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
                 v.push(Node::Text(text.into()));
             }
             Ok(Event::Comment(e)) => {
@@ -200,14 +193,14 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 let text = reader.decode(e.as_ref())?;
                 let v = &mut stack
                     .last_mut()
-                    .ok_or(HErr::Xml(format!("no element in stack")))?;
+                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
                 v.push(Node::Comment(text.into()));
             }
             Ok(Event::CData(e)) => {
                 counts.count_cdata += 1;
                 let v = &mut stack
                     .last_mut()
-                    .ok_or(HErr::Xml(format!("no element in stack")))?;
+                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
                 let mut u = e.to_vec();
                 u.shrink_to_fit();
                 v.push(Node::CData(u));
@@ -216,18 +209,18 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 counts.count_element += 1;
                 let mut v = stack
                     .pop()
-                    .ok_or(HErr::Xml(format!("no element in stack")))?;
+                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
                 v.shrink_to_fit();
                 let mut a = attribute_stack
                     .pop()
-                    .ok_or(HErr::Xml(format!("no element in stack")))?;
+                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
                 a.shrink_to_fit();
                 counts.count_attributes += a.len();
                 let name = reader.decode(e.name())?;
                 let x = Node::Element((name.into(), Rc::new(a), Rc::new(v)));
                 let v = &mut stack
                     .last_mut()
-                    .ok_or(HErr::Xml(format!("no element in stack")))?;
+                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
                 v.push(x);
             }
             Ok(Event::Empty(ref _e)) => {
@@ -237,7 +230,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 let text = format!("{}", err);
                 let v = &mut stack
                     .last_mut()
-                    .ok_or(HErr::Xml(format!("no element in stack")))?;
+                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
                 v.push(Node::Error(text));
             }
 
@@ -250,7 +243,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
     }
     let v = stack
         .pop()
-        .ok_or(HErr::Xml(format!("no element in stack")))?;
+        .ok_or(HErr::Xml("no element in stack".to_string()))?;
     let document = Node::Document(Rc::new(v));
 
     debug!("xml stats: {:?}", counts);
@@ -299,9 +292,14 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellTrait for Cell {
+    type Domain = Domain;
     type Group = Group;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
+
+    fn domain(&self) -> Res<Domain> {
+        Ok(self.group.domain.clone())
+    }
 
     fn typ(&self) -> Res<&str> {
         match &self.group.nodes {
