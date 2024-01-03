@@ -10,11 +10,36 @@ pub trait DomainTrait: Debug {
 
     fn root(&self) -> Res<Self::Cell>;
 
-    fn origin(&self) -> Res<Self::Cell> {
+    fn write_policy(&self) -> WritePolicy {
         todo!();
     }
-    // fn save_to_origin(&self) -> Res<()>;
-    // fn save_to(&self, target: &InDomain>) -> Res<()>;
+    fn set_write_policy(&mut self, policy: WritePolicy) -> Res<()> {
+        todo!();
+    }
+
+    fn save(&self, target: SaveTarget) -> Res<()> {
+        todo!();
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum WritePolicy {
+    // no write access
+    ReadOnly,
+    // write access, but no automatic save
+    ExplicitWrite,
+    // write access, automatic save on every change
+    WriteThrough,
+    // write access, automatic save when all references are dropped
+    WriteBackOnDrop,
+}
+
+#[derive(Clone, Debug)]
+pub enum SaveTarget {
+    // save to the domain origin or source
+    Origin,
+    // save to a new target cell
+    Target(Cell),
 }
 
 pub trait CellTrait: Clone + Debug {
@@ -72,9 +97,9 @@ pub trait GroupTrait: Clone + Debug {
     // type SelectIterator: Iterator<Item = Res<Self::Cell>>;
 
     fn label_type(&self) -> LabelType;
-    fn len(&self) -> usize;
+    fn len(&self) -> Res<usize>;
     fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.len() == Ok(0)
     }
     fn at(&self, index: usize) -> Res<Self::Cell>;
     fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::Cell>;
@@ -99,8 +124,8 @@ impl<C: CellTrait> GroupTrait for VoidGroup<C> {
         LabelType::default()
     }
 
-    fn len(&self) -> usize {
-        0
+    fn len(&self) -> Res<usize> {
+        Ok(0)
     }
 
     fn at(&self, index: usize) -> Res<C> {

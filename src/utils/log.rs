@@ -1,6 +1,9 @@
-use std::borrow::Borrow;
-
 pub static mut VERBOSE: bool = false;
+
+#[macro_export]
+macro_rules! warning {
+    ( $($arg:tt)* ) => ( eprintln!("‣ {}", format!($($arg)*)) );
+}
 
 #[macro_export]
 macro_rules! debug {
@@ -13,13 +16,19 @@ macro_rules! debug {
     );
 }
 
-pub fn set_verbose(flag: bool) {
-    unsafe { VERBOSE = flag }
+#[macro_export]
+macro_rules! debug_err {
+    (
+        $arg:expr
+    ) => {
+        if unsafe { $crate::utils::log::VERBOSE } {
+            if !matches!($arg, HErr::None) {
+                println!("‣Error: {:?}", $arg)
+            }
+        }
+    };
 }
 
-pub fn verbose_error(e: impl Borrow<crate::base::HErr>) {
-    let e = e.borrow();
-    if !matches!(e, crate::base::HErr::None) {
-        debug!("Error: {:?}", e)
-    }
+pub fn set_verbose(flag: bool) {
+    unsafe { VERBOSE = flag }
 }

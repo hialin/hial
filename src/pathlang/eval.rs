@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 
-use crate::pathlang::path::PathItem;
 use crate::{
     base::*,
-    debug, guard_ok, guard_some,
-    pathlang::{path::Expression, Path},
-    utils::log::verbose_error,
+    debug, debug_err, guard_ok, guard_some,
+    pathlang::{
+        path::{Expression, PathItem},
+        Path,
+    },
 };
 
 macro_rules! eval_debug {
@@ -44,11 +45,10 @@ impl<'s> EvalIter<'s> {
             path_indices,
         };
         let stack = vec![start_node];
-        let eval_iter = EvalIter {
+        EvalIter {
             path: path.0,
             stack,
-        };
-        eval_iter
+        }
     }
 
     fn is_doublestar_match(cell: &Cell, path_index: usize, path: &[PathItem<'s>]) -> bool {
@@ -99,7 +99,7 @@ impl<'s> EvalIter<'s> {
             return None;
         });
         let cell = guard_ok!(cell, err => {
-            verbose_error(err);
+            debug_err!(err);
             return None;
         });
 
@@ -128,7 +128,7 @@ impl<'s> EvalIter<'s> {
 
         if has_relation(Relation::Interpretation, &self.path) {
             match Self::subgroup(Relation::Interpretation, &cell) {
-                Err(err) => verbose_error(err),
+                Err(err) => debug_err!(err),
                 Ok(group) => {
                     Self::push_interpretations(&group, &path_indices, &self.path, &mut self.stack)
                 }
@@ -140,7 +140,7 @@ impl<'s> EvalIter<'s> {
             if has_relation(relation, &self.path) {
                 let (star, doublestar) = Self::has_stars(relation, &path_indices, &self.path);
                 match Self::subgroup(relation, &cell) {
-                    Err(err) => verbose_error(err),
+                    Err(err) => debug_err!(err),
                     Ok(group) => {
                         if star || doublestar {
                             Self::push_by_relation_with_stars(
@@ -167,7 +167,7 @@ impl<'s> EvalIter<'s> {
 
         if has_relation(Relation::Field, &self.path) {
             match Self::subgroup(Relation::Field, &cell) {
-                Err(err) => verbose_error(err),
+                Err(err) => debug_err!(err),
                 Ok(group) => Self::push_field(&group, &path_indices, &self.path, &mut self.stack),
             }
         }
@@ -188,7 +188,7 @@ impl<'s> EvalIter<'s> {
             }
             if let Some(interpretation) = path_item.selector {
                 let subcell = guard_ok!(group.get(interpretation), err => {
-                    verbose_error(err);
+                    debug_err!(err);
                     continue;
                 });
 
@@ -215,14 +215,15 @@ impl<'s> EvalIter<'s> {
         relation: Relation,
         group: &Group,
         path_indices: &HashSet<usize>,
-        path: &Vec<PathItem<'s>>,
+        path: &[PathItem<'s>],
         stack: &mut Vec<CellNode>,
         double_stars: bool,
     ) {
-        for i in (0..group.len()).rev() {
+        let len = group.len().unwrap_or(0);
+        for i in (0..len).rev() {
             let mut accepted_path_indices = HashSet::new();
             let subcell = guard_ok!(group.at(i), err => {
-                verbose_error(err);
+                debug_err!(err);
                 continue;
             });
             for path_index in path_indices {
@@ -268,7 +269,7 @@ impl<'s> EvalIter<'s> {
         relation: Relation,
         group: &Group,
         path_indices: &HashSet<usize>,
-        path: &Vec<PathItem<'s>>,
+        path: &[PathItem<'s>],
         stack: &mut Vec<CellNode>,
     ) {
         for path_index in path_indices {
@@ -289,7 +290,7 @@ impl<'s> EvalIter<'s> {
                 continue;
             };
             let subcell = guard_ok!(subcell_res, err => {
-                verbose_error(err);
+                debug_err!(err);
                 continue;
             });
             if Self::accept_subcell(subcell.clone(), path_item) {
@@ -327,7 +328,7 @@ impl<'s> EvalIter<'s> {
             }
             if let Some(field) = path_item.selector {
                 let subcell = guard_ok!(group.get(field), err => {
-                    verbose_error(err);
+                    debug_err!(err);
                     continue;
                 });
 
@@ -388,19 +389,18 @@ impl<'s> EvalIter<'s> {
                         }
                     }
                     Err(e) => {
-                        verbose_error(e);
+                        debug_err!(e);
                         return false;
                     }
                 },
                 Err(e) => {
-                    verbose_error(e);
+                    debug_err!(e);
                     return false;
                 }
             }
         }
 
-        let res = EvalIter::eval_filters_match(&subcell, path_item);
-        res
+        EvalIter::eval_filters_match(&subcell, path_item)
     }
 
     fn eval_filters_match(subcell: &Cell, path_item: &PathItem) -> bool {
@@ -410,7 +410,7 @@ impl<'s> EvalIter<'s> {
                     eval_debug!({
                         // println!("verbose eval filter match ERROR");
                     });
-                    verbose_error(e);
+                    debug_err!(e);
                     return false;
                 }
                 Ok(false) => {
@@ -442,9 +442,9 @@ impl<'s> EvalIter<'s> {
                             return true;
                         }
                     }
-                    Err(e) => verbose_error(e),
+                    Err(e) => debug_err!(e),
                 },
-                Err(e) => verbose_error(e),
+                Err(e) => debug_err!(e),
             }
         }
         false
@@ -454,18 +454,18 @@ impl<'s> EvalIter<'s> {
         let eval_iter_left = Self::new(cell, expr.left.clone());
         for cell in eval_iter_left {
             let cell = guard_ok!(cell, err => {
-                verbose_error(err);
+                debug_err!(err);
                 continue;
             });
             if let Some(op) = expr.op {
                 if let Some(right) = expr.right {
                     let reader = guard_ok!(cell.read(), err => {
-                        verbose_error(err);
+                        debug_err!(err);
                         continue;
                     });
 
                     let lvalue = guard_ok!(reader.value(), err => {
-                        verbose_error(err);
+                        debug_err!(err);
                         continue;
                     });
                     if Self::eval_expr(op, lvalue, right)? {

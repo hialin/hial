@@ -1,4 +1,4 @@
-use crate::base::*;
+use crate::base::{Cell as XCell, *};
 use crate::utils::orc::{Orc, Urc};
 
 #[derive(Clone, Debug)]
@@ -23,21 +23,20 @@ pub struct CellReader(Urc<OwnValue>);
 pub struct CellWriter(Urc<OwnValue>);
 impl CellWriterTrait for CellWriter {}
 
-impl From<OwnValue> for Cell {
-    fn from(ov: OwnValue) -> Self {
-        Cell(Orc::new(ov))
+impl Cell {
+    pub fn from_str(s: &str) -> Res<XCell> {
+        Cell::from_string(s.to_string())
     }
-}
 
-impl From<Value<'_>> for Cell {
-    fn from(v: Value) -> Self {
-        Cell(Orc::new(v.to_owned_value()))
+    pub fn from_string(s: String) -> Res<XCell> {
+        Cell::from_value(OwnValue::String(s))
     }
-}
 
-impl From<String> for Cell {
-    fn from(s: String) -> Self {
-        Cell(Orc::new(OwnValue::String(s)))
+    pub fn from_value(ov: OwnValue) -> Res<XCell> {
+        let cell = Cell(Orc::new(ov));
+        Ok(XCell {
+            dyn_cell: DynCell::from(cell),
+        })
     }
 }
 

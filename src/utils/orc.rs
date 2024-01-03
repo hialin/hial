@@ -1,4 +1,9 @@
-use std::{cell::Cell, fmt, ops::Deref, ptr::NonNull};
+use std::{
+    cell::Cell,
+    fmt,
+    ops::{Deref, DerefMut},
+    ptr::NonNull,
+};
 
 // owned rc
 pub struct Orc<T>(NonNull<RcBox<T>>);
@@ -86,6 +91,12 @@ impl<T> Deref for Urc<T> {
 
     fn deref(&self) -> &Self::Target {
         unsafe { &self.0.as_ref().value }
+    }
+}
+
+impl<T> DerefMut for Urc<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut self.0.as_mut().value }
     }
 }
 

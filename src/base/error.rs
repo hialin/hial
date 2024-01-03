@@ -2,7 +2,7 @@ use std::io;
 
 pub type Res<T> = Result<T, HErr>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub enum HErr {
     None,
@@ -10,7 +10,7 @@ pub enum HErr {
     Internal(String),
 
     IO(std::io::ErrorKind, String),
-    IncompatibleSource(String),
+    ReadOnly(String),
 
     // cannot change data because there are other readers
     ExclusivityRequired { path: String, op: &'static str },
@@ -25,8 +25,24 @@ pub enum HErr {
     Other(String),
 }
 
+fn print_stack_trace() {
+    let s = format!("{}", std::backtrace::Backtrace::capture())
+        .split('\n')
+        .filter(|s| s.contains("hiallib::") || s.contains("./src"))
+        .fold(String::new(), |mut acc, s| {
+            acc.push_str(s);
+            acc.push('\n');
+            acc
+        });
+    println!("{}", s);
+}
+
 pub fn nores<T>() -> Res<T> {
     Err(HErr::None)
+}
+
+pub fn userr<T>(reason: impl Into<String>) -> Res<T> {
+    Err(HErr::User(reason.into()))
 }
 
 pub fn fault<T>(reason: impl Into<String>) -> Res<T> {
@@ -46,7 +62,7 @@ impl std::fmt::Display for HErr {
             HErr::User(msg) => write!(f, "user error: {}", msg),
             HErr::Internal(msg) => write!(f, "internal error: {}", msg),
             HErr::IO(kind, msg) => write!(f, "io error: {:?}: {}", kind, msg),
-            HErr::IncompatibleSource(msg) => write!(f, "incompatible source: {}", msg),
+            HErr::ReadOnly(msg) => write!(f, "read only: {}", msg),
             HErr::ExclusivityRequired { path, op } => {
                 write!(f, "exclusivity required for {}: {}", path, op)
             }

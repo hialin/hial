@@ -3,7 +3,23 @@ use std::{
     rc::Rc,
 };
 
-use crate::base::*;
+use linkme::distributed_slice;
+
+use crate::base::{Cell as XCell, *};
+
+#[distributed_slice(ELEVATION_CONSTRUCTORS)]
+static VALUE_TO_PATH: ElevationConstructor = ElevationConstructor {
+    source_interpretation: "value",
+    target_interpretation: "path",
+    constructor: Cell::from_value_cell,
+};
+
+#[distributed_slice(ELEVATION_CONSTRUCTORS)]
+static FILE_TO_PATH: ElevationConstructor = ElevationConstructor {
+    source_interpretation: "file",
+    target_interpretation: "path",
+    constructor: Cell::from_file_cell,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Domain(Rc<(PathBuf, String)>);
@@ -30,22 +46,45 @@ pub struct CellReader(Domain);
 pub struct CellWriter {}
 impl CellWriterTrait for CellWriter {}
 
-pub fn from_string(s: impl Into<String>) -> Res<Domain> {
+impl Cell {
+    pub fn from_value_cell(cell: XCell) -> Res<XCell> {
+        let s = cell.read()?.value()?.to_string();
+        Cell::from_string(s)
+    }
+
+    pub fn from_file_cell(cell: XCell) -> Res<XCell> {
+        Cell::from_path(cell.as_path()?)
+    }
+
+    pub fn from_string(url: impl Into<String>) -> Res<XCell> {
+        let path_cell = from_string(url.into())?.root()?;
+        Ok(XCell {
+            dyn_cell: DynCell::from(path_cell),
+        })
+    }
+
+    pub fn from_path(path: impl Into<PathBuf>) -> Res<XCell> {
+        let path_cell = from_path(path.into())?.root()?;
+        Ok(XCell {
+            dyn_cell: DynCell::from(path_cell),
+        })
+    }
+
+    pub fn as_path(&self) -> Res<&Path> {
+        Ok(self.0 .0 .0.as_path())
+    }
+}
+
+fn from_string(s: impl Into<String>) -> Res<Domain> {
     let s = s.into();
     let data = (PathBuf::from(&s), s);
     Ok(Domain(Rc::new(data)))
 }
 
-pub fn from_path(s: impl Into<PathBuf>) -> Res<Domain> {
+fn from_path(s: impl Into<PathBuf>) -> Res<Domain> {
     let path = s.into();
     let s = path.to_string_lossy().to_string();
     Ok(Domain(Rc::new((path, s))))
-}
-
-impl Cell {
-    pub fn as_path(&self) -> Res<&Path> {
-        Ok(self.0 .0 .0.as_path())
-    }
 }
 
 impl CellReaderTrait for CellReader {

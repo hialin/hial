@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::{
     cmp::Ordering,
@@ -7,7 +8,20 @@ use std::{
     rc::Rc,
 };
 
-use crate::{base::*, guard_ok, guard_some};
+use linkme::distributed_slice;
+
+use crate::debug;
+use crate::{
+    base::{Cell as XCell, *},
+    guard_ok, guard_some,
+};
+
+#[distributed_slice(ELEVATION_CONSTRUCTORS)]
+static PATH_TO_FILE: ElevationConstructor = ElevationConstructor {
+    source_interpretation: "path",
+    target_interpretation: "file",
+    constructor: Cell::from_path_cell,
+};
 
 #[derive(Clone, Debug)]
 pub struct Domain(Rc<DomainData>);
@@ -30,13 +44,6 @@ pub struct Group {
     domain: Domain,
     files: Rc<Vec<Res<FileEntry>>>,
     attribute_group_file_pos: u32,
-}
-
-#[derive(Debug)]
-pub struct ValueRef {
-    group: Group,
-    pos: u32,
-    is_label: bool,
 }
 
 #[derive(Debug)]
@@ -127,6 +134,30 @@ impl CellReaderTrait for CellReader {
 
 impl CellWriterTrait for CellWriter {}
 
+impl Cell {
+    pub fn from_path_cell(cell: XCell) -> Res<XCell> {
+        Cell::from_path(cell.as_path()?)
+    }
+
+    pub fn from_path(path: impl Borrow<Path>) -> Res<XCell> {
+        let file_cell = from_path(path.borrow())?.root()?;
+        Ok(XCell {
+            dyn_cell: DynCell::from(file_cell),
+        })
+    }
+
+    pub fn from_str_path(path: impl Borrow<str>) -> Res<XCell> {
+        let file_cell = from_path(Path::new(path.borrow()))?.root()?;
+        Ok(XCell {
+            dyn_cell: DynCell::from(file_cell),
+        })
+    }
+
+    pub fn as_path(&self) -> Res<&Path> {
+        get_path(self)
+    }
+}
+
 impl CellTrait for Cell {
     type Domain = Domain;
     type Group = Group;
@@ -211,11 +242,11 @@ impl GroupTrait for Group {
         }
     }
 
-    fn len(&self) -> usize {
+    fn len(&self) -> Res<usize> {
         if self.attribute_group_file_pos == u32::MAX {
-            self.files.len()
+            Ok(self.files.len())
         } else {
-            1
+            Ok(1)
         }
     }
 
@@ -265,9 +296,10 @@ impl GroupTrait for Group {
     }
 }
 
-pub fn from_path(path: &Path) -> Res<Domain> {
+fn from_path(path: &Path) -> Res<Domain> {
     let path = path.canonicalize()?;
     if !path.exists() {
+        debug!("file: path {:?} does not exist", path);
         return nores();
     }
 
@@ -309,7 +341,7 @@ pub fn from_path(path: &Path) -> Res<Domain> {
     })))
 }
 
-pub fn get_path(file: &Cell) -> Res<&Path> {
+fn get_path(file: &Cell) -> Res<&Path> {
     let fileentry =
         guard_ok!(&file.group.files[file.pos as usize], err => {return Err(err.clone())});
     Ok(fileentry.path.as_path())

@@ -1,9 +1,17 @@
 use std::rc::Rc;
 
+use linkme::distributed_slice;
 use reqwest::Url;
 use url::ParseError;
 
-use crate::base::*;
+use crate::base::{Cell as XCell, *};
+
+#[distributed_slice(ELEVATION_CONSTRUCTORS)]
+static VALUE_TO_URL: ElevationConstructor = ElevationConstructor {
+    source_interpretation: "value",
+    target_interpretation: "url",
+    constructor: Cell::from_value_cell,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Domain(Rc<Url>);
@@ -30,12 +38,22 @@ pub struct CellReader(Domain);
 pub struct CellWriter {}
 impl CellWriterTrait for CellWriter {}
 
-pub fn from_string(s: &str) -> Res<Domain> {
-    Ok(Domain(Rc::new(Url::parse(s)?)))
-}
-
 impl Cell {
-    pub fn as_str(&self) -> &str {
+    pub fn from_value_cell(cell: XCell) -> Res<XCell> {
+        let reader = cell.read()?;
+        let value = reader.value()?;
+        let s = value.as_cow_str();
+        Self::from_str(s.as_ref())
+    }
+
+    pub fn from_str(s: &str) -> Res<XCell> {
+        let cell = Domain(Rc::new(Url::parse(s)?)).root()?;
+        Ok(XCell {
+            dyn_cell: DynCell::from(cell),
+        })
+    }
+
+    pub fn as_url_str(&self) -> &str {
         self.0 .0.as_str()
     }
 }

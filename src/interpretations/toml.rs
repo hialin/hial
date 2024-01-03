@@ -1,9 +1,24 @@
 use std::{path::Path, rc::Rc};
 
 use indexmap::IndexMap;
+use linkme::distributed_slice;
 use {toml, toml::Value as TomlValue};
 
-use crate::base::*;
+use crate::base::{Cell as XCell, *};
+
+#[distributed_slice(ELEVATION_CONSTRUCTORS)]
+static VALUE_TO_TOML: ElevationConstructor = ElevationConstructor {
+    source_interpretation: "value",
+    target_interpretation: "toml",
+    constructor: Cell::from_value_cell,
+};
+
+#[distributed_slice(ELEVATION_CONSTRUCTORS)]
+static PATH_TO_TOML: ElevationConstructor = ElevationConstructor {
+    source_interpretation: "file",
+    target_interpretation: "toml",
+    constructor: Cell::from_file_cell,
+};
 
 #[derive(Clone, Debug)]
 pub struct Domain {
@@ -72,18 +87,32 @@ impl From<toml::de::Error> for HErr {
     }
 }
 
-pub fn from_path(path: &Path) -> Res<Domain> {
-    let source = std::fs::read_to_string(path)?;
-    from_string(&source)
-}
+impl Cell {
+    pub fn from_file_cell(cell: XCell) -> Res<XCell> {
+        Cell::from_path(cell.as_path()?)
+    }
 
-pub fn from_string(source: &str) -> Res<Domain> {
-    let toml: TomlValue = toml::from_str(source)?;
-    let root_node = node_from_toml(toml);
-    let preroot = Rc::new(vec![root_node]);
-    Ok(Domain {
-        preroot: NodeGroup::Array(preroot),
-    })
+    pub fn from_value_cell(cell: XCell) -> Res<XCell> {
+        let s = cell.read()?.value()?.to_string();
+        Cell::from_string(s.as_str())
+    }
+
+    pub fn from_path(path: &Path) -> Res<XCell> {
+        let source = std::fs::read_to_string(path)?;
+        Cell::from_string(&source)
+    }
+
+    pub fn from_string(source: &str) -> Res<XCell> {
+        let toml: TomlValue = toml::from_str(source)?;
+        let root_node = node_from_toml(toml);
+        let preroot = Rc::new(vec![root_node]);
+        let domain = Domain {
+            preroot: NodeGroup::Array(preroot),
+        };
+        Ok(XCell {
+            dyn_cell: DynCell::from(domain.root()?),
+        })
+    }
 }
 
 impl CellReaderTrait for CellReader {
@@ -231,11 +260,11 @@ impl GroupTrait for Group {
         }
     }
 
-    fn len(&self) -> usize {
-        match &self.nodes {
+    fn len(&self) -> Res<usize> {
+        Ok(match &self.nodes {
             NodeGroup::Array(array) => array.len(),
             NodeGroup::Table(t) => t.len(),
-        }
+        })
     }
 
     fn at(&self, index: usize) -> Res<Cell> {

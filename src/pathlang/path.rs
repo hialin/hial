@@ -123,31 +123,9 @@ fn fmt_path_item(path_item: &PathItem, f: &mut Formatter<'_>) -> std::fmt::Resul
 impl<'a> PathStart<'a> {
     pub fn eval(&self) -> Res<Cell> {
         match self {
-            PathStart::Url(u) => {
-                let domain = url::from_string(&u.to_string())?;
-                let root = domain.root()?;
-                Cell {
-                    this: DynCell::Url(root),
-                }
-                .elevate()?
-                .get("url")
-            }
-            PathStart::File(f) => {
-                let path = std::path::Path::new(f);
-                let domain = file::from_path(path)?;
-                let root = domain.root()?;
-                Cell {
-                    this: DynCell::File(root),
-                }
-                .elevate()?
-                .get("file")
-            }
-            PathStart::String(str) => {
-                let root = ownvalue::Cell::from(str.to_string());
-                Ok(Cell {
-                    this: DynCell::from(root),
-                })
-            }
+            PathStart::Url(u) => url::Cell::from_str(&u.to_string()),
+            PathStart::File(f) => file::Cell::from_str_path(*f),
+            PathStart::String(s) => ownvalue::Cell::from_str(s),
         }
     }
 }

@@ -6,6 +6,8 @@
 - write policies on domain (interpretation):
     - read only, write ignore, write back, write to new domain
 - use anyhow for errors
+- fix extra::interpretation()
+- fix todo!() and TODO: in code
 
 
 ### Feature implementation status

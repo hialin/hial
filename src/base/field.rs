@@ -38,8 +38,8 @@ impl GroupTrait for FieldGroup {
         }
     }
 
-    fn len(&self) -> usize {
-        4
+    fn len(&self) -> Res<usize> {
+        Ok(4)
     }
 
     fn at(&self, index: usize) -> Res<Self::Cell> {

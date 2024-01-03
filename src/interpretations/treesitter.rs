@@ -1,11 +1,32 @@
 use std::{ops::Range, path::Path, rc::Rc};
 
+use linkme::distributed_slice;
 use tree_sitter::{Parser, Tree, TreeCursor};
 
-use crate::{base::*, tree_sitter_language, *};
+use crate::{
+    base::{Cell as XCell, *},
+    tree_sitter_language, *,
+};
+
+#[distributed_slice(ELEVATION_CONSTRUCTORS)]
+static VALUE_TO_RUST: ElevationConstructor = ElevationConstructor {
+    source_interpretation: "value",
+    target_interpretation: "rust",
+    constructor: Cell::from_value_cell_rust,
+};
+
+#[distributed_slice(ELEVATION_CONSTRUCTORS)]
+static FILE_TO_RUST: ElevationConstructor = ElevationConstructor {
+    source_interpretation: "file",
+    target_interpretation: "rust",
+    constructor: Cell::from_file_cell_rust,
+};
 
 #[derive(Clone, Debug)]
-pub struct Domain {
+pub struct Domain(Rc<DomainData>);
+
+#[derive(Clone, Debug)]
+pub struct DomainData {
     language: &'static str,
     source: String,
     tree: Tree,
@@ -15,11 +36,11 @@ impl DomainTrait for Domain {
     type Cell = Cell;
 
     fn interpretation(&self) -> &str {
-        self.language
+        self.0.language
     }
 
     fn root(&self) -> Res<Self::Cell> {
-        let cnode = node_to_cnode(self.tree.walk(), &self.source);
+        let cnode = node_to_cnode(self.0.tree.walk(), &self.0.source);
 
         let group = Group {
             domain: self.clone(),
@@ -61,20 +82,47 @@ pub struct CNode {
     src: Range<usize>,
 }
 
-pub fn from_path(path: &Path, language: &'static str) -> Res<Domain> {
-    let source = std::fs::read_to_string(path)?;
-    sitter_from_source(source, language)
-}
+impl Cell {
+    pub fn from_value_cell_rust(cell: XCell) -> Res<XCell> {
+        Cell::from_value_cell(cell, "rust")
+    }
+    pub fn from_file_cell_rust(cell: XCell) -> Res<XCell> {
+        Cell::from_file_cell(cell, "rust")
+    }
 
-pub fn from_string(source: String, language: &'static str) -> Res<Domain> {
-    sitter_from_source(source, language)
-}
+    pub fn from_value_cell(cell: XCell, language: &'static str) -> Res<XCell> {
+        let reader = cell.read()?;
+        let value = reader.value()?;
+        let source = value.as_cow_str();
+        let domain = sitter_from_source(source.into_owned(), language)?;
+        Ok(XCell {
+            dyn_cell: DynCell::from(domain.root()?),
+        })
+    }
 
-pub fn get_underlying_string(cell: &Cell) -> Res<&str> {
-    let cnode = guard_some!(cell.group.nodes.get(cell.pos), {
-        return fault("bad pos in rust cell");
-    });
-    Ok(&cell.group.domain.source[cnode.src.clone()])
+    pub fn from_file_cell(cell: XCell, language: &'static str) -> Res<XCell> {
+        let path = cell.as_path()?;
+        Cell::from_path(path, language)
+    }
+
+    pub fn from_path(path: &Path, language: &'static str) -> Res<XCell> {
+        let source = std::fs::read_to_string(path)?;
+        Cell::from_string(source, language)
+    }
+
+    pub fn from_string(source: String, language: &'static str) -> Res<XCell> {
+        let domain = sitter_from_source(source, language)?;
+        Ok(XCell {
+            dyn_cell: DynCell::from(domain.root()?),
+        })
+    }
+
+    pub fn get_underlying_string(cell: &Cell) -> Res<&str> {
+        let cnode = guard_some!(cell.group.nodes.get(cell.pos), {
+            return fault("bad pos in rust cell");
+        });
+        Ok(&cell.group.domain.0.source[cnode.src.clone()])
+    }
 }
 
 fn sitter_from_source(source: String, language: &'static str) -> Res<Domain> {
@@ -108,11 +156,11 @@ fn sitter_from_source(source: String, language: &'static str) -> Res<Domain> {
     let tree = guard_some!(parser.parse(&source, None), {
         return Err(HErr::Sitter("cannot get parse tree".to_string()));
     });
-    Ok(Domain {
+    Ok(Domain(Rc::new(DomainData {
         language,
         source,
         tree,
-    })
+    })))
 }
 
 fn node_to_cnode(mut cursor: TreeCursor, source: &str) -> CNode {
@@ -256,8 +304,8 @@ impl GroupTrait for Group {
         }
     }
 
-    fn len(&self) -> usize {
-        self.nodes.len()
+    fn len(&self) -> Res<usize> {
+        Ok(self.nodes.len())
     }
 
     fn at(&self, index: usize) -> Res<Cell> {
@@ -281,11 +329,5 @@ impl GroupTrait for Group {
             }
         }
         nores()
-    }
-}
-
-impl Cell {
-    pub fn language(&self) -> &'static str {
-        self.group.domain.language
     }
 }

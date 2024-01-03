@@ -2,9 +2,24 @@ use std::io::Read;
 use std::{fs::File, path::Path, rc::Rc};
 
 use indexmap::IndexMap;
+use linkme::distributed_slice;
 use yaml_rust::{ScanError, Yaml, YamlLoader};
 
-use crate::base::*;
+use crate::base::{Cell as XCell, *};
+
+#[distributed_slice(ELEVATION_CONSTRUCTORS)]
+static VALUE_TO_YAML: ElevationConstructor = ElevationConstructor {
+    source_interpretation: "value",
+    target_interpretation: "yaml",
+    constructor: Cell::from_value_cell,
+};
+
+#[distributed_slice(ELEVATION_CONSTRUCTORS)]
+static FILE_TO_YAML: ElevationConstructor = ElevationConstructor {
+    source_interpretation: "file",
+    target_interpretation: "yaml",
+    constructor: Cell::from_file_cell,
+};
 
 #[derive(Clone, Debug)]
 pub struct Domain {
@@ -79,18 +94,36 @@ impl From<ScanError> for HErr {
     }
 }
 
-pub fn from_path(path: &Path) -> Res<Domain> {
-    let mut source = String::new();
-    File::open(path)?.read_to_string(&mut source)?;
-    from_string(&source)
-}
+impl Cell {
+    pub fn from_value_cell(cell: XCell) -> Res<XCell> {
+        let reader = cell.read()?;
+        let value = reader.value()?;
+        let s = value.as_cow_str();
+        Cell::from_string(s)
+    }
 
-pub fn from_string(source: &str) -> Res<Domain> {
-    let yaml_docs = YamlLoader::load_from_str(source)?;
-    let root_group_res: Res<Vec<Node>> = yaml_docs.iter().map(node_from_yaml).collect();
-    Ok(Domain {
-        preroot: NodeGroup::Array(Rc::new(root_group_res?)),
-    })
+    pub fn from_file_cell(cell: XCell) -> Res<XCell> {
+        let path = cell.as_path()?;
+        Cell::from_path(path)
+    }
+
+    pub fn from_path(path: impl AsRef<Path>) -> Res<XCell> {
+        let mut source = String::new();
+        File::open(path)?.read_to_string(&mut source)?;
+        Cell::from_string(source)
+    }
+
+    pub fn from_string(s: impl AsRef<str>) -> Res<XCell> {
+        let yaml_docs = YamlLoader::load_from_str(s.as_ref())?;
+        let root_group_res: Res<Vec<Node>> = yaml_docs.iter().map(node_from_yaml).collect();
+        let domain = Domain {
+            preroot: NodeGroup::Array(Rc::new(root_group_res?)),
+        };
+        let c = domain.root()?;
+        Ok(XCell {
+            dyn_cell: DynCell::from(c),
+        })
+    }
 }
 
 impl CellReaderTrait for CellReader {
@@ -241,11 +274,11 @@ impl GroupTrait for Group {
         }
     }
 
-    fn len(&self) -> usize {
-        match &self.nodes {
+    fn len(&self) -> Res<usize> {
+        Ok(match &self.nodes {
             NodeGroup::Array(array) => array.len(),
             NodeGroup::Object(o) => o.len(),
-        }
+        })
     }
 
     fn at(&self, index: usize) -> Res<Cell> {

@@ -36,7 +36,7 @@ fn test_json() -> Res<()> {
     let json = Cell::from(json.to_string()).be("json")?;
     // pprint::pprint(&json, 0, 0);
     let hosts = json.sub()?.get("hosts")?.sub()?;
-    assert_eq!(hosts.len(), 2);
+    assert_eq!(hosts.len()?, 2);
     let host1 = hosts.at(0)?;
     let host2 = hosts.at(1)?;
     let power1 = host1.sub()?.get("labels")?.sub()?.get("power")?;
@@ -64,7 +64,7 @@ fn test_yaml() -> Res<()> {
     let yaml = Cell::from(yaml.to_string()).be("yaml")?;
     // pprint::pprint(&yaml, 0, 0);
     let hosts = yaml.sub()?.get("hosts")?.sub()?;
-    assert_eq!(hosts.len(), 2);
+    assert_eq!(hosts.len()?, 2);
     let host1 = hosts.at(0)?;
     let host2 = hosts.at(1)?;
     let power1 = host1.sub()?.get("labels")?.sub()?.get("power")?;
@@ -93,7 +93,7 @@ fn test_xml() -> Res<()> {
 
     let decl = xml.sub()?.at(0)?;
     assert_eq!(decl.read()?.label()?, "xml");
-    assert_eq!(decl.attr()?.len(), 1);
+    assert_eq!(decl.attr()?.len()?, 1);
     let decl_reader = decl.attr()?.at(0)?.read()?;
     assert_eq!(decl_reader.label()?, "version");
     assert_eq!(decl_reader.value()?, Value::Str("1.0"));
@@ -106,7 +106,7 @@ fn test_xml() -> Res<()> {
     );
 
     let doc = xml.sub()?.at(2)?;
-    assert_eq!(doc.sub()?.len(), 4);
+    assert_eq!(doc.sub()?.len()?, 4);
     assert_eq!(doc.sub()?.get("first")?.read()?.label()?, "first");
     assert_eq!(doc.sub()?.at(1)?.read()?.label()?, "double");
     assert_eq!(doc.sub()?.at(2)?.read()?.value()?, Value::Str("double"));

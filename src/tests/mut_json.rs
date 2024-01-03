@@ -14,7 +14,7 @@ fn mutate_json() -> Res<()> {
                 }
             ]
         }"#;
-    let json = Cell::from(json.to_string()).be("json")?;
+    let json = Cell::from(json).be("json")?;
     // pprint::pprint(&json, 0, 0);
     let path = "/hosts/[1]/labels/power";
     let newvalue = Value::Str("insanely strong");

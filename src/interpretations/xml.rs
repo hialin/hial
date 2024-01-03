@@ -2,9 +2,27 @@ use std::io::BufRead;
 use std::path::Path;
 use std::rc::Rc;
 
+use linkme::distributed_slice;
 use quick_xml::{events::Event, Error as XmlError, Reader};
 
-use crate::{base::*, debug, guard_some};
+use crate::{
+    base::{Cell as XCell, *},
+    debug, guard_some,
+};
+
+#[distributed_slice(ELEVATION_CONSTRUCTORS)]
+static VALUE_TO_XML: ElevationConstructor = ElevationConstructor {
+    source_interpretation: "value",
+    target_interpretation: "xml",
+    constructor: Cell::from_value_cell,
+};
+
+#[distributed_slice(ELEVATION_CONSTRUCTORS)]
+static FILE_TO_XML: ElevationConstructor = ElevationConstructor {
+    source_interpretation: "file",
+    target_interpretation: "xml",
+    constructor: Cell::from_file_cell,
+};
 
 #[derive(Clone, Debug)]
 pub struct Domain {
@@ -82,20 +100,39 @@ enum Attribute {
     Error(String),
 }
 
-pub fn from_path(path: &Path) -> Res<Domain> {
-    let mut reader = Reader::from_file(path).map_err(HErr::from)?;
-    let root = xml_to_node(&mut reader)?;
-    Ok(Domain {
-        preroot: NodeList(Rc::new(vec![root])),
-    })
-}
+impl Cell {
+    pub fn from_value_cell(cell: XCell) -> Res<XCell> {
+        let reader = cell.read()?;
+        let value = reader.value()?;
+        let s = value.as_cow_str();
+        Self::from_str(s.as_ref())
+    }
 
-pub fn from_string(string: &str) -> Res<Domain> {
-    let mut reader = Reader::from_str(string);
-    let root = xml_to_node(&mut reader)?;
-    Ok(Domain {
-        preroot: NodeList(Rc::new(vec![root])),
-    })
+    pub fn from_file_cell(cell: XCell) -> Res<XCell> {
+        let path = cell.as_path()?;
+        Self::from_path(path)
+    }
+
+    pub fn from_path(path: &Path) -> Res<XCell> {
+        let mut reader = Reader::from_file(path).map_err(HErr::from)?;
+        let root = xml_to_node(&mut reader)?;
+        Self::from_root_node(root)
+    }
+
+    pub fn from_str(string: &str) -> Res<XCell> {
+        let mut reader = Reader::from_str(string);
+        let root = xml_to_node(&mut reader)?;
+        Self::from_root_node(root)
+    }
+
+    fn from_root_node(root: Node) -> Res<XCell> {
+        let domain = Domain {
+            preroot: NodeList(Rc::new(vec![root])),
+        };
+        Ok(XCell {
+            dyn_cell: DynCell::from(domain.root()?),
+        })
+    }
 }
 
 fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
@@ -375,15 +412,15 @@ impl GroupTrait for Group {
         }
     }
 
-    fn len(&self) -> usize {
-        match &self.nodes {
+    fn len(&self) -> Res<usize> {
+        Ok(match &self.nodes {
             NodeGroup::Node(group) => group.0.len(),
             NodeGroup::Attr(group) => group.0.len(),
-        }
+        })
     }
 
     fn at(&self, index: usize) -> Res<Cell> {
-        if index >= self.len() {
+        if index >= self.len()? {
             return nores();
         }
         Ok(Cell {
@@ -394,7 +431,7 @@ impl GroupTrait for Group {
 
     fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, key: S) -> Res<Cell> {
         let key = key.into();
-        for i in 0..self.len() {
+        for i in 0..self.len()? {
             if let Ok(cell) = self.at(i) {
                 if let Ok(reader) = cell.read() {
                     if let Ok(k) = reader.label() {

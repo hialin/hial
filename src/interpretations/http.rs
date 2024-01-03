@@ -1,7 +1,18 @@
 use indexmap::IndexMap;
+use linkme::distributed_slice;
 use reqwest::{blocking::Client, Error as ReqwestError};
 
-use crate::{base::*, utils::orc::*};
+use crate::{
+    base::{Cell as XCell, *},
+    utils::orc::*,
+};
+
+#[distributed_slice(ELEVATION_CONSTRUCTORS)]
+static URL_TO_HTTP: ElevationConstructor = ElevationConstructor {
+    source_interpretation: "url",
+    target_interpretation: "http",
+    constructor: Cell::from_url_cell,
+};
 
 // ^http .value -> bytes
 //       @status
@@ -51,7 +62,20 @@ pub struct Group {
 pub struct CellWriter {}
 impl CellWriterTrait for CellWriter {}
 
-pub fn from_string(url: &str) -> Res<Domain> {
+impl Cell {
+    pub fn from_url_cell(cell: XCell) -> Res<XCell> {
+        Cell::from_url_str(cell.as_url_str()?)
+    }
+
+    pub fn from_url_str<'a>(url: impl Into<&'a str>) -> Res<XCell> {
+        let url_cell = from_url_str(url.into())?.root()?;
+        Ok(XCell {
+            dyn_cell: DynCell::from(url_cell),
+        })
+    }
+}
+
+fn from_url_str(url: &str) -> Res<Domain> {
     let response = Client::builder()
         .user_agent("hial")
         .build()?
@@ -84,7 +108,7 @@ pub fn from_string(url: &str) -> Res<Domain> {
     })))
 }
 
-pub fn to_string(cell: &Cell) -> Res<String> {
+fn to_string(cell: &Cell) -> Res<String> {
     let ur = &*cell.group.response.0.urc();
     let bytes = &ur.body;
     let string = String::from_utf8(bytes.to_vec());
@@ -228,13 +252,13 @@ impl GroupTrait for Group {
         }
     }
 
-    fn len(&self) -> usize {
-        match self.kind {
+    fn len(&self) -> Res<usize> {
+        Ok(match self.kind {
             GroupKind::Root => 0,
             GroupKind::Attr => 2,
             GroupKind::Status => 2,
             GroupKind::Headers => self.response.0.urc().headers.len(),
-        }
+        })
     }
 
     fn at(&self, index: usize) -> Res<Cell> {

@@ -3,7 +3,7 @@ use core::{
     fmt::{self, Display},
     hash::{Hash, Hasher},
 };
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 
 pub const DISPLAY_VALUE_NONE: &str = "ø"; // ø❍•⸰·
 
@@ -295,9 +295,12 @@ impl Value<'_> {
         }
     }
 
-    // pub fn as_str(&self) -> Option<&str> {
-    //     guard_variant!(self, Value::Str)
-    // }
+    pub fn as_cow_str(&self) -> Cow<str> {
+        match self {
+            Value::Str(x) => Cow::Borrowed(x),
+            _ => Cow::Owned(self.to_string()),
+        }
+    }
 }
 
 impl From<bool> for Value<'_> {
