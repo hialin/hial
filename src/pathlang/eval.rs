@@ -32,8 +32,7 @@ pub struct CellNode {
 impl<'s> EvalIter<'s> {
     pub(crate) fn new(start: Cell, path: Path<'s>) -> EvalIter<'s> {
         eval_debug!({
-            println!("");
-            println!("********************************");
+            println!("\n********************************");
             println!("==> path is: {}\n", path)
         });
         let mut path_indices = HashSet::from([0]);
@@ -124,8 +123,7 @@ impl<'s> EvalIter<'s> {
         }
 
         let has_relation =
-            |r, path: &Vec<PathItem<'s>>| path_indices.iter().any(|i| path[*i].relation == r);
-
+            |r, path: &[PathItem<'s>]| path_indices.iter().any(|i| path[*i].relation == r);
         if has_relation(Relation::Interpretation, &self.path) {
             match Self::subgroup(Relation::Interpretation, &cell) {
                 Err(err) => debug_err!(err),
@@ -351,7 +349,7 @@ impl<'s> EvalIter<'s> {
         match relation {
             Relation::Sub => cell.sub(),
             Relation::Attr => cell.attr(),
-            Relation::Interpretation => cell.clone().elevate(),
+            Relation::Interpretation => cell.elevate(),
             Relation::Field => cell.field(),
         }
     }
@@ -408,14 +406,14 @@ impl<'s> EvalIter<'s> {
             match EvalIter::eval_bool_expression(subcell.clone(), &filter.expr) {
                 Err(e) => {
                     eval_debug!({
-                        // println!("verbose eval filter match ERROR");
+                        println!("verbose eval filter match ERROR");
                     });
                     debug_err!(e);
                     return false;
                 }
                 Ok(false) => {
                     eval_debug!({
-                        // println!("verbose eval filter match FALSE");
+                        println!("verbose eval filter match FALSE");
                     });
                     return false;
                 }
@@ -423,14 +421,14 @@ impl<'s> EvalIter<'s> {
             }
         }
         eval_debug!({
-            // println!("eval filter match test is TRUE: {}", subcell.debug_string());
+            println!("eval filter match test is TRUE: {}", subcell.debug_string());
         });
         true
     }
 
     fn cell_matches_selector(cell: &Cell, sel: &Selector) -> bool {
         eval_debug!({
-            // println!("cell_matches_selector: selector {:?}; cell {:?}", sel, cell);
+            println!("cell_matches_selector: selector {:?}; cell {:?}", sel, cell);
         });
         if *sel == Selector::Star || *sel == Selector::DoubleStar {
             return true;

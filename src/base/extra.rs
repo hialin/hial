@@ -243,7 +243,7 @@ impl Cell {
         elevation::top_interpretation(self)
     }
 
-    pub fn elevate(self) -> Res<Group> {
+    pub fn elevate(&self) -> Res<Group> {
         Ok(Group::Elevation(ElevationGroup(self.clone())))
     }
 
@@ -253,7 +253,7 @@ impl Cell {
         })))
     }
 
-    pub fn be(self, interpretation: &str) -> Res<Cell> {
+    pub fn be(&self, interpretation: &str) -> Res<Cell> {
         self.elevate()?.get(interpretation)
     }
 
@@ -376,6 +376,7 @@ impl Cell {
         }
         nores()
     }
+
     pub fn as_url_str(&self) -> Res<&str> {
         if let DynCell::Url(ref url) = self.dyn_cell {
             return Ok(url.as_url_str());

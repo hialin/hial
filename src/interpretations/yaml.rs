@@ -130,6 +130,7 @@ impl CellReaderTrait for CellReader {
     fn index(&self) -> Res<usize> {
         Ok(self.pos)
     }
+
     fn label(&self) -> Res<Value> {
         match self.group.nodes {
             NodeGroup::Array(ref a) => nores(),

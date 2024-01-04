@@ -4,6 +4,7 @@ use indexmap::IndexMap;
 use linkme::distributed_slice;
 use serde_json::Value as SerdeValue;
 
+use crate::guard_some;
 use crate::utils::orc::Urc;
 use crate::{
     base::{Cell as XCell, *},
@@ -156,14 +157,29 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn set_label(&mut self, value: OwnValue) -> Res<()> {
-        // TODO: support write policies
-        // if self.domain.write_policy == WritePolicy::ReadOnly {
-        //     return Err(HErr::ReadOnly);
-        // }
+    // TODO: support write policies
+    // if self.domain.write_policy == WritePolicy::ReadOnly {
+    //     return Err(HErr::ReadOnly);
+    // }
+    fn set_label(&mut self, label: OwnValue) -> Res<()> {
         match self.nodes {
             UrcNodeGroup::Array(_) => {
                 return userr("cannot set label on array object");
+            }
+            UrcNodeGroup::Object(ref mut o) => {
+                let (_, v) = guard_some!(o.swap_remove_index(self.pos), {
+                    return fault("bad pos");
+                });
+                let (new_index, _) = o.insert_full(label.to_string(), v);
+                o.swap_indices(self.pos, new_index)
+            }
+        };
+        Ok(())
+    }
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+        match self.nodes {
+            UrcNodeGroup::Array(ref mut a) => {
+                a[self.pos] = Node::Scalar(value);
             }
             UrcNodeGroup::Object(ref mut o) => {
                 let (_, node) = o

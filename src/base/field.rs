@@ -50,6 +50,13 @@ impl GroupTrait for FieldGroup {
             3 => FieldType::Index,
             _ => return nores(),
         };
+        // only return the field cell if the field is not empty
+        if ty == FieldType::Label && self.cell.read()?.label() == Err(HErr::None) {
+            return nores();
+        }
+        if ty == FieldType::Value && self.cell.read()?.value() == Err(HErr::None) {
+            return nores();
+        }
         Ok(FieldCell {
             cell: self.cell.clone(),
             ty,
@@ -57,7 +64,8 @@ impl GroupTrait for FieldGroup {
     }
 
     fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::Cell> {
-        if let Selector::Str(l) = label.into() {
+        let label = label.into();
+        if let Selector::Str(l) = label {
             return match l {
                 "value" => self.at(0),
                 "label" => self.at(1),

@@ -29,7 +29,7 @@ fn elevation_map(interpretation: &str) -> Res<Arc<IndexMap<&'static str, Elevate
         });
         let reader = guard_some!(maybe_map.as_ref(), { return None });
         debug!(
-            "-- elevation for {:?} is {:?}",
+            "-- elevation map {:?} -> {:?}",
             interpretation,
             reader
                 .get(interpretation)
@@ -70,13 +70,13 @@ fn elevation_map(interpretation: &str) -> Res<Arc<IndexMap<&'static str, Elevate
             for (source, target_map) in source_map {
                 final_source_map.insert(source, Arc::new(target_map.clone()));
             }
-            for (k, v) in final_source_map.iter() {
-                debug!(
-                    "-- elevation map {:?} -> {:?}",
-                    k,
-                    v.keys().collect::<Vec<_>>()
-                );
-            }
+            // for (k, v) in final_source_map.iter() {
+            //     debug!(
+            //         "-- init final elevation map {:?} -> {:?}",
+            //         k,
+            //         v.keys().collect::<Vec<_>>()
+            //     );
+            // }
             *writer = Some(final_source_map);
         }
     }

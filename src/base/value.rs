@@ -251,6 +251,12 @@ where
     }
 }
 
+impl From<&str> for OwnValue {
+    fn from(s: &str) -> Self {
+        OwnValue::String(s.to_owned())
+    }
+}
+
 impl From<String> for OwnValue {
     fn from(s: String) -> Self {
         OwnValue::String(s)

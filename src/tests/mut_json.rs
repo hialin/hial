@@ -16,12 +16,33 @@ fn mutate_json() -> Res<()> {
         }"#;
     let json = Cell::from(json).be("json")?;
     // pprint::pprint(&json, 0, 0);
-    let path = "/hosts/[1]/labels/power";
-    let newvalue = Value::Str("insanely strong");
-    let f1 = json.search(path)?.first()?;
-    f1.write()?.set_value(newvalue.to_owned_value())?;
-    // pprint::pprint(&json, 0, 0);
-    assert_eq!(json.search(path)?.first()?.read()?.value()?, newvalue);
+    {
+        let path = "/hosts/[1]/labels/power";
+        let newvalue = OwnValue::from("insanely strong");
+        let f1 = json.search(path)?.first()?;
+        f1.write()?.set_value(newvalue.clone())?;
+        // pprint::pprint(&json, 0, 0);
+        assert_eq!(
+            json.search(path)?.first()?.read()?.value()?,
+            newvalue.as_value()
+        );
+    }
+    {
+        // pprint(&json, 0, 0);
+        let path = "/hosts/[1]/labels/power";
+        let newvalue = OwnValue::from("intensity");
+        let f1 = json.search(path)?.first()?;
+        f1.write()?.set_label(newvalue.clone())?;
+        assert_eq!(f1.read()?.label()?, newvalue.as_value());
+        // pprint(&json, 0, 0);
+        assert_eq!(
+            json.search("/hosts/[1]/labels/intensity")?
+                .first()?
+                .read()?
+                .label()?,
+            newvalue.as_value()
+        );
+    }
     Ok(())
 }
 
@@ -41,7 +62,7 @@ fn mutate_and_write_json() -> Res<()> {
                 }
             ]
         }"#;
-    let json_original = Cell::from(json.to_string());
+    let json_original = Cell::from(json);
     let json = json_original.clone().be("json")?;
 
     // pprint::pprint(&json, 0, 0);
@@ -65,7 +86,7 @@ fn mutate_and_write_json() -> Res<()> {
     assert_eq!(json.search(path2)?.first()?.read()?.value()?, Value::None);
 
     // TODO: uncomment and fix this write_back() here
-    // json.domain().write_back()?;
+    json.domain()?.save(SaveTarget::Origin)?;
 
     assert_eq!(
         json_original.read()?.value()?.to_string(),

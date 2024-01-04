@@ -278,22 +278,53 @@ fn path_double_kleene_all() -> Res<()> {
 }
 
 #[test]
-fn path_double_kleene_labels() -> Res<()> {
+fn path_double_kleene_labels_json() -> Res<()> {
+    set_verbose(true);
+    const TREE: &str = r#"{
+        "a": {
+          "x": "xa",
+          "b": {
+            "x": "xb",
+            "c": {
+                "x": "xc",
+                "y": "yc",
+                "z": ["r", "s"]
+            }
+          }
+        },
+        "m": "mval",
+        "n": "nval"
+    }"#;
+
+    let root = Cell::from(TREE).be("json")?;
+
+    // crate::pprint::pprint(&root, 0, 0);
+    let eval = str_eval(root.clone(), "/**#label")?;
+    assert_eq!(
+        eval,
+        [":a", ":x", ":b", ":x", ":c", ":x", ":y", ":z", ":m", ":n"]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn path_double_kleene_labels_yaml() -> Res<()> {
     set_verbose(true);
     const TREE: &str = r#"
-            a:
-              x: xa
-              b:
-                x: xb
-                c:
-                    x: xc
-                    y: yc
-                    z: [r, s]
-            m: mval
-            n: nval
-        "#;
+        a:
+          x: xa
+          b:
+            x: xb
+            c:
+                x: xc
+                y: yc
+                z: [r, s]
+        m: mval
+        n: nval
+    "#;
 
-    let root = Cell::from(TREE.to_string()).be("yaml")?;
+    let root = Cell::from(TREE).be("yaml")?;
 
     // crate::pprint::pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/**#label")?;

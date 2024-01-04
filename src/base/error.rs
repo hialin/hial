@@ -38,6 +38,7 @@ fn print_stack_trace() {
 }
 
 pub fn nores<T>() -> Res<T> {
+    // print_stack_trace();
     Err(HErr::None)
 }
 
