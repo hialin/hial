@@ -33,27 +33,31 @@ static HTTP_TO_JSON: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Domain {
-    nodes: Orc<Vec<Node>>,
-    write_policy: WritePolicy,
+pub struct Cell {
+    group: Group,
+    pos: usize,
 }
 
-impl DomainTrait for Domain {
-    type Cell = Cell;
+#[derive(Clone, Debug)]
+pub struct Group {
+    domain: Domain,
+    nodes: NodeGroup,
+}
 
-    fn interpretation(&self) -> &str {
-        "json"
-    }
+#[derive(Clone, Debug)]
+pub struct Domain(Orc<DomainData>);
 
-    fn root(&self) -> Res<Self::Cell> {
-        Ok(Cell {
-            group: Group {
-                domain: self.clone(),
-                nodes: NodeGroup::Array(self.nodes.clone()),
-            },
-            pos: 0,
-        })
-    }
+#[derive(Clone, Debug)]
+pub struct DomainData {
+    nodes: Orc<Vec<Node>>,
+    write_policy: WritePolicy,
+    origin: Option<XCell>,
+}
+
+#[derive(Clone, Debug)]
+pub enum NodeGroup {
+    Array(Orc<Vec<Node>>),
+    Object(Orc<IndexMap<String, Node>>),
 }
 
 #[derive(Clone, Debug)]
@@ -61,12 +65,6 @@ pub enum Node {
     Scalar(OwnValue),
     Array(Orc<Vec<Node>>),
     Object(Orc<IndexMap<String, Node>>),
-}
-
-#[derive(Clone, Debug)]
-pub struct Cell {
-    group: Group,
-    pos: usize,
 }
 
 #[derive(Debug)]
@@ -81,112 +79,37 @@ pub struct CellWriter {
     pos: usize,
 }
 
-#[derive(Clone, Debug)]
-pub struct Group {
-    domain: Domain,
-    nodes: NodeGroup,
-}
-
-#[derive(Clone, Debug)]
-pub enum NodeGroup {
-    Array(Orc<Vec<Node>>),
-    Object(Orc<IndexMap<String, Node>>),
-}
-
 #[derive(Debug)]
 pub enum UrcNodeGroup {
     Array(Urc<Vec<Node>>),
     Object(Urc<IndexMap<String, Node>>),
 }
 
-impl From<serde_json::Error> for HErr {
-    fn from(e: serde_json::Error) -> HErr {
-        HErr::Json(format!("{}", e))
-    }
-}
+impl DomainTrait for Domain {
+    type Cell = Cell;
 
-fn from_json_value(json: SerdeValue) -> Res<Domain> {
-    let root_node = node_from_json(json);
-    let nodes = Orc::new(vec![root_node]);
-    Ok(Domain {
-        nodes,
-        write_policy: WritePolicy::ReadOnly,
-    })
-}
-
-fn owned_value_to_node(v: OwnValue) -> Res<Node> {
-    Ok(Node::Scalar(v))
-}
-
-impl CellReaderTrait for CellReader {
-    fn index(&self) -> Res<usize> {
-        Ok(self.pos)
+    fn interpretation(&self) -> &str {
+        "json"
     }
 
-    fn label(&self) -> Res<Value> {
-        if let UrcNodeGroup::Object(ref o) = self.nodes {
-            if let Some(x) = o.get_index(self.pos) {
-                return Ok(Value::Str(x.0));
-            } else {
-                return fault("bad pos");
-            }
-        }
-        nores()
-    }
-
-    fn value(&self) -> Res<Value> {
-        fn get_value(node: &Node) -> Value {
-            match node {
-                Node::Scalar(v) => v.as_value(),
-                Node::Array(_) => Value::None,
-                Node::Object(_) => Value::None,
-            }
-        }
-
-        match self.nodes {
-            UrcNodeGroup::Array(ref a) => match a.get(self.pos) {
-                Some(x) => Ok(get_value(x)),
-                None => fault(""),
+    fn root(&self) -> Res<Self::Cell> {
+        Ok(Cell {
+            group: Group {
+                domain: self.clone(),
+                nodes: NodeGroup::Array(self.0.urc().nodes.clone()),
             },
-            UrcNodeGroup::Object(ref o) => match o.get_index(self.pos) {
-                Some(x) => Ok(get_value(x.1)),
-                None => fault(""),
-            },
-        }
+            pos: 0,
+        })
     }
-}
 
-impl CellWriterTrait for CellWriter {
-    // TODO: support write policies
-    // if self.domain.write_policy == WritePolicy::ReadOnly {
-    //     return Err(HErr::ReadOnly);
-    // }
-    fn set_label(&mut self, label: OwnValue) -> Res<()> {
-        match self.nodes {
-            UrcNodeGroup::Array(_) => {
-                return userr("cannot set label on array object");
-            }
-            UrcNodeGroup::Object(ref mut o) => {
-                let (_, v) = guard_some!(o.swap_remove_index(self.pos), {
-                    return fault("bad pos");
-                });
-                let (new_index, _) = o.insert_full(label.to_string(), v);
-                o.swap_indices(self.pos, new_index)
-            }
-        };
-        Ok(())
-    }
-    fn set_value(&mut self, value: OwnValue) -> Res<()> {
-        match self.nodes {
-            UrcNodeGroup::Array(ref mut a) => {
-                a[self.pos] = Node::Scalar(value);
-            }
-            UrcNodeGroup::Object(ref mut o) => {
-                let (_, node) = o
-                    .get_index_mut(self.pos)
-                    .ok_or_else(|| HErr::Json("bad pos".into()))?;
-                *node = Node::Scalar(value);
-            }
+    fn save(&self, target: SaveTarget) -> Res<()> {
+        let s = self.root()?.serialize()?;
+        match target {
+            SaveTarget::Origin => match self.0.urc().origin {
+                Some(ref origin) => origin.write()?.set_value(OwnValue::String(s))?,
+                None => return userr("no origin, cannot save"),
+            },
+            SaveTarget::Cell(ref cell) => cell.write()?.set_value(OwnValue::String(s))?,
         };
         Ok(())
     }
@@ -195,34 +118,58 @@ impl CellWriterTrait for CellWriter {
 impl Cell {
     pub fn from_value_cell(cell: XCell) -> Res<XCell> {
         let s = cell.read()?.value()?.to_string();
-        Cell::from_string(s.as_str())
+        let json: SerdeValue = serde_json::from_str(s.as_ref())?;
+        Self::from_serde_value(json, Some(cell))
     }
 
     pub fn from_file_cell(cell: XCell) -> Res<XCell> {
         let path = cell.as_path()?;
-        Cell::from_path(path)
+        let file = File::open(path)?;
+        let json: SerdeValue = serde_json::from_reader(file)?;
+        Self::from_serde_value(json, Some(cell))
     }
 
     pub fn from_http_cell(cell: XCell) -> Res<XCell> {
         let s = cell.read()?.value()?.to_string();
-        Cell::from_string(s.as_str())
+        let json: SerdeValue = serde_json::from_str(s.as_ref())?;
+        Self::from_serde_value(json, Some(cell))
     }
 
     pub fn from_string(s: impl AsRef<str>) -> Res<XCell> {
         let json: SerdeValue = serde_json::from_str(s.as_ref())?;
-        let jcell = from_json_value(json)?.root()?;
-        Ok(XCell {
-            dyn_cell: DynCell::from(jcell),
-        })
+        Self::from_serde_value(json, None)
     }
 
     pub fn from_path(path: impl AsRef<Path>) -> Res<XCell> {
         let file = File::open(path)?;
         let json: SerdeValue = serde_json::from_reader(file)?;
-        let jcell = from_json_value(json)?.root()?;
+        Self::from_serde_value(json, None)
+    }
+
+    pub fn from_serde_value(json: SerdeValue, origin: Option<XCell>) -> Res<XCell> {
+        let nodes = Orc::new(vec![node_from_json(json)]);
+        let domain = Domain(Orc::new(DomainData {
+            nodes,
+            write_policy: WritePolicy::ReadOnly,
+            origin,
+        }));
         Ok(XCell {
-            dyn_cell: DynCell::from(jcell),
+            dyn_cell: DynCell::from(domain.root()?),
         })
+    }
+
+    pub fn serialize(&self) -> Res<String> {
+        let serde_value = match self.group.nodes {
+            NodeGroup::Array(ref a) => match a.urc().get(self.pos) {
+                Some(node) => node_to_serde(node),
+                None => return fault(format!("bad index {}", self.pos)),
+            },
+            NodeGroup::Object(ref o) => match o.urc().get_index(self.pos) {
+                Some(x) => node_to_serde(x.1),
+                None => return fault(format!("bad index {}", self.pos)),
+            },
+        };
+        Ok(serde_json::to_string_pretty(&serde_value)?)
     }
 }
 
@@ -297,42 +244,6 @@ impl CellTrait for Cell {
     }
 
     // TODO: remove this after implementing writer
-    // fn set_value(&mut self, v: OwnValue) -> Res<()> {
-    //     match self.group.nodes {
-    //         NodeGroup::Array(ref mut ra) => {
-    //             let mut urca = ra.urc();
-    //             let a = guard_some!(urca.get_mut(), {
-    //                 return Err(HErr::ExclusivityRequired {
-    //                     path: "".into(),
-    //                     op: "set_value",
-    //                 });
-    //             });
-    //             let x = guard_some!(a.get_mut(self.pos), {
-    //                 return fault("bad pos");
-    //             });
-    //             *x = owned_value_to_node(v)?;
-    //         }
-
-    //         NodeGroup::Object(ref mut ro) => {
-    //             let mut urco = ro.urc();
-    //             let o = guard_some!(urco.get_mut(), {
-    //                 return Err(HErr::ExclusivityRequired {
-    //                     path: "".into(),
-    //                     op: "set_value",
-    //                 });
-    //             });
-    //             let x = guard_some!(o.at_mut(self.pos), {
-    //                 return fault("bad pos");
-    //             });
-    //             let nv = owned_value_to_node(v)?;
-    //             *x.1 = nv;
-    //         }
-    //     };
-
-    //     Ok(())
-    // }
-
-    // TODO: remove this after implementing writer
     // fn delete(&mut self) -> Res<()> {
     //     match self.group.nodes {
     //         NodeGroup::Array(ref mut a) => {
@@ -358,6 +269,86 @@ impl CellTrait for Cell {
     //     };
     //     Ok(())
     // }
+}
+
+impl From<serde_json::Error> for HErr {
+    fn from(e: serde_json::Error) -> HErr {
+        HErr::Json(format!("{}", e))
+    }
+}
+
+impl CellReaderTrait for CellReader {
+    fn index(&self) -> Res<usize> {
+        Ok(self.pos)
+    }
+
+    fn label(&self) -> Res<Value> {
+        if let UrcNodeGroup::Object(ref o) = self.nodes {
+            if let Some(x) = o.get_index(self.pos) {
+                return Ok(Value::Str(x.0));
+            } else {
+                return fault("bad pos");
+            }
+        }
+        nores()
+    }
+
+    fn value(&self) -> Res<Value> {
+        fn get_value(node: &Node) -> Value {
+            match node {
+                Node::Scalar(v) => v.as_value(),
+                Node::Array(_) => Value::None,
+                Node::Object(_) => Value::None,
+            }
+        }
+
+        match self.nodes {
+            UrcNodeGroup::Array(ref a) => match a.get(self.pos) {
+                Some(x) => Ok(get_value(x)),
+                None => fault(""),
+            },
+            UrcNodeGroup::Object(ref o) => match o.get_index(self.pos) {
+                Some(x) => Ok(get_value(x.1)),
+                None => fault(""),
+            },
+        }
+    }
+}
+
+impl CellWriterTrait for CellWriter {
+    // TODO: support write policies
+    // if self.domain.write_policy == WritePolicy::ReadOnly {
+    //     return Err(HErr::ReadOnly);
+    // }
+    fn set_label(&mut self, label: OwnValue) -> Res<()> {
+        match self.nodes {
+            UrcNodeGroup::Array(_) => {
+                return userr("cannot set label on array object");
+            }
+            UrcNodeGroup::Object(ref mut o) => {
+                let (_, v) = guard_some!(o.swap_remove_index(self.pos), {
+                    return fault("bad pos");
+                });
+                let (new_index, _) = o.insert_full(label.to_string(), v);
+                o.swap_indices(self.pos, new_index)
+            }
+        };
+        Ok(())
+    }
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+        match self.nodes {
+            UrcNodeGroup::Array(ref mut a) => {
+                a[self.pos] = Node::Scalar(value);
+            }
+            UrcNodeGroup::Object(ref mut o) => {
+                let (_, node) = o
+                    .get_index_mut(self.pos)
+                    .ok_or_else(|| HErr::Json("bad pos".into()))?;
+                *node = Node::Scalar(value);
+            }
+        };
+        Ok(())
+    }
 }
 
 fn get_typ(node: &Node) -> &'static str {
@@ -448,6 +439,36 @@ fn node_from_json(sv: SerdeValue) -> Node {
                 no.insert(k, node_from_json(v));
             }
             Node::Object(Orc::new(no))
+        }
+    }
+}
+
+fn node_to_serde(node: &Node) -> SerdeValue {
+    match node {
+        Node::Scalar(OwnValue::None) => SerdeValue::Null,
+        Node::Scalar(OwnValue::Bool(b)) => SerdeValue::Bool(*b),
+        Node::Scalar(OwnValue::Int(Int::I32(i))) => SerdeValue::Number((*i).into()),
+        Node::Scalar(OwnValue::Int(Int::U32(i))) => SerdeValue::Number((*i).into()),
+        Node::Scalar(OwnValue::Int(Int::I64(i))) => SerdeValue::Number((*i).into()),
+        Node::Scalar(OwnValue::Int(Int::U64(i))) => SerdeValue::Number((*i).into()),
+        Node::Scalar(OwnValue::Float(StrFloat(f))) => SerdeValue::Number(
+            serde_json::Number::from_f64(*f).unwrap_or(serde_json::Number::from(0)),
+        ),
+        Node::Scalar(OwnValue::String(s)) => SerdeValue::String(s.clone()),
+        Node::Scalar(OwnValue::Bytes(b)) => SerdeValue::String(String::from_utf8_lossy(&b).into()),
+        Node::Array(a) => {
+            let mut na = vec![];
+            for v in &*a.urc() {
+                na.push(node_to_serde(v));
+            }
+            SerdeValue::Array(na)
+        }
+        Node::Object(o) => {
+            let mut no = serde_json::map::Map::new();
+            for (k, v) in o.urc().as_slice() {
+                no.insert(k.clone(), node_to_serde(v));
+            }
+            SerdeValue::Object(no)
         }
     }
 }

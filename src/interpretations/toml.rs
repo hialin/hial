@@ -22,7 +22,7 @@ static PATH_TO_TOML: ElevationConstructor = ElevationConstructor {
 
 #[derive(Clone, Debug)]
 pub struct Domain {
-    preroot: NodeGroup,
+    nodes: NodeGroup,
 }
 
 impl DomainTrait for Domain {
@@ -36,7 +36,7 @@ impl DomainTrait for Domain {
         Ok(Cell {
             group: Group {
                 domain: self.clone(),
-                nodes: self.preroot.clone(),
+                nodes: self.nodes.clone(),
             },
             pos: 0,
         })
@@ -107,7 +107,7 @@ impl Cell {
         let root_node = node_from_toml(toml);
         let preroot = Rc::new(vec![root_node]);
         let domain = Domain {
-            preroot: NodeGroup::Array(preroot),
+            nodes: NodeGroup::Array(preroot),
         };
         Ok(XCell {
             dyn_cell: DynCell::from(domain.root()?),

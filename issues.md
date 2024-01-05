@@ -2,6 +2,7 @@
 
 ## TODOs
 
+- json: use SerdeValue directly instead of Node
 - explicit domain save/write: to origin, to new domain
 - write policies on domain (interpretation):
     - read only, write ignore, write back, write to new domain

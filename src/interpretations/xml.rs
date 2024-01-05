@@ -26,7 +26,7 @@ static FILE_TO_XML: ElevationConstructor = ElevationConstructor {
 
 #[derive(Clone, Debug)]
 pub struct Domain {
-    preroot: NodeList,
+    nodes: NodeList,
 }
 
 impl DomainTrait for Domain {
@@ -40,7 +40,7 @@ impl DomainTrait for Domain {
         Ok(Cell {
             group: Group {
                 domain: self.clone(),
-                nodes: NodeGroup::Node(self.preroot.clone()),
+                nodes: NodeGroup::Node(self.nodes.clone()),
             },
             pos: 0,
         })
@@ -127,7 +127,7 @@ impl Cell {
 
     fn from_root_node(root: Node) -> Res<XCell> {
         let domain = Domain {
-            preroot: NodeList(Rc::new(vec![root])),
+            nodes: NodeList(Rc::new(vec![root])),
         };
         Ok(XCell {
             dyn_cell: DynCell::from(domain.root()?),

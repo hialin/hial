@@ -21,7 +21,6 @@ pub struct CellReader(Urc<OwnValue>);
 
 #[derive(Debug)]
 pub struct CellWriter(Urc<OwnValue>);
-impl CellWriterTrait for CellWriter {}
 
 impl Cell {
     pub fn from_str(s: &str) -> Res<XCell> {
@@ -43,6 +42,13 @@ impl Cell {
 impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
         Ok(self.0.as_value())
+    }
+}
+
+impl CellWriterTrait for CellWriter {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+        *self.0 = value;
+        Ok(())
     }
 }
 

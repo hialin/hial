@@ -23,7 +23,7 @@ static FILE_TO_YAML: ElevationConstructor = ElevationConstructor {
 
 #[derive(Clone, Debug)]
 pub struct Domain {
-    preroot: NodeGroup,
+    nodes: NodeGroup,
 }
 impl DomainTrait for Domain {
     type Cell = Cell;
@@ -36,7 +36,7 @@ impl DomainTrait for Domain {
         Ok(Cell {
             group: Group {
                 domain: self.clone(),
-                nodes: self.preroot.clone(),
+                nodes: self.nodes.clone(),
             },
             pos: 0,
         })
@@ -117,7 +117,7 @@ impl Cell {
         let yaml_docs = YamlLoader::load_from_str(s.as_ref())?;
         let root_group_res: Res<Vec<Node>> = yaml_docs.iter().map(node_from_yaml).collect();
         let domain = Domain {
-            preroot: NodeGroup::Array(Rc::new(root_group_res?)),
+            nodes: NodeGroup::Array(Rc::new(root_group_res?)),
         };
         let c = domain.root()?;
         Ok(XCell {

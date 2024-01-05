@@ -3,6 +3,26 @@ use std::marker::PhantomData;
 
 use crate::base::*;
 
+pub trait CellTrait: Clone + Debug {
+    type Domain: DomainTrait;
+    type Group: GroupTrait;
+    type CellReader: CellReaderTrait;
+    type CellWriter: CellWriterTrait;
+
+    fn domain(&self) -> Res<Self::Domain>;
+    fn typ(&self) -> Res<&str>;
+
+    fn read(&self) -> Res<Self::CellReader>;
+    fn write(&self) -> Res<Self::CellWriter>;
+
+    fn sub(&self) -> Res<Self::Group> {
+        nores()
+    }
+    fn attr(&self) -> Res<Self::Group> {
+        nores()
+    }
+}
+
 pub trait DomainTrait: Debug {
     type Cell: CellTrait;
 
@@ -39,27 +59,7 @@ pub enum SaveTarget {
     // save to the domain origin or source
     Origin,
     // save to a new target cell
-    Target(Cell),
-}
-
-pub trait CellTrait: Clone + Debug {
-    type Domain: DomainTrait;
-    type Group: GroupTrait;
-    type CellReader: CellReaderTrait;
-    type CellWriter: CellWriterTrait;
-
-    fn domain(&self) -> Res<Self::Domain>;
-    fn typ(&self) -> Res<&str>;
-
-    fn read(&self) -> Res<Self::CellReader>;
-    fn write(&self) -> Res<Self::CellWriter>;
-
-    fn sub(&self) -> Res<Self::Group> {
-        nores()
-    }
-    fn attr(&self) -> Res<Self::Group> {
-        nores()
-    }
+    Cell(Cell),
 }
 
 pub trait CellReaderTrait: Debug {
