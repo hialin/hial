@@ -205,12 +205,12 @@ impl Cell {
         }
     }
 
-    pub fn domain(&self) -> Res<Domain> {
+    pub fn domain(&self) -> Domain {
         if let DynCell::Field(fieldcell) = &self.dyn_cell {
             return fieldcell.cell.domain();
         }
-        let domain = dispatch_dyn_cell!(&self.dyn_cell, |x| { DynDomain::from(x.domain()?) });
-        Ok(Domain { dyn_domain: domain })
+        let domain = dispatch_dyn_cell!(&self.dyn_cell, |x| { DynDomain::from(x.domain()) });
+        Domain { dyn_domain: domain }
     }
 
     pub fn typ(&self) -> Res<&str> {

@@ -86,7 +86,7 @@ fn mutate_and_write_json() -> Res<()> {
     assert_eq!(json.search(path2)?.first()?.read()?.value()?, Value::None);
 
     // TODO: uncomment and fix this write_back() here
-    json.domain()?.save(SaveTarget::Origin)?;
+    json.domain().save(SaveTarget::Origin)?;
 
     assert_eq!(
         json_original.read()?.value()?.to_string(),

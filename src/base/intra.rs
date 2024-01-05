@@ -9,7 +9,7 @@ pub trait CellTrait: Clone + Debug {
     type CellReader: CellReaderTrait;
     type CellWriter: CellWriterTrait;
 
-    fn domain(&self) -> Res<Self::Domain>;
+    fn domain(&self) -> Self::Domain;
     fn typ(&self) -> Res<&str>;
 
     fn read(&self) -> Res<Self::CellReader>;

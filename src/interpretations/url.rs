@@ -74,8 +74,8 @@ impl CellTrait for Cell {
     type CellReader = CellReader;
     type CellWriter = CellWriter;
 
-    fn domain(&self) -> Res<Domain> {
-        Ok(self.0.clone())
+    fn domain(&self) -> Domain {
+        self.0.clone()
     }
 
     fn typ(&self) -> Res<&str> {

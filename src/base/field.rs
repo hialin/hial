@@ -30,15 +30,15 @@ impl DomainTrait for FieldGroup {
 
 impl SaveTrait for FieldGroup {
     fn write_policy(&self) -> Res<WritePolicy> {
-        self.cell.domain()?.write_policy()
+        self.cell.domain().write_policy()
     }
 
     fn set_write_policy(&mut self, policy: WritePolicy) -> Res<()> {
-        self.cell.domain()?.set_write_policy(policy)
+        self.cell.domain().set_write_policy(policy)
     }
 
     fn save(&self, target: SaveTarget) -> Res<()> {
-        self.cell.domain()?.save(target)
+        self.cell.domain().save(target)
     }
 }
 
@@ -118,8 +118,10 @@ impl CellTrait for FieldCell {
     type CellReader = FieldReader;
     type CellWriter = FieldWriter;
 
-    fn domain(&self) -> Res<FieldGroup> {
-        nores()
+    fn domain(&self) -> FieldGroup {
+        FieldGroup {
+            cell: self.cell.clone(),
+        }
     }
 
     fn typ(&self) -> Res<&str> {
