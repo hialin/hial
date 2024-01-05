@@ -101,7 +101,8 @@ impl DomainTrait for Domain {
             pos: 0,
         })
     }
-
+}
+impl SaveTrait for Domain {
     fn save(&self, target: SaveTarget) -> Res<()> {
         let s = self.root()?.serialize()?;
         match target {
@@ -113,6 +114,7 @@ impl DomainTrait for Domain {
         };
         Ok(())
     }
+    // TODO: add rest of implementation
 }
 
 impl Cell {

@@ -95,6 +95,10 @@ impl DomainTrait for Domain {
     }
 }
 
+impl SaveTrait for Domain {
+    // TODO: add implementation
+}
+
 impl CellReaderTrait for CellReader {
     fn index(&self) -> Res<usize> {
         Ok(self.pos as usize)

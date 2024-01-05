@@ -49,19 +49,19 @@ fn mutate_json() -> Res<()> {
 #[test]
 fn mutate_and_write_json() -> Res<()> {
     let json = r#"{
-            "hosts": [
-                {
-                    "host_id": "1h48",
-                    "dummy": true
-                },
-                {
-                    "labels": {
-                        "group2": true,
-                        "power": "strong"
-                    }
-                }
-            ]
-        }"#;
+  "hosts": [
+    {
+      "host_id": "1h48",
+      "dummy": true
+    },
+    {
+      "labels": {
+        "group2": true,
+        "power": "strong"
+      }
+    }
+  ]
+}"#;
     let json_original = Cell::from(json);
     let json = json_original.clone().be("json")?;
 
@@ -91,19 +91,19 @@ fn mutate_and_write_json() -> Res<()> {
     assert_eq!(
         json_original.read()?.value()?.to_string(),
         r#"{
-            "hosts": [
-                {
-                    "host_id": null,
-                    "dummy": true
-                },
-                {
-                    "labels": {
-                        "group2": true,
-                        "power": "weak as putty"
-                    }
-                }
-            ]
-        }"#
+  "hosts": [
+    {
+      "host_id": null,
+      "dummy": true
+    },
+    {
+      "labels": {
+        "group2": true,
+        "power": "weak as putty"
+      }
+    }
+  ]
+}"#
     );
 
     Ok(())

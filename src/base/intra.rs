@@ -18,27 +18,31 @@ pub trait CellTrait: Clone + Debug {
     fn sub(&self) -> Res<Self::Group> {
         nores()
     }
+
     fn attr(&self) -> Res<Self::Group> {
         nores()
     }
 }
 
-pub trait DomainTrait: Debug {
+pub trait DomainTrait: Debug + SaveTrait {
     type Cell: CellTrait;
 
     fn interpretation(&self) -> &str;
 
     fn root(&self) -> Res<Self::Cell>;
+}
 
-    fn write_policy(&self) -> WritePolicy {
-        todo!();
+pub trait SaveTrait: Debug {
+    fn write_policy(&self) -> Res<WritePolicy> {
+        unimplemented()
     }
+
     fn set_write_policy(&mut self, policy: WritePolicy) -> Res<()> {
-        todo!();
+        unimplemented()
     }
 
     fn save(&self, target: SaveTarget) -> Res<()> {
-        todo!();
+        unimplemented()
     }
 }
 
@@ -80,15 +84,15 @@ pub trait CellReaderTrait: Debug {
 
 pub trait CellWriterTrait: Debug {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
-        todo!();
+        unimplemented()
     }
 
     fn set_label(&mut self, value: OwnValue) -> Res<()> {
-        todo!();
+        unimplemented()
     }
 
     fn delete(&mut self) -> Res<()> {
-        todo!();
+        unimplemented()
     }
 }
 
@@ -105,9 +109,9 @@ pub trait GroupTrait: Clone + Debug {
     fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::Cell>;
     // fn get_all<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::SelectIterator>;
 
-    // fn add(&mut self) -> Res<()> {
-    //     todo!();
-    // }
+    fn add(&mut self) -> Res<()> {
+        unimplemented()
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -43,6 +43,10 @@ impl DomainTrait for Domain {
     }
 }
 
+impl SaveTrait for Domain {
+    // TODO: add implementation
+}
+
 #[derive(Clone, Debug)]
 pub struct Cell {
     group: Group,

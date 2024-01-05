@@ -7,7 +7,7 @@ pub fn str_eval(root: Cell, path: &str) -> Res<Vec<String>> {
         .into_iter()
         .map(|cres| -> Res<String> {
             // if let Ok(ref cell) = cres {
-            //     if let Ok(path) = cell.get_path() {
+            //     if let Ok(path) = cell.path() {
             //         println!("--> found path: {}", path);
             //     }
             // }

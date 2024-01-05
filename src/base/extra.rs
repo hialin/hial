@@ -127,7 +127,7 @@ impl Domain {
         })
     }
 
-    pub fn write_policy(&self) -> WritePolicy {
+    pub fn write_policy(&self) -> Res<WritePolicy> {
         dispatch_dyn_domain!(&self.dyn_domain, |x| { x.write_policy() })
     }
     pub fn set_write_policy(&mut self, policy: WritePolicy) -> Res<()> {

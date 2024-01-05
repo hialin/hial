@@ -23,6 +23,8 @@ pub enum HErr {
     Http(String),
     Sitter(String),
     Other(String),
+
+    NotYetImplemented,
 }
 
 fn print_stack_trace() {
@@ -40,6 +42,11 @@ fn print_stack_trace() {
 pub fn nores<T>() -> Res<T> {
     // print_stack_trace();
     Err(HErr::None)
+}
+
+pub fn unimplemented<T>() -> Res<T> {
+    print_stack_trace();
+    Err(HErr::NotYetImplemented)
 }
 
 pub fn userr<T>(reason: impl Into<String>) -> Res<T> {
@@ -60,6 +67,7 @@ impl std::fmt::Display for HErr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             HErr::None => write!(f, "no result"),
+            HErr::NotYetImplemented => write!(f, "not yet implemented"),
             HErr::User(msg) => write!(f, "user error: {}", msg),
             HErr::Internal(msg) => write!(f, "internal error: {}", msg),
             HErr::IO(kind, msg) => write!(f, "io error: {:?}: {}", kind, msg),

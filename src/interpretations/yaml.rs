@@ -25,6 +25,7 @@ static FILE_TO_YAML: ElevationConstructor = ElevationConstructor {
 pub struct Domain {
     nodes: NodeGroup,
 }
+
 impl DomainTrait for Domain {
     type Cell = Cell;
 
@@ -41,6 +42,10 @@ impl DomainTrait for Domain {
             pos: 0,
         })
     }
+}
+
+impl SaveTrait for Domain {
+    // TODO: add implementation
 }
 
 #[derive(Clone, Debug)]

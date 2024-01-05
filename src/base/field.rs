@@ -28,6 +28,20 @@ impl DomainTrait for FieldGroup {
     }
 }
 
+impl SaveTrait for FieldGroup {
+    fn write_policy(&self) -> Res<WritePolicy> {
+        self.cell.domain()?.write_policy()
+    }
+
+    fn set_write_policy(&mut self, policy: WritePolicy) -> Res<()> {
+        self.cell.domain()?.set_write_policy(policy)
+    }
+
+    fn save(&self, target: SaveTarget) -> Res<()> {
+        self.cell.domain()?.save(target)
+    }
+}
+
 impl GroupTrait for FieldGroup {
     type Cell = FieldCell;
 

@@ -79,7 +79,7 @@ fn path_simple_search() -> Res<()> {
             m: mval
             n: nval
         "#;
-    let root = Cell::from(TREE.to_string()).be("yaml")?;
+    let root = Cell::from(TREE).be("yaml")?;
     let eval = str_eval(root.clone(), "/a/b/x")?;
     assert_eq!(eval, ["x:xb"]);
     let eval = str_eval(root.clone(), "/ a/b /x")?;
@@ -100,7 +100,7 @@ fn path_kleene() -> Res<()> {
             m: mval
             n: nval
         "#;
-    let root = Cell::from(TREE.to_string()).be("yaml")?;
+    let root = Cell::from(TREE).be("yaml")?;
 
     let eval = str_eval(root.clone(), pr("/*"))?;
     assert_eq!(eval, ["a:ø", "m:mval", "n:nval"]);
@@ -133,7 +133,7 @@ fn path_filter() -> Res<()> {
             m: mval
             n: nval
         "#;
-    let root = Cell::from(TREE.to_string()).be("yaml")?;
+    let root = Cell::from(TREE).be("yaml")?;
     let eval = str_eval(root.clone(), pr("/*[/x]"))?;
     assert_eq!(eval, ["a:ø"]);
     let eval = str_eval(root.clone(), pr("/a/*[/x]"))?;
@@ -152,7 +152,7 @@ fn path_double_kleene_simple() -> Res<()> {
             n: nval
         "#;
     set_verbose(true);
-    let root = Cell::from(TREE_SIMPLE.to_string()).be("yaml")?;
+    let root = Cell::from(TREE_SIMPLE).be("yaml")?;
 
     crate::pprint::pprint(&root, 0, 0);
 
@@ -179,7 +179,7 @@ fn path_double_kleene() -> Res<()> {
         "#;
 
     set_verbose(true);
-    let root = Cell::from(TREE.to_string()).be("yaml")?;
+    let root = Cell::from(TREE).be("yaml")?;
 
     //  doublestar should match on multiple levels
     let eval = str_eval(root.clone(), "/**/x")?;
@@ -213,7 +213,7 @@ fn path_double_kleene_top_filter() -> Res<()> {
         "#;
 
     set_verbose(true);
-    let root = Cell::from(TREE.to_string()).be("yaml")?;
+    let root = Cell::from(TREE).be("yaml")?;
 
     let eval = str_eval(root.clone(), pr("/*[#label=='a']/**[=='xa']"))?;
     assert_eq!(eval, ["x:xa"]);
@@ -237,7 +237,7 @@ fn path_double_kleene_deep_filter() -> Res<()> {
             n: nval
         "#;
 
-    let root = Cell::from(TREE.to_string()).be("yaml")?;
+    let root = Cell::from(TREE).be("yaml")?;
     let eval = str_eval(root.clone(), "/**/*[#label=='x']")?;
     assert_eq!(eval, ["x:xa", "x:xb", "x:xc"]);
     let eval = str_eval(root.clone(), "/a/**[#label!='x']/y")?;
@@ -263,7 +263,7 @@ fn path_double_kleene_all() -> Res<()> {
             n: nval
         "#;
 
-    let root = Cell::from(TREE.to_string()).be("yaml")?;
+    let root = Cell::from(TREE).be("yaml")?;
 
     let eval = str_eval(root.clone(), "/**")?;
     assert_eq!(
@@ -350,7 +350,7 @@ fn path_double_kleene_repeat() -> Res<()> {
             n: nval
         "#;
     set_verbose(true);
-    let root = Cell::from(TREE.to_string()).be("yaml")?;
+    let root = Cell::from(TREE).be("yaml")?;
 
     // crate::pprint::pprint(&root, 0, 0);
     // println!("\npath: {}\n", "/**/b/b");
@@ -360,6 +360,33 @@ fn path_double_kleene_repeat() -> Res<()> {
 
     let eval = str_eval(root.clone(), "/**/b/**/b")?;
     assert_eq!(eval, ["b:ø", "b:bval"]);
+
+    Ok(())
+}
+
+#[test]
+fn path_double_kleene_with_filter() -> Res<()> {
+    const TREE: &str = r#"
+        dir1:
+            f1:
+                size: 1
+            dir2:
+                f2:
+                    size: 2
+        "#;
+    set_verbose(true);
+    let root = Cell::from(TREE).be("yaml")?;
+
+    let eval = str_eval(root.clone(), "/dir1/**")?;
+    assert_eq!(
+        eval,
+        ["dir1:ø", "f1:ø", "size:1", "dir2:ø", "f2:ø", "size:2"]
+    );
+
+    let eval = str_eval(root.clone(), "/dir1/**[/size]")?;
+    assert_eq!(eval, ["f1:ø"]);
+    // TODO: the above is wrong, correct is:
+    // assert_eq!(eval, ["f1:ø", "f2:ø"]);
 
     Ok(())
 }

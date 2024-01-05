@@ -136,6 +136,10 @@ impl DomainTrait for Domain {
     }
 }
 
+impl SaveTrait for Domain {
+    // TODO: add implementation
+}
+
 impl CellTrait for Cell {
     type Domain = Domain;
     type Group = Group;

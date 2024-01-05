@@ -16,6 +16,10 @@ impl DomainTrait for Cell {
     }
 }
 
+impl SaveTrait for Cell {
+    // TODO: add implementation
+}
+
 #[derive(Debug)]
 pub struct CellReader(UseRc<OwnValue>);
 
