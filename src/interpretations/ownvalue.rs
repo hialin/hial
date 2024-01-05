@@ -1,8 +1,8 @@
 use crate::base::{Cell as XCell, *};
-use crate::utils::orc::{Orc, Urc};
+use crate::utils::ownrc::{OwnRc, UseRc};
 
 #[derive(Clone, Debug)]
-pub struct Cell(Orc<OwnValue>);
+pub struct Cell(OwnRc<OwnValue>);
 
 impl DomainTrait for Cell {
     type Cell = Cell;
@@ -17,10 +17,10 @@ impl DomainTrait for Cell {
 }
 
 #[derive(Debug)]
-pub struct CellReader(Urc<OwnValue>);
+pub struct CellReader(UseRc<OwnValue>);
 
 #[derive(Debug)]
-pub struct CellWriter(Urc<OwnValue>);
+pub struct CellWriter(UseRc<OwnValue>);
 
 impl Cell {
     pub fn from_str(s: &str) -> Res<XCell> {
@@ -32,7 +32,7 @@ impl Cell {
     }
 
     pub fn from_value(ov: OwnValue) -> Res<XCell> {
-        let cell = Cell(Orc::new(ov));
+        let cell = Cell(OwnRc::new(ov));
         Ok(XCell {
             dyn_cell: DynCell::from(cell),
         })
@@ -67,10 +67,10 @@ impl CellTrait for Cell {
     }
 
     fn read(&self) -> Res<Self::CellReader> {
-        Ok(CellReader(self.0.urc()))
+        Ok(CellReader(self.0.tap()))
     }
 
     fn write(&self) -> Res<Self::CellWriter> {
-        Ok(CellWriter(self.0.urc()))
+        Ok(CellWriter(self.0.tap()))
     }
 }

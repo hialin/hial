@@ -4,7 +4,7 @@ use reqwest::{blocking::Client, Error as ReqwestError};
 
 use crate::{
     base::{Cell as XCell, *},
-    utils::orc::*,
+    utils::ownrc::*,
 };
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
@@ -21,7 +21,7 @@ static URL_TO_HTTP: ElevationConstructor = ElevationConstructor {
 //       @headers/...
 
 #[derive(Clone, Debug)]
-pub struct Domain(Orc<Response>);
+pub struct Domain(OwnRc<Response>);
 
 #[derive(Debug)]
 pub struct Response {
@@ -40,7 +40,7 @@ pub struct Cell {
 #[derive(Debug)]
 pub struct CellReader {
     kind: GroupKind,
-    response: Urc<Response>,
+    response: UseRc<Response>,
     pos: usize,
 }
 
@@ -100,7 +100,7 @@ fn from_url_str(url: &str) -> Res<Domain> {
     if status >= 400 {
         eprintln!("Error: http call failed: {} = {} {}", url, status, reason);
     }
-    Ok(Domain(Orc::new(Response {
+    Ok(Domain(OwnRc::new(Response {
         status,
         reason,
         headers,
@@ -109,7 +109,7 @@ fn from_url_str(url: &str) -> Res<Domain> {
 }
 
 fn to_string(cell: &Cell) -> Res<String> {
-    let ur = &*cell.group.response.0.urc();
+    let ur = &*cell.group.response.0.tap();
     let bytes = &ur.body;
     let string = String::from_utf8(bytes.to_vec());
     match string {
@@ -161,7 +161,7 @@ impl CellTrait for Cell {
     fn read(&self) -> Res<Self::CellReader> {
         Ok(CellReader {
             kind: self.group.kind,
-            response: self.group.response.0.urc(),
+            response: self.group.response.0.tap(),
             pos: self.pos,
         })
     }
@@ -257,7 +257,7 @@ impl GroupTrait for Group {
             GroupKind::Root => 0,
             GroupKind::Attr => 2,
             GroupKind::Status => 2,
-            GroupKind::Headers => self.response.0.urc().headers.len(),
+            GroupKind::Headers => self.response.0.tap().headers.len(),
         })
     }
 
@@ -271,7 +271,7 @@ impl GroupTrait for Group {
                 group: self.clone(),
                 pos: index,
             }),
-            (GroupKind::Headers, i) if i < self.response.0.urc().headers.len() => Ok(Cell {
+            (GroupKind::Headers, i) if i < self.response.0.tap().headers.len() => Ok(Cell {
                 group: self.clone(),
                 pos: index,
             }),
@@ -301,7 +301,7 @@ impl GroupTrait for Group {
             (GroupKind::Headers, sel) => match sel {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
                 Selector::Str(k) => {
-                    if let Some((i, _, _)) = self.response.0.urc().headers.get_full(k) {
+                    if let Some((i, _, _)) = self.response.0.tap().headers.get_full(k) {
                         Ok(Cell {
                             group: self.clone(),
                             pos: i,

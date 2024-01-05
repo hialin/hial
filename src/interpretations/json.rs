@@ -5,10 +5,10 @@ use linkme::distributed_slice;
 use serde_json::Value as SerdeValue;
 
 use crate::guard_some;
-use crate::utils::orc::Urc;
+use crate::utils::ownrc::UseRc;
 use crate::{
     base::{Cell as XCell, *},
-    utils::orc::*,
+    utils::ownrc::*,
 };
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
@@ -45,26 +45,26 @@ pub struct Group {
 }
 
 #[derive(Clone, Debug)]
-pub struct Domain(Orc<DomainData>);
+pub struct Domain(OwnRc<DomainData>);
 
 #[derive(Clone, Debug)]
 pub struct DomainData {
-    nodes: Orc<Vec<Node>>,
+    nodes: OwnRc<Vec<Node>>,
     write_policy: WritePolicy,
     origin: Option<XCell>,
 }
 
 #[derive(Clone, Debug)]
 pub enum NodeGroup {
-    Array(Orc<Vec<Node>>),
-    Object(Orc<IndexMap<String, Node>>),
+    Array(OwnRc<Vec<Node>>),
+    Object(OwnRc<IndexMap<String, Node>>),
 }
 
 #[derive(Clone, Debug)]
 pub enum Node {
     Scalar(OwnValue),
-    Array(Orc<Vec<Node>>),
-    Object(Orc<IndexMap<String, Node>>),
+    Array(OwnRc<Vec<Node>>),
+    Object(OwnRc<IndexMap<String, Node>>),
 }
 
 #[derive(Debug)]
@@ -81,8 +81,8 @@ pub struct CellWriter {
 
 #[derive(Debug)]
 pub enum UrcNodeGroup {
-    Array(Urc<Vec<Node>>),
-    Object(Urc<IndexMap<String, Node>>),
+    Array(UseRc<Vec<Node>>),
+    Object(UseRc<IndexMap<String, Node>>),
 }
 
 impl DomainTrait for Domain {
@@ -96,7 +96,7 @@ impl DomainTrait for Domain {
         Ok(Cell {
             group: Group {
                 domain: self.clone(),
-                nodes: NodeGroup::Array(self.0.urc().nodes.clone()),
+                nodes: NodeGroup::Array(self.0.tap().nodes.clone()),
             },
             pos: 0,
         })
@@ -105,7 +105,7 @@ impl DomainTrait for Domain {
     fn save(&self, target: SaveTarget) -> Res<()> {
         let s = self.root()?.serialize()?;
         match target {
-            SaveTarget::Origin => match self.0.urc().origin {
+            SaveTarget::Origin => match self.0.tap().origin {
                 Some(ref origin) => origin.write()?.set_value(OwnValue::String(s))?,
                 None => return userr("no origin, cannot save"),
             },
@@ -147,8 +147,8 @@ impl Cell {
     }
 
     pub fn from_serde_value(json: SerdeValue, origin: Option<XCell>) -> Res<XCell> {
-        let nodes = Orc::new(vec![node_from_json(json)]);
-        let domain = Domain(Orc::new(DomainData {
+        let nodes = OwnRc::new(vec![node_from_json(json)]);
+        let domain = Domain(OwnRc::new(DomainData {
             nodes,
             write_policy: WritePolicy::ReadOnly,
             origin,
@@ -160,11 +160,11 @@ impl Cell {
 
     pub fn serialize(&self) -> Res<String> {
         let serde_value = match self.group.nodes {
-            NodeGroup::Array(ref a) => match a.urc().get(self.pos) {
+            NodeGroup::Array(ref a) => match a.tap().get(self.pos) {
                 Some(node) => node_to_serde(node),
                 None => return fault(format!("bad index {}", self.pos)),
             },
-            NodeGroup::Object(ref o) => match o.urc().get_index(self.pos) {
+            NodeGroup::Object(ref o) => match o.tap().get_index(self.pos) {
                 Some(x) => node_to_serde(x.1),
                 None => return fault(format!("bad index {}", self.pos)),
             },
@@ -185,11 +185,11 @@ impl CellTrait for Cell {
 
     fn typ(&self) -> Res<&str> {
         match self.group.nodes {
-            NodeGroup::Array(ref a) => match a.urc().get(self.pos) {
+            NodeGroup::Array(ref a) => match a.tap().get(self.pos) {
                 Some(n) => Ok(get_typ(n)),
                 None => fault(format!("bad index {}", self.pos)),
             },
-            NodeGroup::Object(ref o) => match o.urc().get_index(self.pos) {
+            NodeGroup::Object(ref o) => match o.tap().get_index(self.pos) {
                 Some(x) => Ok(get_typ(x.1)),
                 None => fault(format!("bad index {}", self.pos)),
             },
@@ -199,8 +199,8 @@ impl CellTrait for Cell {
     fn read(&self) -> Res<Self::CellReader> {
         Ok(CellReader {
             nodes: match self.group.nodes {
-                NodeGroup::Array(ref a) => UrcNodeGroup::Array(a.urc()),
-                NodeGroup::Object(ref o) => UrcNodeGroup::Object(o.urc()),
+                NodeGroup::Array(ref a) => UrcNodeGroup::Array(a.tap()),
+                NodeGroup::Object(ref o) => UrcNodeGroup::Object(o.tap()),
             },
             pos: self.pos,
         })
@@ -209,8 +209,8 @@ impl CellTrait for Cell {
     fn write(&self) -> Res<Self::CellWriter> {
         Ok(CellWriter {
             nodes: match self.group.nodes {
-                NodeGroup::Array(ref a) => UrcNodeGroup::Array(a.urc()),
-                NodeGroup::Object(ref o) => UrcNodeGroup::Object(o.urc()),
+                NodeGroup::Array(ref a) => UrcNodeGroup::Array(a.tap()),
+                NodeGroup::Object(ref o) => UrcNodeGroup::Object(o.tap()),
             },
             pos: self.pos,
         })
@@ -218,7 +218,7 @@ impl CellTrait for Cell {
 
     fn sub(&self) -> Res<Group> {
         match self.group.nodes {
-            NodeGroup::Array(ref array) => match &array.urc().get(self.pos) {
+            NodeGroup::Array(ref array) => match &array.tap().get(self.pos) {
                 Some(Node::Array(a)) => Ok(Group {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Array(a.clone()),
@@ -229,7 +229,7 @@ impl CellTrait for Cell {
                 }),
                 _ => nores(),
             },
-            NodeGroup::Object(ref object) => match object.urc().get_index(self.pos) {
+            NodeGroup::Object(ref object) => match object.tap().get_index(self.pos) {
                 Some((_, Node::Array(a))) => Ok(Group {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Array(a.clone()),
@@ -379,7 +379,7 @@ impl GroupTrait for Group {
             NodeGroup::Array(a) => nores(),
             NodeGroup::Object(o) => match key.into() {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
-                Selector::Str(k) => match o.urc().get_index_of(k) {
+                Selector::Str(k) => match o.tap().get_index_of(k) {
                     Some(pos) => Ok(Cell {
                         group: self.clone(),
                         pos,
@@ -392,18 +392,18 @@ impl GroupTrait for Group {
 
     fn len(&self) -> Res<usize> {
         Ok(match &self.nodes {
-            NodeGroup::Array(array) => array.urc().len(),
-            NodeGroup::Object(o) => o.urc().len(),
+            NodeGroup::Array(array) => array.tap().len(),
+            NodeGroup::Object(o) => o.tap().len(),
         })
     }
 
     fn at(&self, index: usize) -> Res<Cell> {
         match &self.nodes {
-            NodeGroup::Array(ref array) if index < array.urc().len() => Ok(Cell {
+            NodeGroup::Array(ref array) if index < array.tap().len() => Ok(Cell {
                 group: self.clone(),
                 pos: index,
             }),
-            NodeGroup::Object(ref o) if index < o.urc().len() => Ok(Cell {
+            NodeGroup::Object(ref o) if index < o.tap().len() => Ok(Cell {
                 group: self.clone(),
                 pos: index,
             }),
@@ -431,14 +431,14 @@ fn node_from_json(sv: SerdeValue) -> Node {
             for v in a {
                 na.push(node_from_json(v));
             }
-            Node::Array(Orc::new(na))
+            Node::Array(OwnRc::new(na))
         }
         SerdeValue::Object(o) => {
             let mut no = IndexMap::new();
             for (k, v) in o {
                 no.insert(k, node_from_json(v));
             }
-            Node::Object(Orc::new(no))
+            Node::Object(OwnRc::new(no))
         }
     }
 }
@@ -455,17 +455,17 @@ fn node_to_serde(node: &Node) -> SerdeValue {
             serde_json::Number::from_f64(*f).unwrap_or(serde_json::Number::from(0)),
         ),
         Node::Scalar(OwnValue::String(s)) => SerdeValue::String(s.clone()),
-        Node::Scalar(OwnValue::Bytes(b)) => SerdeValue::String(String::from_utf8_lossy(&b).into()),
+        Node::Scalar(OwnValue::Bytes(b)) => SerdeValue::String(String::from_utf8_lossy(b).into()),
         Node::Array(a) => {
             let mut na = vec![];
-            for v in &*a.urc() {
+            for v in &*a.tap() {
                 na.push(node_to_serde(v));
             }
             SerdeValue::Array(na)
         }
         Node::Object(o) => {
             let mut no = serde_json::map::Map::new();
-            for (k, v) in o.urc().as_slice() {
+            for (k, v) in o.tap().as_slice() {
                 no.insert(k.clone(), node_to_serde(v));
             }
             SerdeValue::Object(no)

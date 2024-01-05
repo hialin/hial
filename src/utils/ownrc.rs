@@ -6,10 +6,10 @@ use std::{
 };
 
 // owned rc
-pub struct Orc<T>(NonNull<RcBox<T>>);
+pub struct OwnRc<T>(NonNull<RcBox<T>>);
 
 // used rc
-pub struct Urc<T>(NonNull<RcBox<T>>);
+pub struct UseRc<T>(NonNull<RcBox<T>>);
 
 struct RcBox<T> {
     pub(self) owners: Cell<isize>,
@@ -17,36 +17,36 @@ struct RcBox<T> {
     pub(self) value: T,
 }
 
-impl<T> Orc<T> {
-    pub fn new(value: T) -> Orc<T> {
-        Orc(RcBox::new(value))
+impl<T> OwnRc<T> {
+    pub fn new(value: T) -> OwnRc<T> {
+        OwnRc(RcBox::new(value))
     }
 
-    pub fn urc(&self) -> Urc<T> {
+    pub fn tap(&self) -> UseRc<T> {
         unsafe {
             self.0.as_ref().inc_urc();
         }
-        Urc(self.0)
+        UseRc(self.0)
     }
 }
 
-impl<T> Clone for Orc<T> {
+impl<T> Clone for OwnRc<T> {
     #[inline]
-    fn clone(&self) -> Orc<T> {
+    fn clone(&self) -> OwnRc<T> {
         unsafe {
             self.0.as_ref().inc_orc();
         }
-        Orc(self.0)
+        OwnRc(self.0)
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for Orc<T> {
+impl<T: fmt::Debug> fmt::Debug for OwnRc<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         unsafe { write!(f, "Orc({:?})", &self.0.as_ref().value) }
     }
 }
 
-impl<T> Drop for Orc<T> {
+impl<T> Drop for OwnRc<T> {
     fn drop(&mut self) {
         unsafe {
             self.0.as_mut().dec_orc();
@@ -57,7 +57,7 @@ impl<T> Drop for Orc<T> {
     }
 }
 
-impl<T> Urc<T> {
+impl<T> UseRc<T> {
     pub fn get_mut(&mut self) -> Option<&mut T> {
         unsafe {
             if self.0.as_ref().users.get() == 1 {
@@ -69,13 +69,13 @@ impl<T> Urc<T> {
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for Urc<T> {
+impl<T: fmt::Debug> fmt::Debug for UseRc<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         unsafe { write!(f, "Urc({:?})", &self.0.as_ref().value) }
     }
 }
 
-impl<T> Drop for Urc<T> {
+impl<T> Drop for UseRc<T> {
     fn drop(&mut self) {
         unsafe {
             self.0.as_mut().dec_urc();
@@ -86,7 +86,7 @@ impl<T> Drop for Urc<T> {
     }
 }
 
-impl<T> Deref for Urc<T> {
+impl<T> Deref for UseRc<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -94,7 +94,7 @@ impl<T> Deref for Urc<T> {
     }
 }
 
-impl<T> DerefMut for Urc<T> {
+impl<T> DerefMut for UseRc<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut self.0.as_mut().value }
     }
