@@ -101,7 +101,7 @@ impl From<ScanError> for HErr {
 
 impl Cell {
     pub fn from_value_cell(cell: XCell) -> Res<XCell> {
-        let reader = cell.read()?;
+        let reader = cell.read();
         let value = reader.value()?;
         let s = value.as_cow_str();
         Cell::from_string(s)

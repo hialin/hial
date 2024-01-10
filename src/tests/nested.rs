@@ -10,7 +10,7 @@ fn test_nested() -> Res<()> {
         .first()?;
     pprint(&cell, 0, 0);
     assert_eq!(
-        cell.read()?.value()?,
+        cell.read().value()?,
         Value::Str("mytext: This is my yaml string")
     );
 
@@ -20,7 +20,7 @@ fn test_nested() -> Res<()> {
 
     pprint(&cell, 0, 0);
 
-    assert_eq!(cell.read()?.value()?, Value::Str("This is my yaml string"));
+    assert_eq!(cell.read().value()?, Value::Str("This is my yaml string"));
 
     Ok(())
 }

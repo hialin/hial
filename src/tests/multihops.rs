@@ -11,7 +11,7 @@ fn test_multihop_trace() -> Res<()> {
     assert_eq!(results.len(), 1);
     let result = &results[0];
 
-    assert_eq!(result.read()?.value()?, Value::from(60));
+    assert_eq!(result.read().value()?, Value::from(60));
 
     // TODO: implement path() without Box<Cell> parent
     // How do we implement a path() method for a multihop without keeping

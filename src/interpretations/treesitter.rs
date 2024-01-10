@@ -95,7 +95,7 @@ impl Cell {
     }
 
     pub fn from_value_cell(cell: XCell, language: &'static str) -> Res<XCell> {
-        let reader = cell.read()?;
+        let reader = cell.read();
         let value = reader.value()?;
         let source = value.as_cow_str();
         let domain = sitter_from_source(source.into_owned(), language)?;

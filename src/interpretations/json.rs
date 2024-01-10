@@ -107,10 +107,10 @@ impl SaveTrait for Domain {
         let s = self.root()?.serialize()?;
         match target {
             SaveTarget::Origin => match self.0.tap().origin {
-                Some(ref origin) => origin.write()?.set_value(OwnValue::String(s))?,
+                Some(ref origin) => origin.write().set_value(OwnValue::String(s))?,
                 None => return userr("no origin, cannot save"),
             },
-            SaveTarget::Cell(ref cell) => cell.write()?.set_value(OwnValue::String(s))?,
+            SaveTarget::Cell(ref cell) => cell.write().set_value(OwnValue::String(s))?,
         };
         Ok(())
     }
@@ -119,7 +119,7 @@ impl SaveTrait for Domain {
 
 impl Cell {
     pub fn from_value_cell(cell: XCell) -> Res<XCell> {
-        let s = cell.read()?.value()?.to_string();
+        let s = cell.read().value()?.to_string();
         let json: SerdeValue = serde_json::from_str(s.as_ref())?;
         Self::from_serde_value(json, Some(cell))
     }
@@ -132,7 +132,7 @@ impl Cell {
     }
 
     pub fn from_http_cell(cell: XCell) -> Res<XCell> {
-        let s = cell.read()?.value()?.to_string();
+        let s = cell.read().value()?.to_string();
         let json: SerdeValue = serde_json::from_str(s.as_ref())?;
         Self::from_serde_value(json, Some(cell))
     }

@@ -65,10 +65,10 @@ impl GroupTrait for FieldGroup {
             _ => return nores(),
         };
         // only return the field cell if the field is not empty
-        if ty == FieldType::Label && self.cell.read()?.label() == Err(HErr::None) {
+        if ty == FieldType::Label && self.cell.read().label() == Err(HErr::None) {
             return nores();
         }
-        if ty == FieldType::Value && self.cell.read()?.value() == Err(HErr::None) {
+        if ty == FieldType::Value && self.cell.read().value() == Err(HErr::None) {
             return nores();
         }
         Ok(FieldCell {
@@ -132,7 +132,7 @@ impl CellTrait for FieldCell {
         Ok(FieldReader {
             cell: self.cell.clone(),
             ty: self.ty,
-            reader: Box::new(self.cell.read()?),
+            reader: Box::new(self.cell.read().err()?),
         })
     }
 
@@ -140,7 +140,7 @@ impl CellTrait for FieldCell {
         Ok(FieldWriter {
             cell: self.cell.clone(),
             ty: self.ty,
-            writer: Box::new(self.cell.write()?),
+            writer: Box::new(self.cell.write().err()?),
         })
     }
 }

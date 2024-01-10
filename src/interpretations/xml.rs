@@ -106,7 +106,7 @@ enum Attribute {
 
 impl Cell {
     pub fn from_value_cell(cell: XCell) -> Res<XCell> {
-        let reader = cell.read()?;
+        let reader = cell.read();
         let value = reader.value()?;
         let s = value.as_cow_str();
         Self::from_str(s.as_ref())

@@ -48,6 +48,10 @@ fn main() -> Res<()> {
             let depth = depth.unwrap_or(0);
             let breadth = breadth.unwrap_or(0);
             let path = path.as_deref().unwrap_or("");
+            if path.is_empty() {
+                eprintln!("No path given.");
+                return Ok(());
+            }
             debug!("Command: print {}", path);
             let (path_start, path) = match Path::parse_with_starter(path) {
                 Ok(x) => x,

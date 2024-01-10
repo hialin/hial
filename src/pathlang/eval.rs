@@ -185,7 +185,7 @@ impl<'s> EvalIter<'s> {
                 continue;
             }
             if let Some(interpretation) = path_item.selector {
-                let subcell = guard_ok!(group.get(interpretation), err => {
+                let subcell = guard_ok!(group.get(interpretation).err(), err => {
                     debug_err!(err);
                     continue;
                 });
@@ -220,7 +220,7 @@ impl<'s> EvalIter<'s> {
         let len = group.len().unwrap_or(0);
         for i in (0..len).rev() {
             let mut accepted_path_indices = HashSet::new();
-            let subcell = guard_ok!(group.at(i), err => {
+            let subcell = guard_ok!(group.at(i).err(), err => {
                 debug_err!(err);
                 continue;
             });
@@ -277,9 +277,9 @@ impl<'s> EvalIter<'s> {
                 continue;
             }
             let subcell_res = if let Some(sel) = path_item.selector {
-                group.get(sel)
+                group.get(sel).err()
             } else if let Some(idx) = path_item.index {
-                group.at(idx)
+                group.at(idx).err()
             } else {
                 debug!(
                     "error: empty selector and index in path: {:?}",
@@ -325,7 +325,7 @@ impl<'s> EvalIter<'s> {
                 continue;
             }
             if let Some(field) = path_item.selector {
-                let subcell = guard_ok!(group.get(field), err => {
+                let subcell = guard_ok!(group.get(field).err(), err => {
                     debug_err!(err);
                     continue;
                 });
@@ -347,9 +347,9 @@ impl<'s> EvalIter<'s> {
 
     fn subgroup(relation: Relation, cell: &Cell) -> Res<Group> {
         match relation {
-            Relation::Sub => cell.sub(),
-            Relation::Attr => cell.attr(),
-            Relation::Interpretation => cell.elevate(),
+            Relation::Sub => cell.sub().err(),
+            Relation::Attr => cell.attr().err(),
+            Relation::Interpretation => cell.elevate().err(),
             Relation::Field => cell.field(),
         }
     }
@@ -379,7 +379,7 @@ impl<'s> EvalIter<'s> {
                 return false;
             }
         } else if let Some(index) = path_item.index {
-            match subcell.read() {
+            match subcell.read().err() {
                 Ok(reader) => match reader.index() {
                     Ok(cellindex) => {
                         if index != cellindex {
@@ -433,7 +433,7 @@ impl<'s> EvalIter<'s> {
         if *sel == Selector::Star || *sel == Selector::DoubleStar {
             return true;
         } else {
-            match cell.read() {
+            match cell.read().err() {
                 Ok(reader) => match reader.label() {
                     Ok(ref k) => {
                         if sel == k {
@@ -457,7 +457,7 @@ impl<'s> EvalIter<'s> {
             });
             if let Some(op) = expr.op {
                 if let Some(right) = expr.right {
-                    let reader = guard_ok!(cell.read(), err => {
+                    let reader = guard_ok!(cell.read().err(), err => {
                         debug_err!(err);
                         continue;
                     });

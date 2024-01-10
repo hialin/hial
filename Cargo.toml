@@ -32,4 +32,4 @@ features = ["preserve_order"]
 
 [build-dependencies]
 cc = "1.0"
-cbindgen = "0"
+cbindgen = "0.26"

@@ -52,7 +52,7 @@ impl CellWriterTrait for CellWriter {}
 
 impl Cell {
     pub fn from_value_cell(cell: XCell) -> Res<XCell> {
-        let s = cell.read()?.value()?.to_string();
+        let s = cell.read().value()?.to_string();
         Cell::from_string(s)
     }
 

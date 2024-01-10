@@ -12,35 +12,31 @@ fn main() -> Res<()> {
 }
 
 fn test_rustapi() -> Res<()> {
-    let examples = Cell::from(".".to_string())
-        .be("file")?
-        .sub()?
-        .get("examples")?;
+    let examples = Cell::from(".").be("file").sub().get("examples");
     pprint(&examples, 0, 0);
-    let folder = examples.sub()?;
+    let folder = examples.sub();
     let stacks = folder
-        .get("productiondump.json")?
-        .be("json")?
-        .sub()?
-        .get("stacks")?;
-    for stack in stacks.sub()? {
-        let stack = stack?;
+        .get("productiondump.json")
+        .be("json")
+        .sub()
+        .get("stacks");
+    for stack in stacks.sub() {
         pprint(&stack, 0, 0);
-        let stack_sub = stack.sub()?;
-        if stack_sub.get("system_stack")?.read()?.value()? == Value::Bool(true) {
+        let stack_sub = stack.sub();
+        if stack_sub.get("system_stack").read().value()? == Value::Bool(true) {
             continue;
         }
 
         let yaml = stack_sub
-            .get("dockerCompose")?
-            .read()?
+            .get("dockerCompose")
+            .read()
             .value()?
             .to_owned_value();
-        let yaml = Cell::from(yaml).be("yaml")?;
+        let yaml = Cell::from(yaml).be("yaml");
         pprint(&yaml, 0, 0);
-        let service_node = yaml.sub()?.get("services")?.sub()?.at(0)?;
-        let mut filename = format!("{}.yaml", service_node.read()?.label()?);
-        while folder.get(&filename).is_ok() {
+        let service_node = yaml.sub().get("services").sub().at(0);
+        let mut filename = format!("{}.yaml", service_node.read().label()?);
+        while folder.get(&filename).err().is_ok() {
             filename = format!("{}.yaml", filename);
         }
         println!("{}", filename);
@@ -52,22 +48,16 @@ fn test_rustapi() -> Res<()> {
 }
 
 fn test_rustapi_with_path() -> Res<()> {
-    let folder = Cell::from(".".to_string())
-        .be("file")?
-        .sub()?
-        .get("examples")?;
-    let stacks = folder.search("/productiondump.json^json/stacks")?.first()?;
-    for stack in stacks.sub()? {
-        let stack = stack?;
-        if stack.search("/system_stack")?.first()?.read()?.value()? == "true" {
+    let folder = Cell::from(".").to("^file/examples");
+    let stacks = folder.to("/productiondump.json^json/stacks");
+    for stack in stacks.sub() {
+        if stack.to("/system_stack").read().value()? == "true" {
             continue;
         }
-        let service = stack
-            .search("/dockerCompose^string^yaml/services")?
-            .first()?;
+        let service = stack.to("/dockerCompose^string^yaml/services");
         println!("service found");
-        let mut filename = format!("{}.yaml", service.read()?.value()?);
-        while folder.sub()?.get(&filename).is_ok() {
+        let mut filename = format!("{}.yaml", service.read().value()?);
+        while folder.sub().get(&filename).err().is_ok() {
             filename = format!("{}.yaml", filename);
         }
         // folder.new(filename).be("yaml").set(yaml)

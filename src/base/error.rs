@@ -1,5 +1,7 @@
 use std::io;
 
+use crate::base::*;
+
 pub type Res<T> = Result<T, HErr>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -96,5 +98,79 @@ impl From<io::Error> for HErr {
 impl<T> From<HErr> for Res<T> {
     fn from(e: HErr) -> Self {
         Err(e)
+    }
+}
+
+impl DomainTrait for HErr {
+    type Cell = HErr;
+
+    fn interpretation(&self) -> &str {
+        "error"
+    }
+
+    fn root(&self) -> Res<Self::Cell> {
+        Err(self.clone())
+    }
+}
+
+impl SaveTrait for HErr {
+    // TODO: add implementation
+}
+
+impl CellReaderTrait for HErr {
+    fn value(&self) -> Res<Value> {
+        Err(self.clone())
+    }
+}
+
+impl CellWriterTrait for HErr {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+        Err(self.clone())
+    }
+}
+
+impl CellTrait for HErr {
+    type Domain = HErr;
+    type Group = HErr;
+    type CellReader = HErr;
+    type CellWriter = HErr;
+
+    fn domain(&self) -> HErr {
+        self.clone()
+    }
+
+    fn typ(&self) -> Res<&str> {
+        Ok("error")
+    }
+
+    fn read(&self) -> Res<Self::CellReader> {
+        Err(self.clone())
+    }
+
+    fn write(&self) -> Res<Self::CellWriter> {
+        Err(self.clone())
+    }
+}
+
+impl GroupTrait for HErr {
+    type Cell = HErr;
+
+    fn label_type(&self) -> LabelType {
+        LabelType {
+            is_indexed: false,
+            unique_labels: true,
+        }
+    }
+
+    fn len(&self) -> Res<usize> {
+        Ok(0)
+    }
+
+    fn at(&self, index: usize) -> Res<Self::Cell> {
+        Err(self.clone())
+    }
+
+    fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::Cell> {
+        Err(self.clone())
     }
 }

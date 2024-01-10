@@ -2,11 +2,16 @@
 
 ## TODOs
 
+- clean up rust representation
+- explore python implementation and usage
+- implement policy(): set on cells and propagated, not set by interpretations
+- search should return all matches embedded in a delegation cell, which has all results
+    as subs and delegates write operations to all the subs
+- add json treesitter interpretation, compare it with rust outputs
 - json: use SerdeValue directly instead of Node
 - explicit domain save/write: to origin, to new domain
 - write policies on domain (interpretation):
     - read only, write ignore, write back, write to new domain
-- use anyhow for errors
 - fix double kleene error (see test)
 - fix extra::interpretation()
 - fix todo!() and TODO: in code

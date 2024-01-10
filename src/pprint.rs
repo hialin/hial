@@ -21,12 +21,8 @@ fn _pprint(
         return Ok(());
     }
     print_cell(cell, prefix, indent, buffer)?;
-    if let Ok(attr) = cell.attr() {
-        pprint_group("@", attr, depth, breadth, indent, buffer)?;
-    }
-    if let Ok(subs) = cell.sub() {
-        pprint_group("", subs, depth, breadth, indent, buffer)?;
-    }
+    pprint_group("@", cell.attr(), depth, breadth, indent, buffer)?;
+    pprint_group("", cell.sub(), depth, breadth, indent, buffer)?;
     Ok(())
 }
 
@@ -47,7 +43,7 @@ fn pprint_group(
         }
     } else {
         for (i, x) in group.into_iter().enumerate() {
-            match x {
+            match x.err() {
                 Ok(x) => _pprint(&x, prefix, depth, breadth, indent + 1, buffer)?,
                 Err(err) => eprintln!("error: {:?}", err),
             }
@@ -104,7 +100,7 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
     make_indent(indent, buffer)?;
     write!(buffer, "{}", prefix)?;
 
-    match cell.read() {
+    match cell.read().err() {
         Ok(reader) => {
             let key = reader.label();
             let value = reader.value();
@@ -127,7 +123,7 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
         Err(err) => write!(buffer, "⚠cannot read: {:?}⚠", err)?,
     }
 
-    match cell.sub() {
+    match cell.sub().err() {
         Ok(group) => {
             let kt = group.label_type();
             write!(buffer, "{}", if kt.is_indexed { "" } else { " ∤" })

@@ -1,26 +1,24 @@
 
 # Hial
 
-Hial is an uniform data API, particularly suitable for textual data. It is both a library and an executable.
+Hial is an uniform data API, particularly suitable for textual data. It is a CLI tool backed by a library.
 
-🚧 Hial is currently under construction. 🚧
-
-## What is an uniform data API?
-
-An uniform data API is a programmatic interface to different types of data represented in an uniform manner (a general tree/graph structure). This makes the data easy to read, explore and modify using a small number of functions. The types of data that can be supported by this API are the file system structure, usual configuration files (json, yaml, toml), markup files (xml, html), programs written in various programming languages, operating system configurations and runtime parameters, etc.
+An uniform data API is a programmatic interface to different types of data represented in an uniform manner (a general tree/graph structure). This makes the data easy to read, explore and modify using a small number of functions. The types of data that can be supported by this API are the file system structure, usual configuration files (json, yaml, toml), markup files (xml, html), programs written in various programming languages, operating system configurations and runtime parameters, database tables and records, etc.
 
 ### Why is it needed?
 
-The uniform data API maximizes user comfort and speed by mapping the data into a single mental model. This model can be used in 90% of all cases, while the remaining 10% of cases can be handled by the usual specialized APIs. A simple and uniform data model makes it easy to create, transform, filter, delete any kind of data, programmatically.
+The uniform data API maximizes user comfort and speed because it requires a single mental model. This model allows data search and manipulation in most cases, with the remaining cases being handled by the usual specialized APIs. A simple and uniform data model makes it easy to create, transform, filter and delete any kind of data, manually or programmatically.
 
 The following tasks should be easy with such an API:
+- pinpoint changes in configuration files (e.g. change a specific value in a json/yaml/toml/text file)
 - interactive or automated data exploration (structured grep)
-- targeted editing of configuration files (e.g. change a specific value in a json/yaml/toml/text file)
-- custom verification of programs, e.g. testing program invariants
 - complex data conversions
 - semantic diffs
+- custom verification of programs, e.g. testing program invariants
 
 ## The data model
+
+🚧 **Hial is currently under construction. Some things may change**. 🚧
 
 The data model is that of a graph of simple data nodes. The graph is always represented as a spanning tree, with a single root node and a hierarchy of children nodes.
 
@@ -32,7 +30,7 @@ All cells except the root cell have a **super** cell and are part of the **super
 
 A cell is always an **interpretation** of some underlying data. For example a series of bytes `7b 22 61 22 3a 31 7d` can be interpreted as a byte array (a single cell with a blob value of `7b 22 61 22 3a 31 7d`) or as an utf-8 encoded string (another cell with a string value of `{"a":1}`) or as a json tree of cells (the root cell being the json object `{}` with a sub cell with label `a` and value `1`). A cell with some value can be always explicitly re-interpreted as another type of cell.
 
-A cell also has a string **type**describing its kind, depending on the interpretation. Such types can be: "file" or "folder" (in the fs interpretation), "array" (in the json interpretation), "function_item" (in the rust interpretation), "response" (in the http interpretation), etc.
+A cell also has a string **type** describing its kind, depending on the interpretation. Such types can be: "file" or "folder" (in the fs interpretation), "array" (in the json interpretation), "function_item" (in the rust interpretation), "response" (in the http interpretation), etc.
 
 ### Examples:
 
@@ -87,32 +85,67 @@ See [issues.md](./issues.md).
 
 ## API examples, use cases
 
-#### Explore files on the file system
+#### - Explore files on the file system
 
 ```bash
 # shell, works
 hial ls "."
 ```
 
-```python
-# python, wip: python interop not done
-for cell in path('./**'):
-    print(cell.value())
+```rust
+// rust works natively
+for cell in Cell::from_path(".^file/**").all() {
+    // list all file names at the same level
+    // indenting children requires more work
+    println!("{}: ", cell.read().label());
+}
 ```
 
-#### Read a list of services from a Docker compose file and print those that have inaccessible images [working]
+<!-- ```python
+# python, wip: python interop not done
+for cell in hial.path('./**'):
+    print(cell.value())
+``` -->
+
+#### - Read a list of services from a Docker compose file and print those that have inaccessible images
 
 ```bash
 # shell, works
 echo "Bad images:"
-hial print "./config.yaml^yaml/services[/image#value^http@status/code!=200]/name"
+hial ls "./config.yaml^yaml/services[/image#value^http@status/code!=200]/name"
+```
+
+```rust
+// rust, works natively
+for service in Cell::from_path("./config.yaml^yaml/services").all() {
+    let image = service.to("/image");
+    if image.to('^http[@method=HEAD]@status/code') >= 400 {
+        println("service {} has an invalid image: {}", service.read().value()?, image.read().value()?);
+    }
+}
+```
+
+<!-- ```python
+# python, in progress: python interop not done
+for service in hial.search('./config.yaml^yaml/services'):
+    image = service.to('/image')
+    if image.to('/image^http[@method=HEAD]@status/code') >= 400:
+        print(f"service {service.value} has an invalid image: {image}")
+``` -->
+
+#### - Change the default mysql port
+
+```bash
+# shell, wip
+hial "/etc/mysql/my.cnf^ini/mysqld/port = 3307"
+```
+
+```rust
+// rust, wip
+Cell::from_path('/etc/mysql/my.cnf^toml/mysqld/port').write().set_value(3307)?;
 ```
 
 ```python
-# python, in progress: python interop not done
-for service in hial.path('./config.yaml^yaml/services'):
-    name = service.value
-    image = service / 'image'
-    if image.path('^http[@method=HEAD]@status/code') >= 400:
-        print(f"service {name} has an invalid image: {image}")
+# python, wip: python interop not done
+hial.to('/etc/mysql/my.cnf^toml/mysqld/port').write().set_value(3307)
 ```

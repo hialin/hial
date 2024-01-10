@@ -3,13 +3,9 @@ use crate::pprint;
 
 #[test]
 fn test_files() -> Res<()> {
-    let examples = Cell::from(".".to_string())
-        .be("path")?
-        .be("file")?
-        .sub()?
-        .get("examples")?;
-    assert_eq!(examples.read()?.label()?, "examples");
-    assert_eq!(examples.read()?.value()?, "examples");
+    let examples = Cell::from(".").be("path").be("file").sub().get("examples");
+    assert_eq!(examples.read().label()?, "examples");
+    assert_eq!(examples.read().value()?, "examples");
     Ok(())
 }
 
@@ -33,18 +29,18 @@ fn test_json() -> Res<()> {
                 }
             ]
         }"#;
-    let json = Cell::from(json.to_string()).be("json")?;
+    let json = Cell::from(json).be("json");
     // pprint::pprint(&json, 0, 0);
-    let hosts = json.sub()?.get("hosts")?.sub()?;
+    let hosts = json.sub().get("hosts").sub();
     assert_eq!(hosts.len()?, 2);
-    let host1 = hosts.at(0)?;
-    let host2 = hosts.at(1)?;
-    let power1 = host1.sub()?.get("labels")?.sub()?.get("power")?;
-    let power2 = host2.sub()?.get("labels")?.sub()?.get("power")?;
-    let group2 = host2.sub()?.get("labels")?.sub()?.get("group2")?;
-    assert_eq!(power1.read()?.value()?, Value::Str("weak"));
-    assert_eq!(power2.read()?.value()?, Value::Str("strong"));
-    assert_eq!(group2.read()?.value()?, Value::Bool(true));
+    let host1 = hosts.at(0);
+    let host2 = hosts.at(1);
+    let power1 = host1.sub().get("labels").sub().get("power");
+    let power2 = host2.sub().get("labels").sub().get("power");
+    let group2 = host2.sub().get("labels").sub().get("group2");
+    assert_eq!(power1.read().value()?, Value::Str("weak"));
+    assert_eq!(power2.read().value()?, Value::Str("strong"));
+    assert_eq!(group2.read().value()?, Value::Bool(true));
     Ok(())
 }
 
@@ -61,18 +57,18 @@ fn test_yaml() -> Res<()> {
                   "group2": true
                   "power": "strong"
         "#;
-    let yaml = Cell::from(yaml.to_string()).be("yaml")?;
+    let yaml = Cell::from(yaml.to_string()).be("yaml");
     // pprint::pprint(&yaml, 0, 0);
-    let hosts = yaml.sub()?.get("hosts")?.sub()?;
+    let hosts = yaml.sub().get("hosts").sub();
     assert_eq!(hosts.len()?, 2);
-    let host1 = hosts.at(0)?;
-    let host2 = hosts.at(1)?;
-    let power1 = host1.sub()?.get("labels")?.sub()?.get("power")?;
-    let power2 = host2.sub()?.get("labels")?.sub()?.get("power")?;
-    let group2 = host2.sub()?.get("labels")?.sub()?.get("group2")?;
-    assert_eq!(power1.read()?.value()?, Value::Str("weak"));
-    assert_eq!(power2.read()?.value()?, Value::Str("strong"));
-    assert_eq!(group2.read()?.value()?, Value::Bool(true));
+    let host1 = hosts.at(0);
+    let host2 = hosts.at(1);
+    let power1 = host1.sub().get("labels").sub().get("power");
+    let power2 = host2.sub().get("labels").sub().get("power");
+    let group2 = host2.sub().get("labels").sub().get("group2");
+    assert_eq!(power1.read().value()?, Value::Str("weak"));
+    assert_eq!(power2.read().value()?, Value::Str("strong"));
+    assert_eq!(group2.read().value()?, Value::Bool(true));
     Ok(())
 }
 
@@ -88,30 +84,30 @@ fn test_xml() -> Res<()> {
                 <triple/>
             </doc>
         "#;
-    let xml = Cell::from(xml.to_string()).be("xml")?;
+    let xml = Cell::from(xml.to_string()).be("xml");
     // pprint::pprint(&xml, 0, 0);
 
-    let decl = xml.sub()?.at(0)?;
-    assert_eq!(decl.read()?.label()?, "xml");
-    assert_eq!(decl.attr()?.len()?, 1);
-    let decl_reader = decl.attr()?.at(0)?.read()?;
+    let decl = xml.sub().at(0);
+    assert_eq!(decl.read().label()?, "xml");
+    assert_eq!(decl.attr().len()?, 1);
+    let decl_reader = decl.attr().at(0).read();
     assert_eq!(decl_reader.label()?, "version");
     assert_eq!(decl_reader.value()?, Value::Str("1.0"));
 
-    let doctype = xml.sub()?.at(1)?;
-    assert_eq!(doctype.read()?.label()?, "DOCTYPE");
+    let doctype = xml.sub().at(1);
+    assert_eq!(doctype.read().label()?, "DOCTYPE");
     assert_eq!(
-        doctype.read()?.value()?,
+        doctype.read().value()?,
         "entity PUBLIC \"-//no idea//EN\" \"http://example.com/dtd\""
     );
 
-    let doc = xml.sub()?.at(2)?;
-    assert_eq!(doc.sub()?.len()?, 4);
-    assert_eq!(doc.sub()?.get("first")?.read()?.label()?, "first");
-    assert_eq!(doc.sub()?.at(1)?.read()?.label()?, "double");
-    assert_eq!(doc.sub()?.at(2)?.read()?.value()?, Value::Str("double"));
+    let doc = xml.sub().at(2);
+    assert_eq!(doc.sub().len()?, 4);
+    assert_eq!(doc.sub().get("first").read().label()?, "first");
+    assert_eq!(doc.sub().at(1).read().label()?, "double");
+    assert_eq!(doc.sub().at(2).read().value()?, Value::Str("double"));
     assert_eq!(
-        doc.sub()?.get("triple")?.read()?.value()?,
+        doc.sub().get("triple").read().value()?,
         Value::Str("triple")
     );
     Ok(())
@@ -144,9 +140,9 @@ fn test_toml() -> Res<()> {
         ip = "10.0.0.2"
         role = "backend"
     "#;
-    let toml = Cell::from(toml.to_string()).be("toml")?;
+    let toml = Cell::from(toml.to_string()).be("toml");
     pprint::pprint(&toml, 0, 0);
-    let value = toml.sub()?.get("database")?.sub()?.get("enabled")?;
-    assert_eq!(value.read()?.value()?, Value::Bool(true));
+    let value = toml.sub().get("database").sub().get("enabled");
+    assert_eq!(value.read().value()?, Value::Bool(true));
     Ok(())
 }

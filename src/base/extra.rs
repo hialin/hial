@@ -1,12 +1,14 @@
 use std::rc::Rc;
 
 use crate::{
-    base::*, enumerated_dynamic_type, interpretations::*, pathlang::eval::EvalIter, pathlang::Path,
+    base::*, enumerated_dynamic_type, guard_ok, interpretations::*, pathlang::eval::EvalIter,
+    pathlang::Path,
 };
 
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
     pub(crate) enum DynDomain {
+        Error(HErr),
         // field is only declared for type completeness, not actually used
         Field(field::FieldGroup),
         // own value cell is its own domain
@@ -31,6 +33,7 @@ pub struct Domain {
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
     pub(crate) enum DynCell {
+        Error(HErr),
         Field(field::FieldCell),
         OwnValue(ownvalue::Cell),
         File(file::Cell),
@@ -45,6 +48,7 @@ enumerated_dynamic_type! {
     }
 }
 
+#[repr(C)]
 #[derive(Clone, Debug)]
 pub struct Cell {
     pub(crate) dyn_cell: DynCell,
@@ -53,6 +57,7 @@ pub struct Cell {
 enumerated_dynamic_type! {
     #[derive(Debug)]
     pub(crate) enum DynCellReader {
+        Error(HErr),
         Field(field::FieldReader),
         OwnValue(ownvalue::CellReader),
         File(file::CellReader),
@@ -73,6 +78,7 @@ pub struct CellReader(DynCellReader);
 enumerated_dynamic_type! {
     #[derive(Debug)]
     pub(crate) enum DynCellWriter {
+        Error(HErr),
         Field(field::FieldWriter),
         OwnValue(ownvalue::CellWriter),
         File(file::CellWriter),
@@ -93,6 +99,7 @@ pub struct CellWriter(DynCellWriter);
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
     pub enum DynGroup {
+        Error(HErr),
         Field(field::FieldGroup),
         OwnValue(VoidGroup<ownvalue::Cell>),
         File(file::Group),
@@ -137,6 +144,13 @@ impl Domain {
     pub fn save(&self, target: SaveTarget) -> Res<()> {
         dispatch_dyn_domain!(&self.dyn_domain, |x| { x.save(target) })
     }
+
+    pub fn err(self) -> Res<Domain> {
+        if let DynDomain::Error(error) = self.dyn_domain {
+            return Err(error);
+        }
+        Ok(self)
+    }
 }
 
 impl From<OwnValue> for Cell {
@@ -163,6 +177,23 @@ impl From<String> for Cell {
     }
 }
 
+impl From<Res<Cell>> for Cell {
+    fn from(res: Res<Cell>) -> Self {
+        match res {
+            Ok(cell) => cell,
+            Err(e) => Cell::from(e),
+        }
+    }
+}
+
+impl From<HErr> for Cell {
+    fn from(herr: HErr) -> Self {
+        Cell {
+            dyn_cell: DynCell::from(herr),
+        }
+    }
+}
+
 impl CellReaderTrait for CellReader {
     fn index(&self) -> Res<usize> {
         dispatch_dyn_cell_reader!(&self.0, |x| { Ok(x.index()?) })
@@ -185,10 +216,29 @@ impl CellWriterTrait for CellWriter {
     }
 }
 
+impl CellReader {
+    pub fn err(self) -> Res<CellReader> {
+        if let DynCellReader::Error(error) = self.0 {
+            return Err(error);
+        }
+        Ok(self)
+    }
+}
+
+impl CellWriter {
+    pub fn err(self) -> Res<CellWriter> {
+        if let DynCellWriter::Error(error) = self.0 {
+            return Err(error);
+        }
+        Ok(self)
+    }
+}
+
 impl Cell {
     pub fn interpretation(&self) -> &str {
         // TODO: this is not fully correct
         match &self.dyn_cell {
+            DynCell::Error(error) => "error",
             DynCell::Field(fieldcell) => "value",
             // TODO: should a field view change the interpretation?
             // DynCell::Field(fieldcell) => fieldcell.cell.interpretation(),
@@ -205,6 +255,13 @@ impl Cell {
         }
     }
 
+    pub fn err(self) -> Res<Cell> {
+        if let DynCell::Error(error) = self.dyn_cell {
+            return Err(error);
+        }
+        Ok(self)
+    }
+
     pub fn domain(&self) -> Domain {
         if let DynCell::Field(fieldcell) = &self.dyn_cell {
             return fieldcell.cell.domain();
@@ -217,34 +274,62 @@ impl Cell {
         dispatch_dyn_cell!(&self.dyn_cell, |x| { x.typ() })
     }
 
-    pub fn read(&self) -> Res<CellReader> {
-        let reader: DynCellReader =
-            dispatch_dyn_cell!(&self.dyn_cell, |x| { DynCellReader::from(x.read()?) });
-        Ok(CellReader(reader))
+    pub fn read(&self) -> CellReader {
+        let reader: DynCellReader = dispatch_dyn_cell!(&self.dyn_cell, |x| {
+            match x.read() {
+                Ok(r) => DynCellReader::from(r),
+                Err(e) => DynCellReader::from(e),
+            }
+        });
+        CellReader(reader)
     }
 
-    pub fn write(&self) -> Res<CellWriter> {
-        let writer: DynCellWriter =
-            dispatch_dyn_cell!(&self.dyn_cell, |x| { DynCellWriter::from(x.write()?) });
-        Ok(CellWriter(writer))
+    pub fn origin(&self) -> Cell {
+        // TODO: implement extra::Cell::origin
+        Cell::from(HErr::NotYetImplemented)
     }
 
-    pub fn sub(&self) -> Res<Group> {
-        let sub = dispatch_dyn_cell!(&self.dyn_cell, |x| { DynGroup::from(x.sub()?) });
-        Ok(Group::Dyn(sub))
+    pub fn policy(&self, policy: WritePolicy) -> Cell {
+        // TODO: implement extra::Cell::policy
+        self.clone()
     }
 
-    pub fn attr(&self) -> Res<Group> {
-        let attr = dispatch_dyn_cell!(&self.dyn_cell, |x| { DynGroup::from(x.attr()?) });
-        Ok(Group::Dyn(attr))
+    pub fn write(&self) -> CellWriter {
+        let writer: DynCellWriter = dispatch_dyn_cell!(&self.dyn_cell, |x| {
+            match x.write() {
+                Ok(r) => DynCellWriter::from(r),
+                Err(e) => DynCellWriter::from(e),
+            }
+        });
+        CellWriter(writer)
+    }
+
+    pub fn sub(&self) -> Group {
+        let sub = dispatch_dyn_cell!(&self.dyn_cell, |x| {
+            match x.sub() {
+                Ok(r) => DynGroup::from(r),
+                Err(e) => DynGroup::from(e),
+            }
+        });
+        Group::Dyn(sub)
+    }
+
+    pub fn attr(&self) -> Group {
+        let attr = dispatch_dyn_cell!(&self.dyn_cell, |x| {
+            match x.attr() {
+                Ok(r) => DynGroup::from(r),
+                Err(e) => DynGroup::from(e),
+            }
+        });
+        Group::Dyn(attr)
     }
 
     pub fn top_interpretation(&self) -> Option<&str> {
         elevation::top_interpretation(self)
     }
 
-    pub fn elevate(&self) -> Res<Group> {
-        Ok(Group::Elevation(ElevationGroup(self.clone())))
+    pub fn elevate(&self) -> Group {
+        Group::Elevation(ElevationGroup(self.clone()))
     }
 
     pub fn field(&self) -> Res<Group> {
@@ -253,8 +338,21 @@ impl Cell {
         })))
     }
 
-    pub fn be(&self, interpretation: &str) -> Res<Cell> {
-        self.elevate()?.get(interpretation)
+    pub fn be(&self, interpretation: &str) -> Cell {
+        self.elevate().get(interpretation)
+    }
+
+    pub fn to(&self, path: &str) -> Cell {
+        let path = guard_ok!(crate::pathlang::Path::parse(path), err =>
+            return Cell {
+                dyn_cell: DynCell::from(err),
+            }
+        );
+        let search = PathSearch {
+            cell: self.clone(),
+            path,
+        };
+        Cell::from(search.first())
     }
 
     pub fn search<'a>(&self, path: &'a str) -> Res<PathSearch<'a>> {
@@ -316,7 +414,7 @@ impl Cell {
         {
             let mut prev_relation = None;
             let interpretation = self.interpretation();
-            let reader = self.read()?;
+            let reader = self.read();
             for a in v.iter().rev() {
                 let (cell, rel) = a;
                 if prev_relation.is_none() {
@@ -346,7 +444,7 @@ impl Cell {
         let err_fn = |err| eprintln!("💥 str write error {}", err);
         use std::fmt::Write;
         let mut s = String::new();
-        match self.read() {
+        match self.read().err() {
             Ok(reader) => {
                 match reader.label() {
                     Ok(l) => write!(s, "{}", l).unwrap_or_else(err_fn),
@@ -430,36 +528,62 @@ impl Group {
         self.len() == Ok(0)
     }
 
-    pub fn at(&self, index: usize) -> Res<Cell> {
+    pub fn at(&self, index: usize) -> Cell {
         match self {
             Group::Dyn(dyn_group) => {
                 dispatch_dyn_group!(dyn_group, |x| {
-                    Ok(Cell {
-                        dyn_cell: DynCell::from(x.at(index)?),
-                    })
+                    Cell {
+                        dyn_cell: match x.at(index) {
+                            Ok(c) => DynCell::from(c),
+                            Err(e) => DynCell::from(e),
+                        },
+                    }
                 })
             }
-            Group::Elevation(elevation_group) => elevation_group.at(index),
+            Group::Elevation(elevation_group) => match elevation_group.at(index) {
+                Ok(c) => c,
+                Err(e) => Cell {
+                    dyn_cell: DynCell::from(e),
+                },
+            },
         }
     }
 
-    pub fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
+    pub fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Cell {
         let key = key.into();
         match self {
             Group::Dyn(dyn_group) => {
                 dispatch_dyn_group!(dyn_group, |x| {
-                    Ok(Cell {
-                        dyn_cell: DynCell::from(x.get(key)?),
-                    })
+                    Cell {
+                        dyn_cell: match x.get(key) {
+                            Ok(c) => DynCell::from(c),
+                            Err(e) => DynCell::from(e),
+                        },
+                    }
                 })
             }
-            Group::Elevation(elevation_group) => elevation_group.get(key),
+            Group::Elevation(elevation_group) => match elevation_group.get(key) {
+                Ok(c) => c,
+                Err(e) => Cell {
+                    dyn_cell: DynCell::from(e),
+                },
+            },
+        }
+    }
+
+    pub fn err(self) -> Res<Group> {
+        match self {
+            Group::Dyn(dyn_group) => match dyn_group {
+                DynGroup::Error(error) => Err(error),
+                _ => Ok(Group::Dyn(dyn_group)),
+            },
+            _ => Ok(self),
         }
     }
 }
 
 impl IntoIterator for Group {
-    type Item = Res<Cell>;
+    type Item = Cell;
     type IntoIter = GroupIter;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -470,7 +594,7 @@ impl IntoIterator for Group {
 #[derive(Debug)]
 pub struct GroupIter(Group, usize);
 impl Iterator for GroupIter {
-    type Item = Res<Cell>;
+    type Item = Cell;
     fn next(&mut self) -> Option<Self::Item> {
         if self.1 >= self.0.len().unwrap_or(0) {
             return None;
