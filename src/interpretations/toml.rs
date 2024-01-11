@@ -8,16 +8,9 @@ use crate::base::{Cell as XCell, *};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_TOML: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "value",
-    target_interpretation: "toml",
-    constructor: Cell::from_value_cell,
-};
-
-#[distributed_slice(ELEVATION_CONSTRUCTORS)]
-static PATH_TO_TOML: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "file",
-    target_interpretation: "toml",
-    constructor: Cell::from_file_cell,
+    source_interpretations: &["value", "file"],
+    target_interpretations: &["toml"],
+    constructor: Cell::from_cell,
 };
 
 #[derive(Clone, Debug)]
@@ -92,21 +85,20 @@ impl From<toml::de::Error> for HErr {
 }
 
 impl Cell {
-    pub fn from_file_cell(cell: XCell) -> Res<XCell> {
-        Cell::from_path(cell.as_path()?)
-    }
-
-    pub fn from_value_cell(cell: XCell) -> Res<XCell> {
-        let s = cell.read().value()?.to_string();
-        Cell::from_string(s.as_str())
+    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+        match cell.domain().interpretation() {
+            "value" => Self::from_str(cell.read().value()?.as_cow_str().as_ref()),
+            "file" => Self::from_path(cell.as_file_path()?),
+            _ => nores(),
+        }
     }
 
     pub fn from_path(path: &Path) -> Res<XCell> {
         let source = std::fs::read_to_string(path)?;
-        Cell::from_string(&source)
+        Cell::from_str(&source)
     }
 
-    pub fn from_string(source: &str) -> Res<XCell> {
+    pub fn from_str(source: &str) -> Res<XCell> {
         let toml: TomlValue = toml::from_str(source)?;
         let root_node = node_from_toml(toml);
         let preroot = Rc::new(vec![root_node]);
@@ -137,11 +129,11 @@ impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
         match self.group.nodes {
             NodeGroup::Array(ref a) => match a.get(self.pos) {
-                Some(x) => Ok(get_value(x)),
+                Some(x) => get_value(x),
                 None => fault(""),
             },
             NodeGroup::Table(ref t) => match t.get_index(self.pos) {
-                Some(x) => Ok(get_value(x.1)),
+                Some(x) => get_value(x.1),
                 None => fault(""),
             },
         }
@@ -226,15 +218,14 @@ fn get_typ(node: &Node) -> &str {
     }
 }
 
-fn get_value(node: &Node) -> Value {
+fn get_value(node: &Node) -> Res<Value> {
     match node {
-        Node::Bool(b) => Value::Bool(*b),
-        Node::I64(i) => Value::Int(Int::I64(*i)),
-        Node::F64(f) => Value::Float(StrFloat(*f)),
-        Node::String(ref s) => Value::Str(s.as_str()),
-        Node::Datetime(ref d) => Value::Str(d.as_str()),
-        Node::Array(_) => Value::None,
-        Node::Table(_) => Value::None,
+        Node::Bool(b) => Ok(Value::Bool(*b)),
+        Node::I64(i) => Ok(Value::Int(Int::I64(*i))),
+        Node::F64(f) => Ok(Value::Float(StrFloat(*f))),
+        Node::String(ref s) => Ok(Value::Str(s.as_str())),
+        Node::Datetime(ref d) => Ok(Value::Str(d.as_str())),
+        _ => nores(),
     }
 }
 

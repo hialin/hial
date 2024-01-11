@@ -18,9 +18,9 @@ use crate::{
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static PATH_TO_FILE: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "path",
-    target_interpretation: "file",
-    constructor: Cell::from_path_cell,
+    source_interpretations: &["path"],
+    target_interpretations: &["file"],
+    constructor: Cell::from_cell,
 };
 
 #[derive(Clone, Debug)]
@@ -139,8 +139,8 @@ impl CellReaderTrait for CellReader {
 impl CellWriterTrait for CellWriter {}
 
 impl Cell {
-    pub fn from_path_cell(cell: XCell) -> Res<XCell> {
-        Cell::from_path(cell.as_path()?)
+    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+        Cell::from_path(cell.as_file_path()?)
     }
 
     pub fn from_path(path: impl Borrow<Path>) -> Res<XCell> {

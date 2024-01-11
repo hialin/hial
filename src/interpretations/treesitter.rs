@@ -10,16 +10,9 @@ use crate::{
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_RUST: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "value",
-    target_interpretation: "rust",
-    constructor: Cell::from_value_cell_rust,
-};
-
-#[distributed_slice(ELEVATION_CONSTRUCTORS)]
-static FILE_TO_RUST: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "file",
-    target_interpretation: "rust",
-    constructor: Cell::from_file_cell_rust,
+    source_interpretations: &["value", "file"],
+    target_interpretations: &["rust", "javascript"],
+    constructor: Cell::from_cell,
 };
 
 #[derive(Clone, Debug)]
@@ -27,7 +20,7 @@ pub struct Domain(Rc<DomainData>);
 
 #[derive(Clone, Debug)]
 pub struct DomainData {
-    language: &'static str,
+    language: String,
     source: String,
     tree: Tree,
 }
@@ -36,7 +29,7 @@ impl DomainTrait for Domain {
     type Cell = Cell;
 
     fn interpretation(&self) -> &str {
-        self.0.language
+        self.0.language.as_str()
     }
 
     fn root(&self) -> Res<Self::Cell> {
@@ -80,41 +73,32 @@ impl CellWriterTrait for CellWriter {}
 #[derive(Clone, Debug)]
 pub struct CNode {
     typ: &'static str,
-    name: Option<&'static str>,
-    value: String,
+    value: Option<String>,
     subs: Rc<Vec<CNode>>,
     src: Range<usize>,
 }
 
 impl Cell {
-    pub fn from_value_cell_rust(cell: XCell) -> Res<XCell> {
-        Cell::from_value_cell(cell, "rust")
-    }
-    pub fn from_file_cell_rust(cell: XCell) -> Res<XCell> {
-        Cell::from_file_cell(cell, "rust")
-    }
-
-    pub fn from_value_cell(cell: XCell, language: &'static str) -> Res<XCell> {
-        let reader = cell.read();
-        let value = reader.value()?;
-        let source = value.as_cow_str();
-        let domain = sitter_from_source(source.into_owned(), language)?;
-        Ok(XCell {
-            dyn_cell: DynCell::from(domain.root()?),
-        })
+    pub fn from_cell(cell: XCell, lang: &'static str) -> Res<XCell> {
+        match cell.domain().interpretation() {
+            "value" => {
+                let source = cell.read().value()?.as_cow_str().into_owned();
+                Cell::from_string(source, lang.to_owned())
+            }
+            "file" => {
+                let path = cell.as_file_path()?;
+                Cell::from_path(path, lang.to_owned())
+            }
+            _ => nores(),
+        }
     }
 
-    pub fn from_file_cell(cell: XCell, language: &'static str) -> Res<XCell> {
-        let path = cell.as_path()?;
-        Cell::from_path(path, language)
-    }
-
-    pub fn from_path(path: &Path, language: &'static str) -> Res<XCell> {
+    pub fn from_path(path: &Path, language: String) -> Res<XCell> {
         let source = std::fs::read_to_string(path)?;
         Cell::from_string(source, language)
     }
 
-    pub fn from_string(source: String, language: &'static str) -> Res<XCell> {
+    pub fn from_string(source: String, language: String) -> Res<XCell> {
         let domain = sitter_from_source(source, language)?;
         Ok(XCell {
             dyn_cell: DynCell::from(domain.root()?),
@@ -129,8 +113,8 @@ impl Cell {
     }
 }
 
-fn sitter_from_source(source: String, language: &'static str) -> Res<Domain> {
-    let sitter_language = guard_some!(tree_sitter_language(language), {
+fn sitter_from_source(source: String, language: String) -> Res<Domain> {
+    let sitter_language = guard_some!(tree_sitter_language(language.as_str()), {
         return Err(HErr::Sitter(format!("unsupported language: {}", language)));
     });
 
@@ -169,16 +153,20 @@ fn sitter_from_source(source: String, language: &'static str) -> Res<Domain> {
 
 fn node_to_cnode(mut cursor: TreeCursor, source: &str) -> CNode {
     let node = cursor.node();
-    let name = cursor.field_name();
-    let typ = if node.is_named() { node.kind() } else { "" };
     let src = &source[node.byte_range()];
 
-    let mut value = String::new();
-    if !node.is_named() || node.child_count() == 0 {
-        value = src.to_string();
-    }
-    if typ == "string_literal" {
-        value = src.to_string();
+    // node.kind() is treesiter's structural type, we prefer a more semantic type
+    let typ = cursor.field_name().unwrap_or_else(|| {
+        if node.kind() == src {
+            "literal"
+        } else {
+            node.kind()
+        }
+    });
+
+    let mut value = None;
+    if !node.is_named() || node.child_count() == 0 || typ == "string_literal" {
+        value = Some(src.to_string());
     }
 
     let mut subs = vec![];
@@ -189,35 +177,39 @@ fn node_to_cnode(mut cursor: TreeCursor, source: &str) -> CNode {
         }
     }
 
-    // reshape_subs(&mut value, typ, &mut subs, source);
+    reshape_subs(&mut value, typ, &mut subs, source);
 
     CNode {
         typ,
-        name,
         value,
         subs: Rc::new(subs),
         src: node.start_byte()..node.end_byte(),
     }
 }
 
-fn reshape_subs(value: &mut String, typ: &str, subs: &mut Vec<CNode>, source: &str) {
+fn reshape_subs(value: &mut Option<String>, typ: &str, subs: &mut Vec<CNode>, source: &str) {
     if subs.len() > 1 {
         let first = &subs[0];
         let last = &subs[subs.len() - 1];
-        let s1 = &source[first.src.clone()];
-        let s2 = &source[last.src.clone()];
-        if (s1, s2) == ("(", ")")
-            || (s1, s2) == ("[", "]")
-            || (s1, s2) == ("{", "}")
-            || (s1, s2) == ("<", ">")
+        let first_src = &source[first.src.clone()];
+        let last_src = &source[last.src.clone()];
+        if (first_src, last_src) == ("(", ")")
+            || (first_src, last_src) == ("[", "]")
+            || (first_src, last_src) == ("{", "}")
+            || (first_src, last_src) == ("<", ">")
         {
-            *value = format!("{}{}{}", s1, value, s2);
+            *value = Some(format!(
+                "{}{}{}",
+                first_src,
+                value.as_deref().unwrap_or(""),
+                last_src
+            ));
             subs.remove(0);
             subs.remove(subs.len() - 1);
-        } else if value.is_empty()
-            && !first.value.is_empty()
+        } else if is_empty(value)
             && first.subs.is_empty()
-            && typ.starts_with(&first.value)
+            && !is_empty(&first.value)
+            && typ.starts_with(first.value.as_deref().unwrap_or(""))
         {
             *value = subs[0].value.clone();
             subs.remove(0);
@@ -225,7 +217,11 @@ fn reshape_subs(value: &mut String, typ: &str, subs: &mut Vec<CNode>, source: &s
 
         let mut new_subs = vec![];
         for s in subs.drain(..) {
-            if s.value == "," && (value == "()" || value == "[]" || value == "{}" || value == "<>")
+            if s.value.as_deref() == Some(",")
+                && (value.as_deref() == Some("()")
+                    || value.as_deref() == Some("[]")
+                    || value.as_deref() == Some("{}")
+                    || value.as_deref() == Some("<>"))
             {
             } else {
                 new_subs.push(s);
@@ -234,12 +230,19 @@ fn reshape_subs(value: &mut String, typ: &str, subs: &mut Vec<CNode>, source: &s
         *subs = new_subs;
     }
 
-    if subs.len() == 1 && typ == "visibility_modifier" && value.is_empty() {
+    if subs.len() == 1 && typ == "visibility_modifier" && is_empty(value) {
         *value = subs.remove(0).value;
     }
-    if subs.len() > 1 && subs[subs.len() - 1].typ.is_empty() && subs[subs.len() - 1].value == ";" {
+    if subs.len() > 1
+        && subs[subs.len() - 1].typ.is_empty()
+        && subs[subs.len() - 1].value.as_deref() == Some(";")
+    {
         subs.remove(subs.len() - 1);
     }
+}
+
+fn is_empty(v: &Option<String>) -> bool {
+    v.as_ref().map_or(true, |v| v.is_empty())
 }
 
 impl CellReaderTrait for CellReader {
@@ -248,20 +251,20 @@ impl CellReaderTrait for CellReader {
     }
 
     fn label(&self) -> Res<Value> {
-        if let Some(label) = self.group.nodes[self.pos].name {
-            Ok(Value::Str(label))
-        } else {
-            nores()
-        }
+        nores()
+        // if let Some(label) = self.group.nodes[self.pos].name {
+        //     Ok(Value::Str(label))
+        // } else {
+        //     nores()
+        // }
     }
 
     fn value(&self) -> Res<Value> {
         let cnode = &self.group.nodes[self.pos];
-        if cnode.value.is_empty() {
-            Ok(Value::None)
-        } else {
-            Ok(Value::Str(&cnode.value))
-        }
+        cnode
+            .value
+            .as_ref()
+            .map_or_else(nores, |v| Ok(Value::Str(v)))
     }
 }
 
@@ -324,14 +327,15 @@ impl GroupTrait for Group {
     }
 
     fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
-        let key = key.into();
-        for (i, node) in self.nodes.iter().enumerate() {
-            if let Some(name) = node.name {
-                if key == name {
-                    return self.at(i);
-                }
-            }
-        }
         nores()
+        // let key = key.into();
+        // for (i, node) in self.nodes.iter().enumerate() {
+        //     if let Some(name) = node.name {
+        //         if key == name {
+        //             return self.at(i);
+        //         }
+        //     }
+        // }
+        // nores()
     }
 }

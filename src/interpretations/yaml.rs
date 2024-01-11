@@ -9,16 +9,9 @@ use crate::base::{Cell as XCell, *};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_YAML: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "value",
-    target_interpretation: "yaml",
-    constructor: Cell::from_value_cell,
-};
-
-#[distributed_slice(ELEVATION_CONSTRUCTORS)]
-static FILE_TO_YAML: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "file",
-    target_interpretation: "yaml",
-    constructor: Cell::from_file_cell,
+    source_interpretations: &["value", "file"],
+    target_interpretations: &["yaml"],
+    constructor: Cell::from_cell,
 };
 
 #[derive(Clone, Debug)]
@@ -100,16 +93,12 @@ impl From<ScanError> for HErr {
 }
 
 impl Cell {
-    pub fn from_value_cell(cell: XCell) -> Res<XCell> {
-        let reader = cell.read();
-        let value = reader.value()?;
-        let s = value.as_cow_str();
-        Cell::from_string(s)
-    }
-
-    pub fn from_file_cell(cell: XCell) -> Res<XCell> {
-        let path = cell.as_path()?;
-        Cell::from_path(path)
+    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+        match cell.domain().interpretation() {
+            "value" => Cell::from_string(cell.read().value()?.as_cow_str()),
+            "file" => Cell::from_path(cell.as_file_path()?),
+            _ => fault(""),
+        }
     }
 
     pub fn from_path(path: impl AsRef<Path>) -> Res<XCell> {
@@ -149,11 +138,11 @@ impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
         match self.group.nodes {
             NodeGroup::Array(ref a) => match a.get(self.pos) {
-                Some(x) => Ok(get_value(x)),
+                Some(x) => get_value(x),
                 None => fault(""),
             },
             NodeGroup::Object(ref o) => match o.get_index(self.pos) {
-                Some(x) => Ok(get_value(x.1)),
+                Some(x) => get_value(x.1),
                 None => fault(""),
             },
         }
@@ -246,11 +235,10 @@ fn scalar_to_value(s: &Scalar) -> Value {
     }
 }
 
-fn get_value(node: &Node) -> Value {
+fn get_value(node: &Node) -> Res<Value> {
     match node {
-        Node::Scalar(s) => scalar_to_value(s),
-        Node::Array(_) => Value::None,
-        Node::Object(_) => Value::None,
+        Node::Scalar(s) => Ok(scalar_to_value(s)),
+        _ => nores(),
     }
 }
 

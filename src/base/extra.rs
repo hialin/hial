@@ -127,6 +127,9 @@ impl Domain {
     }
 
     pub fn root(&self) -> Res<Cell> {
+        if let DynDomain::Field(field) = &self.dyn_domain {
+            return field.cell.domain().root();
+        }
         dispatch_dyn_domain!(&self.dyn_domain, |x| {
             Ok(Cell {
                 dyn_cell: DynCell::from(x.root()?),
@@ -205,6 +208,14 @@ impl CellReaderTrait for CellReader {
         dispatch_dyn_cell_reader!(&self.0, |x| { Ok(x.value()?) })
     }
 }
+impl CellReader {
+    pub fn err(self) -> Res<CellReader> {
+        if let DynCellReader::Error(error) = self.0 {
+            return Err(error);
+        }
+        Ok(self)
+    }
+}
 
 impl CellWriterTrait for CellWriter {
     fn set_label(&mut self, value: OwnValue) -> Res<()> {
@@ -215,16 +226,6 @@ impl CellWriterTrait for CellWriter {
         dispatch_dyn_cell_writer!(&mut self.0, |x| { x.set_value(ov) })
     }
 }
-
-impl CellReader {
-    pub fn err(self) -> Res<CellReader> {
-        if let DynCellReader::Error(error) = self.0 {
-            return Err(error);
-        }
-        Ok(self)
-    }
-}
-
 impl CellWriter {
     pub fn err(self) -> Res<CellWriter> {
         if let DynCellWriter::Error(error) = self.0 {
@@ -235,26 +236,6 @@ impl CellWriter {
 }
 
 impl Cell {
-    pub fn interpretation(&self) -> &str {
-        // TODO: this is not fully correct
-        match &self.dyn_cell {
-            DynCell::Error(error) => "error",
-            DynCell::Field(fieldcell) => "value",
-            // TODO: should a field view change the interpretation?
-            // DynCell::Field(fieldcell) => fieldcell.cell.interpretation(),
-            DynCell::OwnValue(_) => "value",
-            DynCell::File(_) => "file",
-            DynCell::Json(_) => "json",
-            DynCell::Toml(_) => "toml",
-            DynCell::Yaml(_) => "yaml",
-            DynCell::Xml(_) => "xml",
-            DynCell::Url(_) => "url",
-            DynCell::Path(_) => "path",
-            DynCell::Http(_) => "http",
-            DynCell::TreeSitter(_) => "treesitter",
-        }
-    }
-
     pub fn err(self) -> Res<Cell> {
         if let DynCell::Error(error) = self.dyn_cell {
             return Err(error);
@@ -325,16 +306,23 @@ impl Cell {
     }
 
     pub fn top_interpretation(&self) -> Option<&str> {
+        if let DynCell::Error(_) = self.dyn_cell {
+            return None;
+        }
         elevation::top_interpretation(self)
     }
 
     pub fn elevate(&self) -> Group {
+        if let DynCell::Error(err) = &self.dyn_cell {
+            return Group::Dyn(DynGroup::from(err.clone()));
+        }
         Group::Elevation(ElevationGroup(self.clone()))
     }
 
     pub fn field(&self) -> Res<Group> {
         Ok(Group::Dyn(DynGroup::from(FieldGroup {
             cell: Rc::new(self.clone()),
+            interpretation: self.domain().interpretation().to_string(),
         })))
     }
 
@@ -413,17 +401,17 @@ impl Cell {
         let mut s = String::new();
         {
             let mut prev_relation = None;
-            let interpretation = self.interpretation();
+            let domain = self.domain();
             let reader = self.read();
             for a in v.iter().rev() {
                 let (cell, rel) = a;
                 if prev_relation.is_none() {
-                    write_value_fn(&mut s, &reader, interpretation);
+                    write_value_fn(&mut s, &reader, domain.interpretation());
                 } else {
                     write_label_fn(
                         &mut s,
                         &reader,
-                        interpretation,
+                        domain.interpretation(),
                         prev_relation == Some(Relation::Interpretation),
                     );
                 }
@@ -433,7 +421,7 @@ impl Cell {
             write_label_fn(
                 &mut s,
                 &reader,
-                interpretation,
+                domain.interpretation(),
                 prev_relation == Some(Relation::Interpretation),
             );
         }
@@ -465,7 +453,7 @@ impl Cell {
         s
     }
 
-    pub fn as_path(&self) -> Res<&std::path::Path> {
+    pub fn as_file_path(&self) -> Res<&std::path::Path> {
         if let DynCell::File(ref file_cell) = self.dyn_cell {
             return file_cell.as_path();
         }

@@ -5,7 +5,7 @@ use core::{
 };
 use std::borrow::{Borrow, Cow};
 
-pub const DISPLAY_VALUE_NONE: &str = "ø"; // ø❍•⸰·
+pub const DISPLAY_VALUE_NONE: &str = "ø"; // ❍•⸰·
 
 #[derive(Copy, Clone, Debug)]
 pub enum Int {
@@ -228,14 +228,7 @@ pub enum OwnValue {
 
 impl Display for OwnValue {
     fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            OwnValue::None => write!(buf, "{}", DISPLAY_VALUE_NONE),
-            OwnValue::Bool(x) => write!(buf, "{}", x),
-            OwnValue::Int(x) => write!(buf, "{}", x),
-            OwnValue::Float(x) => write!(buf, "{}", x),
-            OwnValue::String(x) => write!(buf, "{}", x),
-            OwnValue::Bytes(x) => write!(buf, "{}", String::from_utf8_lossy(x)),
-        }
+        self.as_value().fmt(buf)
     }
 }
 
@@ -305,6 +298,15 @@ impl Value<'_> {
         match self {
             Value::Str(x) => Cow::Borrowed(x),
             _ => Cow::Owned(self.to_string()),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Value::None => true,
+            Value::Str(x) => x.is_empty(),
+            Value::Bytes(x) => x.is_empty(),
+            _ => false,
         }
     }
 }

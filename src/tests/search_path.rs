@@ -7,6 +7,21 @@ use crate::{
 use super::utils::*;
 
 #[test]
+fn path_simple_item() -> Res<()> {
+    let path = Path::parse("/a[2]")?;
+    assert_eq!(
+        path.0.as_slice(),
+        &[PathItem {
+            relation: Relation::Sub,
+            selector: Some(Selector::Str("a".into())),
+            index: Some(2),
+            filters: vec![],
+        },]
+    );
+    Ok(())
+}
+
+#[test]
 fn path_items() -> Res<()> {
     let path = Path::parse("/a@name/[2]/*[#value=='3'][/x]")?;
     assert_eq!(
@@ -80,10 +95,45 @@ fn path_simple_search() -> Res<()> {
             n: nval
         "#;
     let root = Cell::from(TREE).be("yaml");
+
     let eval = str_eval(root.clone(), "/a/b/x")?;
     assert_eq!(eval, ["x:xb"]);
+
     let eval = str_eval(root.clone(), "/ a/b /x")?;
     assert_eq!(eval, ["x:xb"]);
+
+    let eval = str_eval(root.clone(), "/ a/b /x")?;
+    assert_eq!(eval, ["x:xb"]);
+
+    Ok(())
+}
+
+#[test]
+fn path_simple_search_with_index() -> Res<()> {
+    const TREE: &str = r#"
+    <test>
+        <a>
+            <x>1</x>
+        </a>
+        <a>
+            <y>2</y>
+        </a>
+        <a>
+            <z>3</z>
+        </a>
+    </test>
+        "#;
+    let root = Cell::from(TREE).be("yaml");
+
+    let eval = str_eval(root.clone(), "/a[0]")?;
+    assert_eq!(eval, ["x:1"]);
+
+    let eval = str_eval(root.clone(), "/a[1]")?;
+    assert_eq!(eval, ["y:2"]);
+
+    let eval = str_eval(root.clone(), "/a[2]")?;
+    assert_eq!(eval, ["z:3"]);
+
     Ok(())
 }
 

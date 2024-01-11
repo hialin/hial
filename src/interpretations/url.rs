@@ -8,9 +8,9 @@ use crate::base::{Cell as XCell, *};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_URL: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "value",
-    target_interpretation: "url",
-    constructor: Cell::from_value_cell,
+    source_interpretations: &["value"],
+    target_interpretations: &["url"],
+    constructor: Cell::from_cell,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -43,11 +43,11 @@ pub struct CellWriter {}
 impl CellWriterTrait for CellWriter {}
 
 impl Cell {
-    pub fn from_value_cell(cell: XCell) -> Res<XCell> {
-        let reader = cell.read();
-        let value = reader.value()?;
-        let s = value.as_cow_str();
-        Self::from_str(s.as_ref())
+    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+        match cell.domain().interpretation() {
+            "value" => Self::from_str(cell.read().value()?.as_cow_str().as_ref()),
+            _ => nores(),
+        }
     }
 
     pub fn from_str(s: &str) -> Res<XCell> {

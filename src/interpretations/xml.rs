@@ -12,16 +12,9 @@ use crate::{
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_XML: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "value",
-    target_interpretation: "xml",
-    constructor: Cell::from_value_cell,
-};
-
-#[distributed_slice(ELEVATION_CONSTRUCTORS)]
-static FILE_TO_XML: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "file",
-    target_interpretation: "xml",
-    constructor: Cell::from_file_cell,
+    source_interpretations: &["value", "file"],
+    target_interpretations: &["xml"],
+    constructor: Cell::from_cell,
 };
 
 #[derive(Clone, Debug)]
@@ -105,16 +98,12 @@ enum Attribute {
 }
 
 impl Cell {
-    pub fn from_value_cell(cell: XCell) -> Res<XCell> {
-        let reader = cell.read();
-        let value = reader.value()?;
-        let s = value.as_cow_str();
-        Self::from_str(s.as_ref())
-    }
-
-    pub fn from_file_cell(cell: XCell) -> Res<XCell> {
-        let path = cell.as_path()?;
-        Self::from_path(path)
+    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+        match cell.domain().interpretation() {
+            "value" => Self::from_str(cell.read().value()?.as_cow_str().as_ref()),
+            "file" => Self::from_path(cell.as_file_path()?),
+            _ => nores(),
+        }
     }
 
     pub fn from_path(path: &Path) -> Res<XCell> {
@@ -315,8 +304,8 @@ impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
         match &self.group.nodes {
             NodeGroup::Node(group) => match &group.0[self.pos] {
-                Node::Document(_) => Ok(Value::None),
-                Node::Decl(_) => Ok(Value::None),
+                Node::Document(_) => nores(),
+                Node::Decl(_) => nores(),
                 Node::DocType(x) => Ok(Value::Str(x.trim())),
                 Node::PI(x) => Ok(Value::Str(x)),
                 Node::Element((x, _, _)) => Ok(Value::Str(x)),

@@ -13,23 +13,9 @@ use crate::{
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_JSON: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "value",
-    target_interpretation: "json",
-    constructor: Cell::from_value_cell,
-};
-
-#[distributed_slice(ELEVATION_CONSTRUCTORS)]
-static FILE_TO_JSON: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "file",
-    target_interpretation: "json",
-    constructor: Cell::from_file_cell,
-};
-
-#[distributed_slice(ELEVATION_CONSTRUCTORS)]
-static HTTP_TO_JSON: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "http",
-    target_interpretation: "json",
-    constructor: Cell::from_http_cell,
+    source_interpretations: &["value", "file", "http"],
+    target_interpretations: &["json"],
+    constructor: Cell::from_cell,
 };
 
 #[derive(Clone, Debug)]
@@ -118,23 +104,23 @@ impl SaveTrait for Domain {
 }
 
 impl Cell {
-    pub fn from_value_cell(cell: XCell) -> Res<XCell> {
-        let s = cell.read().value()?.to_string();
-        let json: SerdeValue = serde_json::from_str(s.as_ref())?;
-        Self::from_serde_value(json, Some(cell))
-    }
-
-    pub fn from_file_cell(cell: XCell) -> Res<XCell> {
-        let path = cell.as_path()?;
-        let file = File::open(path)?;
-        let json: SerdeValue = serde_json::from_reader(file)?;
-        Self::from_serde_value(json, Some(cell))
-    }
-
-    pub fn from_http_cell(cell: XCell) -> Res<XCell> {
-        let s = cell.read().value()?.to_string();
-        let json: SerdeValue = serde_json::from_str(s.as_ref())?;
-        Self::from_serde_value(json, Some(cell))
+    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+        let serde_value = match cell.domain().interpretation() {
+            "value" => {
+                let s = cell.read().value()?.to_string();
+                serde_json::from_str(s.as_ref())?
+            }
+            "file" => {
+                let path = cell.as_file_path()?;
+                serde_json::from_reader(File::open(path)?)?
+            }
+            "http" => {
+                let s = cell.read().value()?.to_string();
+                serde_json::from_str(s.as_ref())?
+            }
+            _ => return nores(),
+        };
+        Self::from_serde_value(serde_value, Some(cell))
     }
 
     pub fn from_string(s: impl AsRef<str>) -> Res<XCell> {
@@ -296,21 +282,20 @@ impl CellReaderTrait for CellReader {
     }
 
     fn value(&self) -> Res<Value> {
-        fn get_value(node: &Node) -> Value {
+        fn get_value(node: &Node) -> Res<Value> {
             match node {
-                Node::Scalar(v) => v.as_value(),
-                Node::Array(_) => Value::None,
-                Node::Object(_) => Value::None,
+                Node::Scalar(v) => Ok(v.as_value()),
+                _ => nores(),
             }
         }
 
         match self.nodes {
             UrcNodeGroup::Array(ref a) => match a.get(self.pos) {
-                Some(x) => Ok(get_value(x)),
+                Some(x) => get_value(x),
                 None => fault(""),
             },
             UrcNodeGroup::Object(ref o) => match o.get_index(self.pos) {
-                Some(x) => Ok(get_value(x.1)),
+                Some(x) => get_value(x.1),
                 None => fault(""),
             },
         }

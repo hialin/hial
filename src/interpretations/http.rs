@@ -9,9 +9,9 @@ use crate::{
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static URL_TO_HTTP: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "url",
-    target_interpretation: "http",
-    constructor: Cell::from_url_cell,
+    source_interpretations: &["url"],
+    target_interpretations: &["http"],
+    constructor: Cell::from_cell,
 };
 
 // ^http .value -> bytes
@@ -63,7 +63,7 @@ pub struct CellWriter {}
 impl CellWriterTrait for CellWriter {}
 
 impl Cell {
-    pub fn from_url_cell(cell: XCell) -> Res<XCell> {
+    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         Cell::from_url_str(cell.as_url_str()?)
     }
 
@@ -224,14 +224,10 @@ impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
         match (&self.kind, self.pos) {
             (GroupKind::Root, 0) => Ok(Value::Bytes(&self.response.body)),
-            (GroupKind::Attr, 0) => Ok(Value::None),
-            (GroupKind::Attr, 1) => Ok(Value::None),
+            (GroupKind::Attr, 0) => nores(),
+            (GroupKind::Attr, 1) => nores(),
             (GroupKind::Status, 0) => Ok(Value::Int(Int::I32(self.response.status as i32))),
-            (GroupKind::Status, 1) => Ok(if self.response.reason.is_empty() {
-                Value::None
-            } else {
-                Value::Str(&self.response.reason)
-            }),
+            (GroupKind::Status, 1) => Ok(Value::Str(&self.response.reason)),
             (GroupKind::Headers, _) => {
                 let header_values = if let Some(hv) = self.response.headers.get_index(self.pos) {
                     hv.1

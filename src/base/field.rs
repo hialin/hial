@@ -14,21 +14,27 @@ pub enum FieldType {
 #[derive(Clone, Debug)]
 pub struct FieldGroup {
     pub(crate) cell: Rc<Cell>,
+    // copy of original cell's interpretation, need to own it
+    pub(crate) interpretation: String,
 }
 
 impl DomainTrait for FieldGroup {
     type Cell = FieldCell;
 
     fn interpretation(&self) -> &str {
-        self.cell.interpretation()
+        // should return self.interpretation.as_str()?
+        "value"
     }
 
     fn root(&self) -> Res<FieldCell> {
-        nores()
+        // cannot be implemented, we cannot return a FieldCell without knowing the type
+        // is patched by extra::Domain which returns the correct root
+        unimplemented!()
     }
 }
 
 impl SaveTrait for FieldGroup {
+    // we don't use cell_domain.1 because we can't get mut access to it
     fn write_policy(&self) -> Res<WritePolicy> {
         self.cell.domain().write_policy()
     }
@@ -121,6 +127,7 @@ impl CellTrait for FieldCell {
     fn domain(&self) -> FieldGroup {
         FieldGroup {
             cell: self.cell.clone(),
+            interpretation: "field".to_string(),
         }
     }
 

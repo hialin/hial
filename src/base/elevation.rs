@@ -6,14 +6,14 @@ use crate::{base::*, debug, guard_ok, guard_some, warning};
 
 use linkme::distributed_slice;
 
-pub type ElevateFn = fn(Cell) -> Res<Cell>;
+pub type ElevateFn = fn(source: Cell, target_interpretation: &'static str) -> Res<Cell>;
 type TargetMap = IndexMap<&'static str, ElevateFn>;
 type ElevationsMap = IndexMap<&'static str, Arc<TargetMap>>;
 
 #[derive(Debug, Clone)]
 pub struct ElevationConstructor {
-    pub source_interpretation: &'static str,
-    pub target_interpretation: &'static str,
+    pub source_interpretations: &'static [&'static str],
+    pub target_interpretations: &'static [&'static str],
     pub constructor: ElevateFn,
 }
 
@@ -28,13 +28,13 @@ fn elevation_map(interpretation: &str) -> Res<Arc<IndexMap<&'static str, Elevate
             return Some(fault(format!("elevation map read lock error: {:?}", err)));
         });
         let reader = guard_some!(maybe_map.as_ref(), { return None });
-        debug!(
-            "-- elevation map {:?} -> {:?}",
-            interpretation,
-            reader
-                .get(interpretation)
-                .map(|m| m.keys().collect::<Vec<_>>())
-        );
+        // debug!(
+        //     "-- elevation map {:?} -> {:?}",
+        //     interpretation,
+        //     reader
+        //         .get(interpretation)
+        //         .map(|m| m.keys().collect::<Vec<_>>())
+        // );
         reader.get(interpretation).map(|e| Ok(e.clone()))
     }
 
@@ -54,15 +54,19 @@ fn elevation_map(interpretation: &str) -> Res<Arc<IndexMap<&'static str, Elevate
                 IndexMap::new();
 
             for ec in ELEVATION_CONSTRUCTORS {
-                let target_map = source_map.entry(ec.source_interpretation).or_default();
-                if target_map.contains_key(ec.target_interpretation) {
-                    warning!(
-                        "elevation map: {} -> {} already exists",
-                        ec.source_interpretation,
-                        ec.target_interpretation
-                    );
-                } else {
-                    target_map.insert(ec.target_interpretation, ec.constructor);
+                for source_interpretation in ec.source_interpretations {
+                    let target_map = source_map.entry(source_interpretation).or_default();
+                    for target_interpretation in ec.target_interpretations {
+                        if target_map.contains_key(target_interpretation) {
+                            warning!(
+                                "elevation map: {} -> {} already exists",
+                                source_interpretation,
+                                target_interpretation
+                            );
+                        } else {
+                            target_map.insert(target_interpretation, ec.constructor);
+                        }
+                    }
                 }
             }
 
@@ -83,11 +87,11 @@ fn elevation_map(interpretation: &str) -> Res<Arc<IndexMap<&'static str, Elevate
     if let Some(x) = read(interpretation) {
         return x;
     }
-    fault("elevation map not initialized")
+    nores()
 }
 
 pub(crate) fn top_interpretation(cell: &Cell) -> Option<&str> {
-    if cell.interpretation() == "file" && cell.typ().ok()? == "file" {
+    if cell.domain().interpretation() == "file" && cell.typ().ok()? == "file" {
         if let Ok(reader) = cell.read().err() {
             if let Ok(Value::Str(name)) = reader.label() {
                 if name.ends_with(".c") {
@@ -108,7 +112,7 @@ pub(crate) fn top_interpretation(cell: &Cell) -> Option<&str> {
             }
         }
     }
-    if cell.interpretation() == "value" {
+    if cell.domain().interpretation() == "value" {
         if let Ok(reader) = cell.read().err() {
             if let Ok(Value::Str(s)) = reader.value() {
                 if s.starts_with("http://") || s.starts_with("https://") {
@@ -134,7 +138,8 @@ impl ElevationGroup {
     }
 
     pub fn len(&self) -> Res<usize> {
-        let e = guard_ok!(elevation_map(self.0.interpretation()), err => { return Err(err) });
+        let e =
+            guard_ok!(elevation_map(self.0.domain().interpretation()), err => { return Err(err) });
         Ok(e.len())
     }
 
@@ -143,9 +148,10 @@ impl ElevationGroup {
     }
 
     pub fn at(&self, index: usize) -> Res<Cell> {
-        let e = guard_ok!(elevation_map(self.0.interpretation()), err => { return Err(err) });
-        if let Some(func_tuple) = e.get_index(index) {
-            func_tuple.1(self.0.clone())
+        let e =
+            guard_ok!(elevation_map(self.0.domain().interpretation()), err => { return Err(err) });
+        if let Some((target_interpretation, func)) = e.get_index(index) {
+            func(self.0.clone(), target_interpretation)
         } else {
             nores()
         }
@@ -153,7 +159,8 @@ impl ElevationGroup {
 
     pub fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
         let key = key.into();
-        let old_interp = self.0.interpretation();
+        let domain = self.0.domain();
+        let old_interp = domain.interpretation();
         let interp = match key {
             Selector::Str(k) => k,
             Selector::Top => guard_some!(top_interpretation(&self.0), { return nores() }),
@@ -166,9 +173,9 @@ impl ElevationGroup {
             return Ok(self.0.clone());
         }
         let e = guard_ok!(elevation_map(old_interp), err => { return Err(err) });
-        if let Some(func) = e.get(interp) {
+        if let Some((_, target_interpretation, func)) = e.get_full(interp) {
             debug!("elevate {} to {}", old_interp, key);
-            return func(self.0.clone());
+            return func(self.0.clone(), target_interpretation);
         }
         debug!("no elevation from {} to {}", old_interp, interp);
         nores()

@@ -2,6 +2,10 @@ use std::fmt::Error;
 
 use crate::base::*;
 
+const SPACE_TO_SEPARATOR: usize = 32;
+const SEPARATORS: &[&str] = &["│ ", "╞ ", "┝ ", "├ "];
+const INDENT: usize = 4;
+
 pub fn pprint(cell: &Cell, depth: usize, breadth: usize) {
     let mut buffer = String::new();
     if let Err(e) = _pprint(cell, "", depth, breadth, 0, &mut buffer) {
@@ -61,10 +65,6 @@ fn pprint_group(
 }
 
 fn make_indent(indent: usize, buffer: &mut String) -> Result<(), Error> {
-    const SPACE_TO_SEPARATOR: usize = 32;
-    const SEPARATORS: &[&str] = &["│ ", "╞ ", "┝ ", "├ "];
-    const INDENT: usize = 4;
-
     while buffer.len() < SPACE_TO_SEPARATOR {
         buffer.push(' ');
     }
@@ -91,7 +91,7 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
     write!(
         buffer,
         "{} {}",
-        cell.interpretation(),
+        cell.domain().interpretation(),
         cell.typ().unwrap_or_else(|e| {
             typ = format!("⚠{:?}⚠", e);
             &typ
@@ -100,6 +100,7 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
     make_indent(indent, buffer)?;
     write!(buffer, "{}", prefix)?;
 
+    let mut empty = true;
     match cell.read().err() {
         Ok(reader) => {
             let key = reader.label();
@@ -107,20 +108,40 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
             match key {
                 Ok(k) => {
                     if Some(&k) != value.as_ref().ok() {
+                        empty = false;
                         write!(buffer, "{}: ", k)
                     } else {
                         write!(buffer, "")
                     }
                 }
                 Err(HErr::None) => write!(buffer, ""),
-                Err(err) => write!(buffer, "⚠{:?}⚠ ", err),
+                Err(err) => {
+                    empty = false;
+                    write!(buffer, "⚠{:?}⚠ ", err)
+                }
             }?;
             match value {
-                Ok(v) => write!(buffer, "{}", v),
-                Err(err) => write!(buffer, "⚠{:?}⚠", err),
+                Ok(v) => {
+                    // write!(buffer, "empty={} ", v.is_empty())?;
+                    if empty {
+                        empty = v.is_empty();
+                    }
+                    write!(buffer, "{}", v)
+                }
+                Err(HErr::None) => write!(buffer, ""),
+                Err(err) => {
+                    empty = false;
+                    write!(buffer, "⚠{:?}⚠", err)
+                }
             }?;
         }
-        Err(err) => write!(buffer, "⚠cannot read: {:?}⚠", err)?,
+        Err(err) => {
+            empty = false;
+            write!(buffer, "⚠cannot read: {:?}⚠", err)?
+        }
+    }
+    if empty {
+        write!(buffer, "•")?;
     }
 
     match cell.sub().err() {

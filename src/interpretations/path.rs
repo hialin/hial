@@ -9,16 +9,9 @@ use crate::base::{Cell as XCell, *};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_PATH: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "value",
-    target_interpretation: "path",
-    constructor: Cell::from_value_cell,
-};
-
-#[distributed_slice(ELEVATION_CONSTRUCTORS)]
-static FILE_TO_PATH: ElevationConstructor = ElevationConstructor {
-    source_interpretation: "file",
-    target_interpretation: "path",
-    constructor: Cell::from_file_cell,
+    source_interpretations: &["value", "file"],
+    target_interpretations: &["path"],
+    constructor: Cell::from_cell,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -51,13 +44,12 @@ pub struct CellWriter {}
 impl CellWriterTrait for CellWriter {}
 
 impl Cell {
-    pub fn from_value_cell(cell: XCell) -> Res<XCell> {
-        let s = cell.read().value()?.to_string();
-        Cell::from_string(s)
-    }
-
-    pub fn from_file_cell(cell: XCell) -> Res<XCell> {
-        Cell::from_path(cell.as_path()?)
+    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+        match cell.domain().interpretation() {
+            "value" => Cell::from_string(cell.read().value()?.to_string()),
+            "file" => Cell::from_path(cell.as_file_path()?),
+            _ => nores(),
+        }
     }
 
     pub fn from_string(url: impl Into<String>) -> Res<XCell> {
