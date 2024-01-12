@@ -14,8 +14,8 @@ static VALUE_TO_PATH: ElevationConstructor = ElevationConstructor {
     constructor: Cell::from_cell,
 };
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Domain(Rc<(PathBuf, String)>);
+#[derive(Clone, Debug)]
+pub struct Domain(Rc<(PathBuf, String, Option<XCell>)>);
 
 impl DomainTrait for Domain {
     type Cell = Cell;
@@ -27,13 +27,17 @@ impl DomainTrait for Domain {
     fn root(&self) -> Res<Self::Cell> {
         Ok(Cell(self.clone()))
     }
+
+    fn origin(&self) -> Res<XCell> {
+        self.0 .2.as_ref().ok_or(HErr::None).map(|c| c.clone())
+    }
 }
 
 impl SaveTrait for Domain {
     // TODO: add implementation
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug)]
 pub struct Cell(Domain);
 
 #[derive(Debug)]
@@ -46,41 +50,46 @@ impl CellWriterTrait for CellWriter {}
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         match cell.domain().interpretation() {
-            "value" => Cell::from_string(cell.read().value()?.to_string()),
-            "file" => Cell::from_path(cell.as_file_path()?),
+            "value" => {
+                let r = cell.read();
+                let v = r.value()?;
+                let cow = v.as_cow_str();
+                let value = cow.as_ref();
+                Self::make_cell(PathBuf::from(value), value.to_owned(), Some(cell))
+            }
+            "file" => {
+                let path = cell.as_file_path()?;
+                Self::make_cell(
+                    path.to_owned(),
+                    path.to_string_lossy().into_owned(),
+                    Some(cell),
+                )
+            }
             _ => nores(),
         }
     }
 
     pub fn from_string(url: impl Into<String>) -> Res<XCell> {
-        let path_cell = from_string(url.into())?.root()?;
-        Ok(XCell {
-            dyn_cell: DynCell::from(path_cell),
-        })
+        let url = url.into();
+        let path = PathBuf::from(&url);
+        Self::make_cell(path, url, None)
     }
 
     pub fn from_path(path: impl Into<PathBuf>) -> Res<XCell> {
-        let path_cell = from_path(path.into())?.root()?;
+        let path = path.into();
+        Self::make_cell(path.clone(), path.to_string_lossy().into_owned(), None)
+    }
+
+    fn make_cell(path: PathBuf, string: String, origin: Option<XCell>) -> Res<XCell> {
+        let domain = Domain(Rc::new((path, string, origin)));
         Ok(XCell {
-            dyn_cell: DynCell::from(path_cell),
+            dyn_cell: DynCell::from(domain.root()?),
         })
     }
 
     pub fn as_path(&self) -> Res<&Path> {
         Ok(self.0 .0 .0.as_path())
     }
-}
-
-fn from_string(s: impl Into<String>) -> Res<Domain> {
-    let s = s.into();
-    let data = (PathBuf::from(&s), s);
-    Ok(Domain(Rc::new(data)))
-}
-
-fn from_path(s: impl Into<PathBuf>) -> Res<Domain> {
-    let path = s.into();
-    let s = path.to_string_lossy().to_string();
-    Ok(Domain(Rc::new((path, s))))
 }
 
 impl CellReaderTrait for CellReader {

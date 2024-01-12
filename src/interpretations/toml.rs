@@ -16,6 +16,7 @@ static VALUE_TO_TOML: ElevationConstructor = ElevationConstructor {
 #[derive(Clone, Debug)]
 pub struct Domain {
     nodes: NodeGroup,
+    origin: Option<Box<XCell>>,
 }
 
 impl DomainTrait for Domain {
@@ -33,6 +34,10 @@ impl DomainTrait for Domain {
             },
             pos: 0,
         })
+    }
+
+    fn origin(&self) -> Res<XCell> {
+        self.origin.as_ref().map(|c| *c.clone()).ok_or(HErr::None)
     }
 }
 
@@ -87,23 +92,37 @@ impl From<toml::de::Error> for HErr {
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         match cell.domain().interpretation() {
-            "value" => Self::from_str(cell.read().value()?.as_cow_str().as_ref()),
-            "file" => Self::from_path(cell.as_file_path()?),
+            "value" => {
+                let r = cell.read();
+                let v = r.value()?;
+                let cow = v.as_cow_str();
+                let value = cow.as_ref();
+                Self::make_cell(value, Some(cell))
+            }
+            "file" => {
+                let path = cell.as_file_path()?;
+                Self::make_cell(&std::fs::read_to_string(path)?, Some(cell))
+            }
             _ => nores(),
         }
     }
 
     pub fn from_path(path: &Path) -> Res<XCell> {
         let source = std::fs::read_to_string(path)?;
-        Cell::from_str(&source)
+        Self::make_cell(&source, None)
     }
 
     pub fn from_str(source: &str) -> Res<XCell> {
+        Self::make_cell(source, None)
+    }
+
+    fn make_cell(source: &str, origin: Option<XCell>) -> Res<XCell> {
         let toml: TomlValue = toml::from_str(source)?;
         let root_node = node_from_toml(toml);
         let preroot = Rc::new(vec![root_node]);
         let domain = Domain {
             nodes: NodeGroup::Array(preroot),
+            origin: origin.map(Box::new),
         };
         Ok(XCell {
             dyn_cell: DynCell::from(domain.root()?),

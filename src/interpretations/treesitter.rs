@@ -5,7 +5,7 @@ use tree_sitter::{Parser, Tree, TreeCursor};
 
 use crate::{
     base::{Cell as XCell, *},
-    tree_sitter_language, *,
+    *,
 };
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
@@ -23,6 +23,7 @@ pub struct DomainData {
     language: String,
     source: String,
     tree: Tree,
+    origin: Option<XCell>,
 }
 
 impl DomainTrait for Domain {
@@ -40,6 +41,10 @@ impl DomainTrait for Domain {
             nodes: Rc::new(vec![cnode]),
         };
         Ok(Cell { group, pos: 0 })
+    }
+
+    fn origin(&self) -> Res<XCell> {
+        self.0.origin.clone().ok_or(HErr::None)
     }
 }
 
@@ -83,11 +88,12 @@ impl Cell {
         match cell.domain().interpretation() {
             "value" => {
                 let source = cell.read().value()?.as_cow_str().into_owned();
-                Cell::from_string(source, lang.to_owned())
+                Self::make_cell(source, lang.to_owned(), Some(cell))
             }
             "file" => {
                 let path = cell.as_file_path()?;
-                Cell::from_path(path, lang.to_owned())
+                let source = std::fs::read_to_string(path)?;
+                Self::make_cell(source, lang.to_owned(), Some(cell))
             }
             _ => nores(),
         }
@@ -95,11 +101,15 @@ impl Cell {
 
     pub fn from_path(path: &Path, language: String) -> Res<XCell> {
         let source = std::fs::read_to_string(path)?;
-        Cell::from_string(source, language)
+        Self::make_cell(source, language, None)
     }
 
     pub fn from_string(source: String, language: String) -> Res<XCell> {
-        let domain = sitter_from_source(source, language)?;
+        Self::make_cell(source, language, None)
+    }
+
+    fn make_cell(source: String, language: String, origin: Option<XCell>) -> Res<XCell> {
+        let domain = sitter_from_source(source, language, origin)?;
         Ok(XCell {
             dyn_cell: DynCell::from(domain.root()?),
         })
@@ -113,12 +123,15 @@ impl Cell {
     }
 }
 
-fn sitter_from_source(source: String, language: String) -> Res<Domain> {
-    let sitter_language = guard_some!(tree_sitter_language(language.as_str()), {
-        return Err(HErr::Sitter(format!("unsupported language: {}", language)));
-    });
+fn sitter_from_source(source: String, language: String, origin: Option<XCell>) -> Res<Domain> {
+    let sitter_language = match language.as_str() {
+        "rust" => unsafe { tree_sitter_rust() },
+        "javascript" => unsafe { tree_sitter_javascript() },
+        _ => return Err(HErr::Sitter(format!("unsupported language: {}", language))),
+    };
 
     debug!("sitter language: {}", language);
+
     // println!("node kinds:");
     // let mut nk = vec![];
     // for i in 0..sitter_language.node_kind_count() {
@@ -148,6 +161,7 @@ fn sitter_from_source(source: String, language: String) -> Res<Domain> {
         language,
         source,
         tree,
+        origin,
     })))
 }
 

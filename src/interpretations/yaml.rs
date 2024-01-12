@@ -15,8 +15,12 @@ static VALUE_TO_YAML: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Domain {
+pub struct Domain(Rc<DomainData>);
+
+#[derive(Clone, Debug)]
+pub struct DomainData {
     nodes: NodeGroup,
+    origin: Option<XCell>,
 }
 
 impl DomainTrait for Domain {
@@ -30,10 +34,17 @@ impl DomainTrait for Domain {
         Ok(Cell {
             group: Group {
                 domain: self.clone(),
-                nodes: self.nodes.clone(),
+                nodes: self.0.nodes.clone(),
             },
             pos: 0,
         })
+    }
+
+    fn origin(&self) -> Res<XCell> {
+        match &self.0.origin {
+            Some(c) => Ok(c.clone()),
+            None => nores(),
+        }
     }
 }
 
@@ -95,8 +106,19 @@ impl From<ScanError> for HErr {
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         match cell.domain().interpretation() {
-            "value" => Cell::from_string(cell.read().value()?.as_cow_str()),
-            "file" => Cell::from_path(cell.as_file_path()?),
+            "value" => {
+                let r = cell.read();
+                let v = r.value()?;
+                let cow = v.as_cow_str();
+                let value = cow.as_ref();
+                Cell::make_cell(value, Some(cell))
+            }
+            "file" => {
+                let mut source = String::new();
+                let path = cell.as_file_path()?;
+                File::open(path)?.read_to_string(&mut source)?;
+                Cell::make_cell(source, Some(cell))
+            }
             _ => fault(""),
         }
     }
@@ -104,18 +126,22 @@ impl Cell {
     pub fn from_path(path: impl AsRef<Path>) -> Res<XCell> {
         let mut source = String::new();
         File::open(path)?.read_to_string(&mut source)?;
-        Cell::from_string(source)
+        Cell::make_cell(source, None)
     }
 
-    pub fn from_string(s: impl AsRef<str>) -> Res<XCell> {
+    pub fn from_str(source: impl AsRef<str>) -> Res<XCell> {
+        Cell::make_cell(source, None)
+    }
+
+    fn make_cell(s: impl AsRef<str>, origin: Option<XCell>) -> Res<XCell> {
         let yaml_docs = YamlLoader::load_from_str(s.as_ref())?;
         let root_group_res: Res<Vec<Node>> = yaml_docs.iter().map(node_from_yaml).collect();
-        let domain = Domain {
+        let domain = Domain(Rc::new(DomainData {
+            origin,
             nodes: NodeGroup::Array(Rc::new(root_group_res?)),
-        };
-        let c = domain.root()?;
+        }));
         Ok(XCell {
-            dyn_cell: DynCell::from(c),
+            dyn_cell: DynCell::from(domain.root()?),
         })
     }
 }

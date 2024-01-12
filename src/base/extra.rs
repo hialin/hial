@@ -137,6 +137,17 @@ impl Domain {
         })
     }
 
+    pub fn origin(&self) -> Cell {
+        dispatch_dyn_domain!(&self.dyn_domain, |x| {
+            match x.origin() {
+                Ok(c) => c,
+                Err(e) => Cell {
+                    dyn_cell: DynCell::from(e),
+                },
+            }
+        })
+    }
+
     pub fn write_policy(&self) -> Res<WritePolicy> {
         dispatch_dyn_domain!(&self.dyn_domain, |x| { x.write_policy() })
     }
@@ -235,6 +246,9 @@ impl CellWriter {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct CellPath(pub String);
+
 impl Cell {
     pub fn err(self) -> Res<Cell> {
         if let DynCell::Error(error) = self.dyn_cell {
@@ -263,11 +277,6 @@ impl Cell {
             }
         });
         CellReader(reader)
-    }
-
-    pub fn origin(&self) -> Cell {
-        // TODO: implement extra::Cell::origin
-        Cell::from(HErr::NotYetImplemented)
     }
 
     pub fn policy(&self, policy: WritePolicy) -> Cell {
@@ -350,8 +359,45 @@ impl Cell {
         })
     }
 
-    pub fn path(&self) -> Res<String> {
-        // TODO: path is not complete/correct (requires prev cell)
+    pub fn head(&self) -> Res<(Cell, Relation)> {
+        if let DynCell::Error(err) = &self.dyn_cell {
+            return Err(err.clone());
+        }
+        dispatch_dyn_cell!(&self.dyn_cell, |x| {
+            match x.head() {
+                Ok((c, r)) => Ok((
+                    Cell {
+                        dyn_cell: DynCell::from(c),
+                    },
+                    r,
+                )),
+                Err(e) => Err(e),
+            }
+        })
+    }
+
+    /// Returns the path of head cells and relations in the current domain.
+    /// The current cell is not included. If the path is empty, the current
+    /// cell is the domain root. HErr::None is never returned.
+    fn domain_path_items(&self) -> Res<Vec<(Cell, Relation)>> {
+        let mut v: Vec<(Cell, Relation)> = vec![];
+
+        let mut head = self.head();
+        while let Ok(h) = head {
+            v.push((h.0.clone(), h.1));
+            head = h.0.head();
+        }
+
+        let err = head.unwrap_err();
+        if err == HErr::None {
+            v.reverse();
+            Ok(v)
+        } else {
+            Err(err)
+        }
+    }
+
+    pub fn path(&self) -> Res<CellPath> {
         use std::fmt::Write;
         let err_fn = |err| eprintln!("💥 str write error {}", err);
         let write_label_fn =
@@ -389,22 +435,14 @@ impl Cell {
                 Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
             };
 
-        let v: Vec<(Cell, Relation)> = vec![];
-        // {
-        //     let mut a = self.prev.as_ref();
-        //     while let Some((cell, rel)) = a {
-        //         v.push((cell.clone(), *rel));
-        //         a = cell.prev.as_ref();
-        //     }
-        // }
+        let v: Vec<(Cell, Relation)> = self.domain_path_items()?;
 
         let mut s = String::new();
         {
             let mut prev_relation = None;
             let domain = self.domain();
             let reader = self.read();
-            for a in v.iter().rev() {
-                let (cell, rel) = a;
+            for (cell, rel) in v.iter().rev() {
                 if prev_relation.is_none() {
                     write_value_fn(&mut s, &reader, domain.interpretation());
                 } else {
@@ -425,7 +463,7 @@ impl Cell {
                 prev_relation == Some(Relation::Interpretation),
             );
         }
-        Ok(s)
+        Ok(CellPath(s))
     }
 
     pub fn debug_string(&self) -> String {

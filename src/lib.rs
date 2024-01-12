@@ -23,11 +23,3 @@ extern "C" {
     fn tree_sitter_rust() -> tree_sitter::Language;
     fn tree_sitter_javascript() -> tree_sitter::Language;
 }
-
-pub fn tree_sitter_language(language: &str) -> Option<tree_sitter::Language> {
-    match language {
-        "rust" => Some(unsafe { tree_sitter_rust() }),
-        "javascript" => Some(unsafe { tree_sitter_javascript() }),
-        _ => None,
-    }
-}

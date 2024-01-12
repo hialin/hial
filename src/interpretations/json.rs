@@ -28,6 +28,7 @@ pub struct Cell {
 pub struct Group {
     domain: Domain,
     nodes: NodeGroup,
+    head: Option<Box<(Cell, Relation)>>,
 }
 
 #[derive(Clone, Debug)]
@@ -83,9 +84,17 @@ impl DomainTrait for Domain {
             group: Group {
                 domain: self.clone(),
                 nodes: NodeGroup::Array(self.0.tap().nodes.clone()),
+                head: None,
             },
             pos: 0,
         })
+    }
+
+    fn origin(&self) -> Res<XCell> {
+        match &self.0.tap().origin {
+            Some(c) => Ok(c.clone()),
+            None => nores(),
+        }
     }
 }
 impl SaveTrait for Domain {
@@ -208,10 +217,12 @@ impl CellTrait for Cell {
         match self.group.nodes {
             NodeGroup::Array(ref array) => match &array.tap().get(self.pos) {
                 Some(Node::Array(a)) => Ok(Group {
+                    head: Some(Box::new((self.clone(), Relation::Sub))),
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Array(a.clone()),
                 }),
                 Some(Node::Object(o)) => Ok(Group {
+                    head: Some(Box::new((self.clone(), Relation::Sub))),
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Object(o.clone()),
                 }),
@@ -219,10 +230,12 @@ impl CellTrait for Cell {
             },
             NodeGroup::Object(ref object) => match object.tap().get_index(self.pos) {
                 Some((_, Node::Array(a))) => Ok(Group {
+                    head: Some(Box::new((self.clone(), Relation::Sub))),
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Array(a.clone()),
                 }),
                 Some((_, Node::Object(o))) => Ok(Group {
+                    head: Some(Box::new((self.clone(), Relation::Sub))),
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Object(o.clone()),
                 }),

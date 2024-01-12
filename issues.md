@@ -2,17 +2,24 @@
 
 ## TODOs
 
-- implement cell path
-- printing errors should show the cell path and the cell operation that failed
+! focus on releasing a first minimal version, then improve
+    - interpretations: path+fs, json+yaml+toml+xml, rust+js, url?+net
+    - explicit and implicit write support (policy, include readonly)
+    - fix tests, todo!() and TODO: in code
+    - later: python, git, database, ical, zip, markdown
+    - later: separate api module, used by ffi and dependent crates
 
+- rename XCell -> Nex, Cell -> Inex, CellTrait -> InexTrait
+- implement cell head for each interpretation
+- replace ownrc with a native implementation, then fix it
+- printing errors should show the cell path and the cell operation that failed
+- fix tests using the error's cell path
 - implement policy(): set on cells and propagated, not set by interpretations
-- add json treesitter interpretation, compare it with rust outputs
 - json: use SerdeValue directly instead of Node
 - explicit domain save/write: to origin, to new domain
 - write policies on domain (interpretation):
     - read only, write ignore, write back, write to new domain
 - fix double kleene error (see test)
-- fix todo!() and TODO: in code
 
 - ?treesitter representations are too detailed, unsure what to do
 - ?explore python implementation and usage

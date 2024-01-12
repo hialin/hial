@@ -31,6 +31,7 @@ pub struct DomainData {
     file_map: HashMap<PathBuf, Rc<Vec<Res<FileEntry>>>>,
     root_path: PathBuf,
     root_pos: u32,
+    origin: Option<XCell>,
 }
 
 #[derive(Clone, Debug)]
@@ -93,6 +94,13 @@ impl DomainTrait for Domain {
             pos: self.0.root_pos,
         })
     }
+
+    fn origin(&self) -> Res<XCell> {
+        match &self.0.origin {
+            Some(c) => Ok(c.clone()),
+            None => nores(),
+        }
+    }
 }
 
 impl SaveTrait for Domain {
@@ -140,18 +148,22 @@ impl CellWriterTrait for CellWriter {}
 
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
-        Cell::from_path(cell.as_file_path()?)
+        let path = cell.as_file_path()?;
+        let file_cell = from_path(path, Some(cell.clone()))?.root()?;
+        Ok(XCell {
+            dyn_cell: DynCell::from(file_cell),
+        })
     }
 
     pub fn from_path(path: impl Borrow<Path>) -> Res<XCell> {
-        let file_cell = from_path(path.borrow())?.root()?;
+        let file_cell = from_path(path.borrow(), None)?.root()?;
         Ok(XCell {
             dyn_cell: DynCell::from(file_cell),
         })
     }
 
     pub fn from_str_path(path: impl Borrow<str>) -> Res<XCell> {
-        let file_cell = from_path(Path::new(path.borrow()))?.root()?;
+        let file_cell = from_path(Path::new(path.borrow()), None)?.root()?;
         Ok(XCell {
             dyn_cell: DynCell::from(file_cell),
         })
@@ -300,7 +312,7 @@ impl GroupTrait for Group {
     }
 }
 
-fn from_path(path: &Path) -> Res<Domain> {
+fn from_path(path: &Path, origin: Option<XCell>) -> Res<Domain> {
     let path = path.canonicalize()?;
     if !path.exists() {
         debug!("file: path {:?} does not exist", path);
@@ -342,6 +354,7 @@ fn from_path(path: &Path) -> Res<Domain> {
         file_map: HashMap::from([(path.clone(), roots.clone())]),
         root_pos: pos as u32,
         root_path: path,
+        origin,
     })))
 }
 

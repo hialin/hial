@@ -13,8 +13,8 @@ static VALUE_TO_URL: ElevationConstructor = ElevationConstructor {
     constructor: Cell::from_cell,
 };
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Domain(Rc<Url>);
+#[derive(Clone, Debug)]
+pub struct Domain(Rc<(Url, Option<XCell>)>);
 
 impl DomainTrait for Domain {
     type Cell = Cell;
@@ -26,13 +26,20 @@ impl DomainTrait for Domain {
     fn root(&self) -> Res<Self::Cell> {
         Ok(Cell(self.clone()))
     }
+
+    fn origin(&self) -> Res<XCell> {
+        match &self.0 .1 {
+            Some(c) => Ok(c.clone()),
+            None => nores(),
+        }
+    }
 }
 
 impl SaveTrait for Domain {
     // TODO: add implementation
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug)]
 pub struct Cell(Domain);
 
 #[derive(Debug)]
@@ -45,26 +52,35 @@ impl CellWriterTrait for CellWriter {}
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         match cell.domain().interpretation() {
-            "value" => Self::from_str(cell.read().value()?.as_cow_str().as_ref()),
+            "value" => {
+                let r = cell.read();
+                let v = r.value()?;
+                let cow = v.as_cow_str();
+                let value = cow.as_ref();
+                let cell = Domain(Rc::new((Url::parse(value)?, Some(cell)))).root()?;
+                Ok(XCell {
+                    dyn_cell: DynCell::from(cell),
+                })
+            }
             _ => nores(),
         }
     }
 
     pub fn from_str(s: &str) -> Res<XCell> {
-        let cell = Domain(Rc::new(Url::parse(s)?)).root()?;
+        let cell = Domain(Rc::new((Url::parse(s)?, None))).root()?;
         Ok(XCell {
             dyn_cell: DynCell::from(cell),
         })
     }
 
     pub fn as_url_str(&self) -> &str {
-        self.0 .0.as_str()
+        self.0 .0 .0.as_str()
     }
 }
 
 impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
-        Ok(Value::Str(self.0 .0.as_str()))
+        Ok(Value::Str(self.0 .0 .0.as_str()))
     }
 }
 

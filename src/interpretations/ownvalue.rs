@@ -14,6 +14,10 @@ impl DomainTrait for Cell {
     fn root(&self) -> Res<Self::Cell> {
         Ok(self.clone())
     }
+
+    fn origin(&self) -> Res<XCell> {
+        nores()
+    }
 }
 
 impl SaveTrait for Cell {

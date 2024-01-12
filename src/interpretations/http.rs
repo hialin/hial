@@ -9,7 +9,7 @@ use crate::{
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static URL_TO_HTTP: ElevationConstructor = ElevationConstructor {
-    source_interpretations: &["url"],
+    source_interpretations: &["value"],
     target_interpretations: &["http"],
     constructor: Cell::from_cell,
 };
@@ -29,6 +29,7 @@ pub struct Response {
     reason: String,
     headers: IndexMap<String, Vec<String>>,
     body: Vec<u8>,
+    origin: Option<XCell>,
 }
 
 #[derive(Clone, Debug)]
@@ -64,18 +65,21 @@ impl CellWriterTrait for CellWriter {}
 
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
-        Cell::from_url_str(cell.as_url_str()?)
+        let url_cell = from_url_str(cell.as_url_str()?, Some(cell.clone()))?.root()?;
+        Ok(XCell {
+            dyn_cell: DynCell::from(url_cell),
+        })
     }
 
     pub fn from_url_str<'a>(url: impl Into<&'a str>) -> Res<XCell> {
-        let url_cell = from_url_str(url.into())?.root()?;
+        let url_cell = from_url_str(url.into(), None)?.root()?;
         Ok(XCell {
             dyn_cell: DynCell::from(url_cell),
         })
     }
 }
 
-fn from_url_str(url: &str) -> Res<Domain> {
+fn from_url_str(url: &str, origin: Option<XCell>) -> Res<Domain> {
     let response = Client::builder()
         .user_agent("hial")
         .build()?
@@ -105,6 +109,7 @@ fn from_url_str(url: &str) -> Res<Domain> {
         reason,
         headers,
         body: response.bytes()?.as_ref().to_vec(),
+        origin,
     })))
 }
 
@@ -133,6 +138,10 @@ impl DomainTrait for Domain {
             },
             pos: 0,
         })
+    }
+
+    fn origin(&self) -> Res<XCell> {
+        self.0.tap().origin.as_ref().cloned().ok_or(HErr::None)
     }
 }
 

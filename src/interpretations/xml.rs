@@ -20,6 +20,7 @@ static VALUE_TO_XML: ElevationConstructor = ElevationConstructor {
 #[derive(Clone, Debug)]
 pub struct Domain {
     nodes: NodeList,
+    origin: Option<Rc<XCell>>,
 }
 
 impl DomainTrait for Domain {
@@ -37,6 +38,13 @@ impl DomainTrait for Domain {
             },
             pos: 0,
         })
+    }
+
+    fn origin(&self) -> Res<XCell> {
+        match self.origin {
+            Some(ref c) => Ok(c.as_ref().clone()),
+            None => nores(),
+        }
     }
 }
 
@@ -100,8 +108,20 @@ enum Attribute {
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         match cell.domain().interpretation() {
-            "value" => Self::from_str(cell.read().value()?.as_cow_str().as_ref()),
-            "file" => Self::from_path(cell.as_file_path()?),
+            "value" => {
+                let r = cell.read();
+                let v = r.value()?;
+                let cow = v.as_cow_str();
+                let mut reader = Reader::from_str(cow.as_ref());
+                let root = xml_to_node(&mut reader)?;
+                Self::from_root_node(root, Some(cell))
+            }
+            "file" => {
+                let path = cell.as_file_path()?;
+                let mut reader = Reader::from_file(path).map_err(HErr::from)?;
+                let root = xml_to_node(&mut reader)?;
+                Self::from_root_node(root, Some(cell))
+            }
             _ => nores(),
         }
     }
@@ -109,18 +129,19 @@ impl Cell {
     pub fn from_path(path: &Path) -> Res<XCell> {
         let mut reader = Reader::from_file(path).map_err(HErr::from)?;
         let root = xml_to_node(&mut reader)?;
-        Self::from_root_node(root)
+        Self::from_root_node(root, None)
     }
 
     pub fn from_str(string: &str) -> Res<XCell> {
         let mut reader = Reader::from_str(string);
         let root = xml_to_node(&mut reader)?;
-        Self::from_root_node(root)
+        Self::from_root_node(root, None)
     }
 
-    fn from_root_node(root: Node) -> Res<XCell> {
+    fn from_root_node(root: Node, origin: Option<XCell>) -> Res<XCell> {
         let domain = Domain {
             nodes: NodeList(Rc::new(vec![root])),
+            origin: origin.map(Rc::new),
         };
         Ok(XCell {
             dyn_cell: DynCell::from(domain.root()?),

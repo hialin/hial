@@ -1,3 +1,6 @@
+/// A Field domain is not really a separate domain, but a view on a cell.
+/// Most domain and cell operations are forwarded to the underlying cell.
+///
 use std::rc::Rc;
 
 use crate::base::*;
@@ -30,6 +33,10 @@ impl DomainTrait for FieldGroup {
         // cannot be implemented, we cannot return a FieldCell without knowing the type
         // is patched by extra::Domain which returns the correct root
         unimplemented!()
+    }
+
+    fn origin(&self) -> Res<super::extra::Cell> {
+        self.cell.domain().origin().err()
     }
 }
 
@@ -71,11 +78,15 @@ impl GroupTrait for FieldGroup {
             _ => return nores(),
         };
         // only return the field cell if the field is not empty
-        if ty == FieldType::Label && self.cell.read().label() == Err(HErr::None) {
-            return nores();
+        if ty == FieldType::Label {
+            if let Err(HErr::None) = self.cell.read().label() {
+                return nores();
+            }
         }
-        if ty == FieldType::Value && self.cell.read().value() == Err(HErr::None) {
-            return nores();
+        if ty == FieldType::Value {
+            if let Err(HErr::None) = self.cell.read().value() {
+                return nores();
+            }
         }
         Ok(FieldCell {
             cell: self.cell.clone(),

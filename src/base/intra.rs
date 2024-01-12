@@ -22,6 +22,10 @@ pub trait CellTrait: Clone + Debug {
     fn attr(&self) -> Res<Self::Group> {
         nores()
     }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        todo!()
+    }
 }
 
 pub trait DomainTrait: Debug + SaveTrait {
@@ -30,6 +34,8 @@ pub trait DomainTrait: Debug + SaveTrait {
     fn interpretation(&self) -> &str;
 
     fn root(&self) -> Res<Self::Cell>;
+
+    fn origin(&self) -> Res<crate::base::extra::Cell>;
 }
 
 pub trait SaveTrait: Debug {

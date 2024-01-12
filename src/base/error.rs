@@ -111,6 +111,10 @@ impl DomainTrait for HErr {
     fn root(&self) -> Res<Self::Cell> {
         Err(self.clone())
     }
+
+    fn origin(&self) -> Res<super::extra::Cell> {
+        Err(self.clone())
+    }
 }
 
 impl SaveTrait for HErr {
