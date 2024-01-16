@@ -1,4 +1,7 @@
-use std::rc::Rc;
+use std::{
+    fmt::{Debug, Write},
+    rc::Rc,
+};
 
 use crate::{
     base::*, enumerated_dynamic_type, guard_ok, interpretations::*, pathlang::eval::EvalIter,
@@ -126,14 +129,20 @@ impl Domain {
         dispatch_dyn_domain!(&self.dyn_domain, |x| { x.interpretation() })
     }
 
-    pub fn root(&self) -> Res<Cell> {
+    pub fn root(&self) -> Cell {
         if let DynDomain::Field(field) = &self.dyn_domain {
+            // need to have a special case here, it's not possible to do this in the field::root
             return field.cell.domain().root();
         }
         dispatch_dyn_domain!(&self.dyn_domain, |x| {
-            Ok(Cell {
-                dyn_cell: DynCell::from(x.root()?),
-            })
+            match x.root() {
+                Ok(c) => Cell {
+                    dyn_cell: DynCell::from(c),
+                },
+                Err(e) => Cell {
+                    dyn_cell: DynCell::from(e),
+                },
+            }
         })
     }
 
@@ -246,9 +255,6 @@ impl CellWriter {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct CellPath(pub String);
-
 impl Cell {
     pub fn err(self) -> Res<Cell> {
         if let DynCell::Error(error) = self.dyn_cell {
@@ -258,15 +264,12 @@ impl Cell {
     }
 
     pub fn domain(&self) -> Domain {
-        if let DynCell::Field(fieldcell) = &self.dyn_cell {
-            return fieldcell.cell.domain();
-        }
         let domain = dispatch_dyn_cell!(&self.dyn_cell, |x| { DynDomain::from(x.domain()) });
         Domain { dyn_domain: domain }
     }
 
-    pub fn typ(&self) -> Res<&str> {
-        dispatch_dyn_cell!(&self.dyn_cell, |x| { x.typ() })
+    pub fn ty(&self) -> Res<&str> {
+        dispatch_dyn_cell!(&self.dyn_cell, |x| { x.ty() })
     }
 
     pub fn read(&self) -> CellReader {
@@ -328,11 +331,14 @@ impl Cell {
         Group::Elevation(ElevationGroup(self.clone()))
     }
 
-    pub fn field(&self) -> Res<Group> {
-        Ok(Group::Dyn(DynGroup::from(FieldGroup {
+    pub fn field(&self) -> Group {
+        if let DynCell::Error(err) = &self.dyn_cell {
+            return Group::Dyn(DynGroup::from(err.clone()));
+        }
+        Group::Dyn(DynGroup::from(FieldGroup {
             cell: Rc::new(self.clone()),
-            interpretation: self.domain().interpretation().to_string(),
-        })))
+            // interpretation: self.domain().interpretation().to_string(),
+        }))
     }
 
     pub fn be(&self, interpretation: &str) -> Cell {
@@ -345,23 +351,20 @@ impl Cell {
                 dyn_cell: DynCell::from(err),
             }
         );
-        let search = PathSearch {
-            cell: self.clone(),
-            path,
-        };
-        Cell::from(search.first())
+        PathSearch::new(self.clone(), path).first()
     }
 
     pub fn search<'a>(&self, path: &'a str) -> Res<PathSearch<'a>> {
-        Ok(PathSearch {
-            cell: self.clone(),
-            path: crate::pathlang::Path::parse(path)?,
-        })
+        let path = guard_ok!(crate::pathlang::Path::parse(path), err => {return Err(err)});
+        Ok(PathSearch::new(self.clone(), path))
     }
 
     pub fn head(&self) -> Res<(Cell, Relation)> {
         if let DynCell::Error(err) = &self.dyn_cell {
             return Err(err.clone());
+        }
+        if let DynCell::Field(field) = &self.dyn_cell {
+            return Ok(((*field.cell).clone(), Relation::Field));
         }
         dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match x.head() {
@@ -378,9 +381,9 @@ impl Cell {
 
     /// Returns the path of head cells and relations in the current domain.
     /// The current cell is not included. If the path is empty, the current
-    /// cell is the domain root. HErr::None is never returned.
-    fn domain_path_items(&self) -> Res<Vec<(Cell, Relation)>> {
-        let mut v: Vec<(Cell, Relation)> = vec![];
+    /// cell is the domain root. HErrKind::None is never returned.
+    fn domain_path_items(&self) -> Res<Vec<(Self, Relation)>> {
+        let mut v: Vec<(Self, Relation)> = vec![];
 
         let mut head = self.head();
         while let Ok(h) = head {
@@ -389,7 +392,7 @@ impl Cell {
         }
 
         let err = head.unwrap_err();
-        if err == HErr::None {
+        if err.kind == HErrKind::None {
             v.reverse();
             Ok(v)
         } else {
@@ -397,90 +400,132 @@ impl Cell {
         }
     }
 
-    pub fn path(&self) -> Res<CellPath> {
-        use std::fmt::Write;
-        let err_fn = |err| eprintln!("💥 str write error {}", err);
-        let write_label_fn =
-            |s: &mut String, reader: &CellReader, interpretation: &str, is_interpretation: bool| {
-                match reader.label() {
-                    Ok(l) => write!(s, "{}", l).unwrap_or_else(err_fn),
-                    Err(HErr::None) => {
-                        if is_interpretation {
-                            write!(s, "{}", interpretation).unwrap_or_else(err_fn)
-                        } else if let Ok(index) = reader.index() {
-                            write!(s, "[{}]", index).unwrap_or_else(err_fn)
-                        } else {
-                            write!(s, "<?>").unwrap_or_else(err_fn)
-                        }
-                    }
-                    Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
+    /// Returns the path of head cells and relations in the current domain.
+    /// The current cell is included. HErrKind::None is never returned.
+    /// The path is returned as a string of labels separated by slashes.
+    fn domain_path(&self) -> Res<String> {
+        fn write_index(reader: CellReader, s: &mut String) -> Res<()> {
+            match reader.index() {
+                Ok(i) => {
+                    write!(s, "[{}]", i).map_err(|e| caused(HErrKind::IO, "write error", e))?;
+                    Ok(())
                 }
-            };
-
-        let write_value_fn =
-            |s: &mut String, reader: &CellReader, interpretation: &str| match reader.value() {
-                Ok(value) => {
-                    if interpretation == "value" {
-                        let mut v = format!("{}", value).replace('\n', "\\n");
-                        if v.len() > 4 {
-                            v.truncate(4);
-                            v += "...";
-                        }
-                        write!(s, "\"{}\"", v).unwrap_or_else(err_fn);
+                Err(e) => {
+                    if e.kind != HErrKind::None {
+                        Err(e)
                     } else {
-                        write!(s, "{}", value).unwrap_or_else(err_fn);
+                        Ok(())
                     }
                 }
-                Err(HErr::None) => write!(s, "<?>").unwrap_or_else(err_fn),
-                Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
-            };
-
-        let v: Vec<(Cell, Relation)> = self.domain_path_items()?;
+            }
+        }
 
         let mut s = String::new();
-        {
-            let mut prev_relation = None;
-            let domain = self.domain();
-            let reader = self.read();
-            for (cell, rel) in v.iter().rev() {
-                if prev_relation.is_none() {
-                    write_value_fn(&mut s, &reader, domain.interpretation());
-                } else {
-                    write_label_fn(
-                        &mut s,
-                        &reader,
-                        domain.interpretation(),
-                        prev_relation == Some(Relation::Interpretation),
-                    );
+        for (i, (c, r)) in self.domain_path_items()?.iter().enumerate() {
+            let reader = c.read().err()?;
+            if i == 0 {
+                write!(s, "{}", r).map_err(|e| caused(HErrKind::IO, "write error", e))?;
+            } else {
+                let lres = reader.label();
+                match lres {
+                    Ok(l) => {
+                        if !l.is_empty() {
+                            write!(s, "{}{}", l, r)
+                                .map_err(|e| caused(HErrKind::IO, "write error", e))?;
+                        } else {
+                            write_index(reader, &mut s)?;
+                            write!(s, "{}", r)
+                                .map_err(|e| caused(HErrKind::IO, "write error", e))?;
+                        }
+                    }
+                    Err(e) => {
+                        if e.kind == HErrKind::None {
+                            write_index(reader, &mut s)?;
+                            write!(s, "{}", r)
+                                .map_err(|e| caused(HErrKind::IO, "write error", e))?;
+                        } else {
+                            return Err(e);
+                        }
+                    }
                 }
-                write!(s, "{}", rel).unwrap_or_else(err_fn);
-                prev_relation = Some(*rel);
             }
-            write_label_fn(
-                &mut s,
-                &reader,
-                domain.interpretation(),
-                prev_relation == Some(Relation::Interpretation),
-            );
         }
-        Ok(CellPath(s))
+
+        let reader = self.read().err()?;
+        let lres = reader.label();
+        match lres {
+            Ok(l) => {
+                if !l.is_empty() {
+                    write!(s, "{}", l).map_err(|e| caused(HErrKind::IO, "write error", e))?;
+                } else {
+                    write_index(reader, &mut s)?;
+                }
+            }
+            Err(e) => {
+                if e.kind == HErrKind::None {
+                    write_index(reader, &mut s)?;
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+        Ok(s)
+    }
+
+    /// Returns the full path of head cells and relations in and between domains.
+    /// The current cell is not included. If the path is empty, the current
+    /// cell is the domain root. HErrKind::None is never returned.
+    /// The path is returned as a string of labels separated by slashes.
+    pub fn path(&self) -> Res<String> {
+        let mut v: Vec<String> = Vec::new();
+        let mut some_cell = Some(self.clone());
+        while let Some(cell) = some_cell {
+            let domain = cell.domain();
+            v.push(cell.domain_path()?);
+            if let Err(e) = domain.origin().err() {
+                if e.kind == HErrKind::None {
+                    let rr = domain.root().read();
+                    if domain.interpretation() == "value" {
+                        let mut s = format!(
+                            "{}",
+                            rr.value().unwrap_or(Value::Str("<💥 root read error>"))
+                        )
+                        .replace('\n', "\\n");
+                        if s.len() > 16 {
+                            s.truncate(16);
+                            s += "...";
+                        }
+                        v.push(format!("\"{}\"", s));
+                    }
+                }
+            } else {
+                v.push(format!(
+                    "{}{}",
+                    Relation::Interpretation,
+                    domain.interpretation()
+                ));
+            }
+            some_cell = domain.origin().err().ok();
+        }
+        v.reverse();
+        let s = v.join("");
+        Ok(s)
     }
 
     pub fn debug_string(&self) -> String {
         let err_fn = |err| eprintln!("💥 str write error {}", err);
-        use std::fmt::Write;
         let mut s = String::new();
         match self.read().err() {
             Ok(reader) => {
                 match reader.label() {
                     Ok(l) => write!(s, "{}", l).unwrap_or_else(err_fn),
-                    Err(HErr::None) => {}
+                    Err(e) if e.kind == HErrKind::None => {}
                     Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
                 };
                 write!(s, ":").unwrap_or_else(err_fn);
                 match reader.value() {
                     Ok(v) => write!(s, "{}", v).unwrap_or_else(err_fn),
-                    Err(HErr::None) => {}
+                    Err(e) if e.kind == HErrKind::None => {}
                     Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
                 };
             }
@@ -498,14 +543,14 @@ impl Cell {
         if let DynCell::Path(ref path_cell) = self.dyn_cell {
             return path_cell.as_path();
         }
-        nores()
+        nores().with_path_res(self.path())
     }
 
     pub fn as_url_str(&self) -> Res<&str> {
         if let DynCell::Url(ref url) = self.dyn_cell {
             return Ok(url.as_url_str());
         }
-        nores()
+        nores().with_path_res(self.path())
     }
     // fn http_as_string(cell: &Cell) -> Res<String> {
     //     if let Cell {
@@ -551,7 +596,7 @@ impl Group {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() == Ok(0)
+        self.len().map_or(false, |l| l == 0)
     }
 
     pub fn at(&self, index: usize) -> Cell {
@@ -632,23 +677,28 @@ impl Iterator for GroupIter {
 
 #[derive(Clone, Debug)]
 pub struct PathSearch<'a> {
-    cell: Cell,
-    path: Path<'a>,
-}
-impl<'a> IntoIterator for PathSearch<'a> {
-    type Item = Res<Cell>;
-    type IntoIter = EvalIter<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        EvalIter::new(self.cell, self.path)
-    }
+    eval_iter: EvalIter<'a>,
 }
 impl<'a> PathSearch<'a> {
-    pub fn first(self) -> Res<Cell> {
-        let x = self.into_iter().next();
-        x.unwrap_or(nores())
+    pub fn new(cell: Cell, path: Path<'a>) -> Self {
+        PathSearch {
+            eval_iter: EvalIter::new(cell, path),
+        }
     }
+
+    pub fn first(mut self) -> Cell {
+        match self.eval_iter.next() {
+            Some(Ok(c)) => c,
+            Some(Err(e)) => Cell {
+                dyn_cell: DynCell::from(e),
+            },
+            None => Cell {
+                dyn_cell: DynCell::from(noerr().with_path(self.eval_iter.get_max_accepted_path())),
+            },
+        }
+    }
+
     pub fn all(self) -> Res<Vec<Cell>> {
-        self.into_iter().collect::<Res<Vec<_>>>()
+        self.eval_iter.collect::<Res<Vec<_>>>()
     }
 }

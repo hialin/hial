@@ -83,7 +83,6 @@ impl DomainTrait for Domain {
             return fault("initial path not found");
         })
         .clone();
-        // .get(self.root_path.as_path());
         let group = Group {
             domain: self.clone(),
             files,
@@ -184,7 +183,7 @@ impl CellTrait for Cell {
         self.group.domain.clone()
     }
 
-    fn typ(&self) -> Res<&str> {
+    fn ty(&self) -> Res<&str> {
         if self.group.attribute_group_file_pos == u32::MAX {
             let fileentry =
                 guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
@@ -244,6 +243,10 @@ impl CellTrait for Cell {
         } else {
             nores()
         }
+    }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        todo!()
     }
 }
 
@@ -313,7 +316,9 @@ impl GroupTrait for Group {
 }
 
 fn from_path(path: &Path, origin: Option<XCell>) -> Res<Domain> {
-    let path = path.canonicalize()?;
+    let path = path
+        .canonicalize()
+        .map_err(|e| caused(HErrKind::IO, "cannot canonicalize path", e))?;
     if !path.exists() {
         debug!("file: path {:?} does not exist", path);
         return nores();
@@ -343,7 +348,7 @@ fn from_path(path: &Path, origin: Option<XCell>) -> Res<Domain> {
                 is_dir: xmd.is_dir(),
                 is_link: xmd.file_type().is_symlink(),
             })
-            .map_err(HErr::from);
+            .map_err(|e| caused(HErrKind::IO, "cannot query file metadata", e));
         siblings.push(Ok(FileEntry {
             path: path.clone(),
             metadata,
@@ -365,37 +370,54 @@ fn get_path(file: &Cell) -> Res<&Path> {
 }
 
 fn read_files(path: &Path, entries: &mut Vec<Res<FileEntry>>) -> Res<()> {
+    fn custom_metadata(direntry: &fs::DirEntry, md: &fs::Metadata) -> Metadata {
+        let is_link = md.file_type().is_symlink();
+        let is_dir = {
+            if !is_link {
+                md.is_dir()
+            } else {
+                match fs::metadata(direntry.path()) {
+                    Err(_) => false,
+                    Ok(xmd) => xmd.is_dir(),
+                }
+            }
+        };
+        let os_name = direntry.file_name().to_os_string();
+        Metadata {
+            name: os_name.to_string_lossy().to_string(),
+            os_name,
+            filesize: md.len(),
+            is_dir,
+            is_link,
+        }
+    }
+
     // verbose!("file: read children of {:?}", path);
-    let files_iterator = std::fs::read_dir(path)?;
+    let files_iterator = std::fs::read_dir(path).map_err(|e| {
+        caused(
+            HErrKind::IO,
+            format!("cannot read dir: {}", path.to_string_lossy()),
+            e,
+        )
+    })?;
     for res_direntry in files_iterator {
         let direntry = guard_ok!(res_direntry, err => {
-            entries.push(Err(HErr::from(err)));
+            entries.push(Err(caused(HErrKind::IO, "cannot read dir entry", err)));
             continue
         });
         let metadata = direntry
             .metadata()
-            .map(|md| {
-                let is_link = md.file_type().is_symlink();
-                let is_dir = {
-                    if !is_link {
-                        md.is_dir()
-                    } else {
-                        match fs::metadata(direntry.path()) {
-                            Err(_) => false,
-                            Ok(xmd) => xmd.is_dir(),
-                        }
-                    }
-                };
-                let os_name = direntry.file_name().to_os_string();
-                Metadata {
-                    name: os_name.to_string_lossy().to_string(),
-                    os_name,
-                    filesize: md.len(),
-                    is_dir,
-                    is_link,
-                }
-            })
-            .map_err(HErr::from);
+            .map(|md| custom_metadata(&direntry, &md))
+            .map_err(|e| {
+                caused(
+                    HErrKind::IO,
+                    format!(
+                        "cannot query file metadata: {}",
+                        direntry.path().to_string_lossy()
+                    ),
+                    e,
+                )
+            });
         entries.push(Ok(FileEntry {
             path: direntry.path(),
             metadata,
@@ -406,12 +428,10 @@ fn read_files(path: &Path, entries: &mut Vec<Res<FileEntry>>) -> Res<()> {
             (Ok(md1), Ok(md2)) => md1.name.cmp(&md2.name),
             (Ok(_), Err(_)) => Ordering::Less,
             (Err(_), Ok(_)) => Ordering::Greater,
-            (Err(HErr::IO(ek1, es1)), Err(HErr::IO(ek2, es2))) => ek1.cmp(ek2),
             (Err(e1), Err(e2)) => format!("{:?}", e1).cmp(&format!("{:?}", e2)),
         },
         (Ok(_), Err(_)) => Ordering::Less,
         (Err(_), Ok(_)) => Ordering::Greater,
-        (Err(HErr::IO(ek1, es1)), Err(HErr::IO(ek2, es2))) => ek1.cmp(ek2),
         (Err(e1), Err(e2)) => format!("{:?}", e1).cmp(&format!("{:?}", e2)),
     });
     Ok(())

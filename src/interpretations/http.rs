@@ -113,16 +113,6 @@ fn from_url_str(url: &str, origin: Option<XCell>) -> Res<Domain> {
     })))
 }
 
-fn to_string(cell: &Cell) -> Res<String> {
-    let ur = &*cell.group.response.0.tap();
-    let bytes = &ur.body;
-    let string = String::from_utf8(bytes.to_vec());
-    match string {
-        Ok(s) => Ok(s),
-        Err(err) => Err(HErr::Http(format!("not utf8 string: {}", err))),
-    }
-}
-
 impl DomainTrait for Domain {
     type Cell = Cell;
 
@@ -141,7 +131,7 @@ impl DomainTrait for Domain {
     }
 
     fn origin(&self) -> Res<XCell> {
-        self.0.tap().origin.as_ref().cloned().ok_or(HErr::None)
+        self.0.tap().origin.as_ref().cloned().ok_or_else(noerr)
     }
 }
 
@@ -159,7 +149,7 @@ impl CellTrait for Cell {
         self.group.response.clone()
     }
 
-    fn typ(&self) -> Res<&str> {
+    fn ty(&self) -> Res<&str> {
         match (&self.group.kind, self.pos) {
             (GroupKind::Root, _) => Ok("body"),
             (GroupKind::Attr, 0) => Ok(""),
@@ -184,13 +174,13 @@ impl CellTrait for Cell {
     }
 
     fn sub(&self) -> Res<Group> {
-        if self.group.kind == GroupKind::Attr && self.pos == 0 {
+        if self.group.kind == GroupKind::Attr {
             let mut group = self.group.clone();
-            group.kind = GroupKind::Status;
-            Ok(group)
-        } else if self.group.kind == GroupKind::Attr && self.pos == 1 {
-            let mut group = self.group.clone();
-            group.kind = GroupKind::Headers;
+            if self.pos == 0 {
+                group.kind = GroupKind::Status;
+            } else {
+                group.kind = GroupKind::Headers;
+            }
             Ok(group)
         } else {
             nores()
@@ -205,6 +195,34 @@ impl CellTrait for Cell {
         } else {
             nores()
         }
+    }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        let mut cell = Cell {
+            group: Group {
+                kind: GroupKind::Root,
+                response: self.group.response.clone(),
+            },
+            pos: 0,
+        };
+        let mut rel = Relation::Sub;
+        match self.group.kind {
+            GroupKind::Root => {
+                return nores();
+            }
+            GroupKind::Attr => {
+                cell.group.kind = GroupKind::Root;
+                rel = Relation::Attr;
+            }
+            GroupKind::Status => {
+                cell.group.kind = GroupKind::Attr;
+            }
+            GroupKind::Headers => {
+                cell.group.kind = GroupKind::Attr;
+                cell.pos = 1;
+            }
+        }
+        Ok((cell, rel))
     }
 }
 
@@ -241,11 +259,11 @@ impl CellReaderTrait for CellReader {
                 let header_values = if let Some(hv) = self.response.headers.get_index(self.pos) {
                     hv.1
                 } else {
-                    return Err(HErr::Http("logic error".to_string()));
+                    return fault(format!("bad pos in headers: {}", self.pos));
                 };
                 Ok(Value::Str(header_values[0].as_str()))
             }
-            _ => Err(HErr::Http("logic error".to_string())),
+            _ => fault(format!("bad kind/pos: {:?}/{}", self.kind, self.pos)),
         }
     }
 }
@@ -327,6 +345,6 @@ impl GroupTrait for Group {
 
 impl From<ReqwestError> for HErr {
     fn from(e: ReqwestError) -> HErr {
-        HErr::Http(format!("{}", e))
+        caused(HErrKind::Net, "http request error", e)
     }
 }

@@ -22,7 +22,7 @@ macro_rules! debug_err {
         $arg:expr
     ) => {
         if unsafe { $crate::utils::log::VERBOSE } {
-            if !matches!($arg, HErr::None) {
+            if $arg.kind != HErrKind::None {
                 println!("‣Error: {:?}", $arg)
             }
         }

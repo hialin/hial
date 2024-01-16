@@ -82,6 +82,14 @@ impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
         Ok(Value::Str(self.0 .0 .0.as_str()))
     }
+
+    fn label(&self) -> Res<Value> {
+        nores()
+    }
+
+    fn index(&self) -> Res<usize> {
+        nores()
+    }
 }
 
 impl CellTrait for Cell {
@@ -94,7 +102,7 @@ impl CellTrait for Cell {
         self.0.clone()
     }
 
-    fn typ(&self) -> Res<&str> {
+    fn ty(&self) -> Res<&str> {
         Ok("url")
     }
 
@@ -105,10 +113,14 @@ impl CellTrait for Cell {
     fn write(&self) -> Res<Self::CellWriter> {
         Ok(CellWriter {})
     }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        todo!()
+    }
 }
 
 impl From<ParseError> for HErr {
     fn from(e: ParseError) -> HErr {
-        HErr::Url(format!("{}", e))
+        caused(HErrKind::InvalidFormat, "cannot parse url", e)
     }
 }

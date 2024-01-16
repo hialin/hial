@@ -35,6 +35,7 @@ impl DomainTrait for Domain {
             group: Group {
                 domain: self.clone(),
                 nodes: self.0.nodes.clone(),
+                head: None,
             },
             pos: 0,
         })
@@ -72,6 +73,7 @@ impl CellWriterTrait for CellWriter {}
 pub struct Group {
     domain: Domain,
     nodes: NodeGroup,
+    head: Option<Box<(Cell, Relation)>>,
 }
 
 #[derive(Clone, Debug)]
@@ -99,7 +101,7 @@ pub enum Node {
 
 impl From<ScanError> for HErr {
     fn from(e: ScanError) -> HErr {
-        HErr::Yaml(format!("{}", e))
+        caused(HErrKind::InvalidFormat, "yaml parse error", e)
     }
 }
 
@@ -116,7 +118,22 @@ impl Cell {
             "file" => {
                 let mut source = String::new();
                 let path = cell.as_file_path()?;
-                File::open(path)?.read_to_string(&mut source)?;
+                File::open(path)
+                    .map_err(|e| {
+                        caused(
+                            HErrKind::IO,
+                            format!("cannot open file: {}", path.to_string_lossy()),
+                            e,
+                        )
+                    })?
+                    .read_to_string(&mut source)
+                    .map_err(|e| {
+                        caused(
+                            HErrKind::IO,
+                            format!("cannot read file: {}", path.to_string_lossy()),
+                            e,
+                        )
+                    })?;
                 Cell::make_cell(source, Some(cell))
             }
             _ => fault(""),
@@ -125,7 +142,23 @@ impl Cell {
 
     pub fn from_path(path: impl AsRef<Path>) -> Res<XCell> {
         let mut source = String::new();
-        File::open(path)?.read_to_string(&mut source)?;
+        let path = path.as_ref();
+        File::open(path)
+            .map_err(|e| {
+                caused(
+                    HErrKind::IO,
+                    format!("cannot open file: {}", path.to_string_lossy()),
+                    e,
+                )
+            })?
+            .read_to_string(&mut source)
+            .map_err(|e| {
+                caused(
+                    HErrKind::IO,
+                    format!("cannot read file: {}", path.to_string_lossy()),
+                    e,
+                )
+            })?;
         Cell::make_cell(source, None)
     }
 
@@ -185,14 +218,14 @@ impl CellTrait for Cell {
         self.group.domain.clone()
     }
 
-    fn typ(&self) -> Res<&str> {
+    fn ty(&self) -> Res<&str> {
         match self.group.nodes {
             NodeGroup::Array(ref a) => match a.get(self.pos) {
-                Some(n) => Ok(get_typ(n)),
+                Some(n) => Ok(get_ty(n)),
                 None => fault(""),
             },
             NodeGroup::Object(ref o) => match o.get_index(self.pos) {
-                Some(x) => Ok(get_typ(x.1)),
+                Some(x) => Ok(get_ty(x.1)),
                 None => fault(""),
             },
         }
@@ -215,10 +248,12 @@ impl CellTrait for Cell {
                 Some(Node::Array(a)) => Ok(Group {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Array(a.clone()),
+                    head: Some(Box::new((self.clone(), Relation::Sub))),
                 }),
                 Some(Node::Object(o)) => Ok(Group {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Object(o.clone()),
+                    head: Some(Box::new((self.clone(), Relation::Sub))),
                 }),
                 _ => nores(),
             },
@@ -226,18 +261,27 @@ impl CellTrait for Cell {
                 Some((_, Node::Array(a))) => Ok(Group {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Array(a.clone()),
+                    head: Some(Box::new((self.clone(), Relation::Sub))),
                 }),
                 Some((_, Node::Object(o))) => Ok(Group {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Object(o.clone()),
+                    head: Some(Box::new((self.clone(), Relation::Sub))),
                 }),
                 _ => nores(),
             },
         }
     }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        match &self.group.head {
+            Some(h) => Ok((h.0.clone(), h.1)),
+            None => nores(),
+        }
+    }
 }
 
-fn get_typ(node: &Node) -> &str {
+fn get_ty(node: &Node) -> &str {
     match node {
         Node::Scalar(Scalar::Null) => "null",
         Node::Scalar(Scalar::Bool(_)) => "bool",
@@ -325,7 +369,7 @@ fn node_from_yaml(y: &Yaml) -> Res<Node> {
             if let Some(x) = y.as_f64() {
                 Node::Scalar(Scalar::Float(StrFloat(x)))
             } else {
-                return Err(HErr::Yaml(format!("bad yaml float: {:?}", r)));
+                return fault("failed assertion, assumed all yaml reals can output f64");
             }
         }
         Yaml::String(s) => Node::Scalar(Scalar::String(s.clone())),
@@ -345,10 +389,10 @@ fn node_from_yaml(y: &Yaml) -> Res<Node> {
                     let v = node_from_yaml(yv)?;
                     no.insert(sk, v);
                 } else {
-                    return Err(HErr::Yaml(format!(
-                        "bad yaml label (must be string): {:?}",
+                    return fault(format!(
+                        "unsupported yaml label (expected string): {:?}",
                         knode
-                    )));
+                    ));
                 }
             }
             Node::Object(Rc::new(no))

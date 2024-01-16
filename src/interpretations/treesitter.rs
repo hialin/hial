@@ -44,7 +44,7 @@ impl DomainTrait for Domain {
     }
 
     fn origin(&self) -> Res<XCell> {
-        self.0.origin.clone().ok_or(HErr::None)
+        self.0.origin.clone().ok_or(noerr())
     }
 }
 
@@ -92,7 +92,8 @@ impl Cell {
             }
             "file" => {
                 let path = cell.as_file_path()?;
-                let source = std::fs::read_to_string(path)?;
+                let source = std::fs::read_to_string(path)
+                    .map_err(|e| caused(HErrKind::IO, "cannot read file", e))?;
                 Self::make_cell(source, lang.to_owned(), Some(cell))
             }
             _ => nores(),
@@ -100,7 +101,8 @@ impl Cell {
     }
 
     pub fn from_path(path: &Path, language: String) -> Res<XCell> {
-        let source = std::fs::read_to_string(path)?;
+        let source = std::fs::read_to_string(path)
+            .map_err(|e| caused(HErrKind::IO, "cannot read file", e))?;
         Self::make_cell(source, language, None)
     }
 
@@ -127,7 +129,7 @@ fn sitter_from_source(source: String, language: String, origin: Option<XCell>) -
     let sitter_language = match language.as_str() {
         "rust" => unsafe { tree_sitter_rust() },
         "javascript" => unsafe { tree_sitter_javascript() },
-        _ => return Err(HErr::Sitter(format!("unsupported language: {}", language))),
+        _ => return userr(format!("unsupported language: {}", language)),
     };
 
     debug!("sitter language: {}", language);
@@ -151,11 +153,11 @@ fn sitter_from_source(source: String, language: String, origin: Option<XCell>) -
 
     let mut parser = Parser::new();
     guard_ok!(parser.set_language(sitter_language), err => {
-        return Err(HErr::Sitter(format!("{}", err)));
+        return Err(caused(HErrKind::Internal, format!("cannot set language {}", language), err));
     });
 
     let tree = guard_some!(parser.parse(&source, None), {
-        return Err(HErr::Sitter("cannot get parse tree".to_string()));
+        return fault("cannot get parse tree");
     });
     Ok(Domain(Rc::new(DomainData {
         language,
@@ -292,7 +294,7 @@ impl CellTrait for Cell {
         self.group.domain.clone()
     }
 
-    fn typ(&self) -> Res<&str> {
+    fn ty(&self) -> Res<&str> {
         Ok(self.group.nodes[self.pos].typ)
     }
 
@@ -312,6 +314,10 @@ impl CellTrait for Cell {
         let mut group = self.group.clone();
         group.nodes = cnode.subs.clone();
         Ok(group)
+    }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        todo!()
     }
 }
 

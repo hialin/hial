@@ -25,7 +25,7 @@ static ELEVATION_MAP: RwLock<Option<ElevationsMap>> = RwLock::new(None);
 fn elevation_map(interpretation: &str) -> Res<Arc<IndexMap<&'static str, ElevateFn>>> {
     fn read(interpretation: &str) -> Option<Res<Arc<IndexMap<&'static str, ElevateFn>>>> {
         let maybe_map = guard_ok!(ELEVATION_MAP.read(), err => {
-            return Some(fault(format!("elevation map read lock error: {:?}", err)));
+            return Some(Err(caused(HErrKind::Internal, "elevation map read lock error",  err)));
         });
         let reader = guard_some!(maybe_map.as_ref(), { return None });
         // debug!(
@@ -45,7 +45,7 @@ fn elevation_map(interpretation: &str) -> Res<Arc<IndexMap<&'static str, Elevate
     // initialize the map
     {
         let mut writer = guard_ok!(ELEVATION_MAP.write(), err => {
-            return fault(format!("elevation map write lock error: {:?}", err));
+            return Err(caused(HErrKind::Internal, "elevation map read lock error", err));
         });
 
         // check first, it could have been initialized inbetween
@@ -91,7 +91,7 @@ fn elevation_map(interpretation: &str) -> Res<Arc<IndexMap<&'static str, Elevate
 }
 
 pub(crate) fn top_interpretation(cell: &Cell) -> Option<&str> {
-    if cell.domain().interpretation() == "file" && cell.typ().ok()? == "file" {
+    if cell.domain().interpretation() == "file" && cell.ty().ok()? == "file" {
         if let Ok(reader) = cell.read().err() {
             if let Ok(Value::Str(name)) = reader.label() {
                 if name.ends_with(".c") {
@@ -144,7 +144,7 @@ impl ElevationGroup {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() == Ok(0)
+        self.len().map_or(false, |x| x == 0)
     }
 
     pub fn at(&self, index: usize) -> Res<Cell> {
@@ -163,19 +163,26 @@ impl ElevationGroup {
         let old_interp = domain.interpretation();
         let interp = match key {
             Selector::Str(k) => k,
-            Selector::Top => guard_some!(top_interpretation(&self.0), { return nores() }),
-            Selector::Star => return HErr::User("no interpretation for '*'".to_string()).into(),
-            Selector::DoubleStar => {
-                return HErr::User("no interpretation for '**'".to_string()).into()
-            }
+            Selector::Top => guard_some!(top_interpretation(&self.0), {
+                return nores();
+            }),
+            Selector::Star => return userr("no interpretation for '*'".to_string()),
+            Selector::DoubleStar => return userr("no interpretation for '**'".to_string()),
         };
         if interp == old_interp {
             return Ok(self.0.clone());
         }
-        let e = guard_ok!(elevation_map(old_interp), err => { return Err(err) });
-        if let Some((_, target_interpretation, func)) = e.get_full(interp) {
-            debug!("elevate {} to {}", old_interp, key);
-            return func(self.0.clone(), target_interpretation);
+        if let Ok(e) = elevation_map(old_interp) {
+            if let Some((_, target_interpretation, func)) = e.get_full(interp) {
+                debug!("elevate {} to {}", old_interp, key);
+                return func(self.0.clone(), target_interpretation);
+            }
+        }
+        if let Ok(e) = elevation_map("value") {
+            if let Some((_, target_interpretation, func)) = e.get_full(interp) {
+                debug!("elevate as value from {} to {}", old_interp, key);
+                return func(self.0.clone().field().at(0), target_interpretation);
+            }
         }
         debug!("no elevation from {} to {}", old_interp, interp);
         nores()

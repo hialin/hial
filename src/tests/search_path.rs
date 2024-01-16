@@ -13,7 +13,7 @@ fn path_simple_item() -> Res<()> {
         path.0.as_slice(),
         &[PathItem {
             relation: Relation::Sub,
-            selector: Some(Selector::Str("a".into())),
+            selector: Some(Selector::Str("a")),
             index: Some(2),
             filters: vec![],
         },]

@@ -29,7 +29,10 @@ impl DomainTrait for Domain {
     }
 
     fn origin(&self) -> Res<XCell> {
-        self.0 .2.as_ref().ok_or(HErr::None).map(|c| c.clone())
+        match self.0 .2.as_ref() {
+            Some(cell) => Ok(cell.clone()),
+            None => nores(),
+        }
     }
 }
 
@@ -96,6 +99,14 @@ impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
         Ok(Value::Str(&self.0 .0 .1))
     }
+
+    fn label(&self) -> Res<Value> {
+        nores()
+    }
+
+    fn index(&self) -> Res<usize> {
+        nores()
+    }
 }
 
 impl CellTrait for Cell {
@@ -108,7 +119,7 @@ impl CellTrait for Cell {
         self.0.clone()
     }
 
-    fn typ(&self) -> Res<&str> {
+    fn ty(&self) -> Res<&str> {
         Ok("path")
     }
 
@@ -118,5 +129,9 @@ impl CellTrait for Cell {
 
     fn write(&self) -> Res<Self::CellWriter> {
         Ok(CellWriter {})
+    }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        todo!()
     }
 }

@@ -18,14 +18,16 @@ pub enum FieldType {
 pub struct FieldGroup {
     pub(crate) cell: Rc<Cell>,
     // copy of original cell's interpretation, need to own it
-    pub(crate) interpretation: String,
+    // pub(crate) interpretation: String,
 }
 
 impl DomainTrait for FieldGroup {
     type Cell = FieldCell;
 
     fn interpretation(&self) -> &str {
-        // should return self.interpretation.as_str()?
+        // TODO: should we return the right interpretation here?
+        // self.interpretation.as_str() -- if we do this, then some elevations
+        // won't work anymore, e.g. ^json/one#value^xml
         "value"
     }
 
@@ -78,15 +80,25 @@ impl GroupTrait for FieldGroup {
             _ => return nores(),
         };
         // only return the field cell if the field is not empty
-        if ty == FieldType::Label {
-            if let Err(HErr::None) = self.cell.read().label() {
-                return nores();
-            }
+        if ty == FieldType::Label
+            && self
+                .cell
+                .read()
+                .label()
+                .err()
+                .map_or(false, |e| e.kind == HErrKind::None)
+        {
+            return nores();
         }
-        if ty == FieldType::Value {
-            if let Err(HErr::None) = self.cell.read().value() {
-                return nores();
-            }
+        if ty == FieldType::Value
+            && self
+                .cell
+                .read()
+                .value()
+                .err()
+                .map_or(false, |e| e.kind == HErrKind::None)
+        {
+            return nores();
         }
         Ok(FieldCell {
             cell: self.cell.clone(),
@@ -138,11 +150,11 @@ impl CellTrait for FieldCell {
     fn domain(&self) -> FieldGroup {
         FieldGroup {
             cell: self.cell.clone(),
-            interpretation: "field".to_string(),
+            // interpretation: self.cell.domain().interpretation().to_string(),
         }
     }
 
-    fn typ(&self) -> Res<&str> {
+    fn ty(&self) -> Res<&str> {
         Ok("field")
     }
 
@@ -161,6 +173,13 @@ impl CellTrait for FieldCell {
             writer: Box::new(self.cell.write().err()?),
         })
     }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        // This cannot be implemented, we should return a XCell here but the
+        // trait type does not allow us. This is fixed by extra::Cell which
+        // returns the correct head.
+        unimplemented!()
+    }
 }
 
 impl CellReaderTrait for FieldReader {
@@ -168,8 +187,21 @@ impl CellReaderTrait for FieldReader {
         match self.ty {
             FieldType::Value => self.reader.value(),
             FieldType::Label => self.reader.label(),
-            FieldType::Type => Ok(Value::Str(self.cell.typ()?)),
+            FieldType::Type => Ok(Value::Str(self.cell.ty()?)),
             FieldType::Index => Ok(Value::from(self.reader.index()? as u64)),
+        }
+    }
+
+    fn index(&self) -> Res<usize> {
+        Ok(self.ty as usize)
+    }
+
+    fn label(&self) -> Res<Value> {
+        match self.ty {
+            FieldType::Value => Ok(Value::Str("value")),
+            FieldType::Label => Ok(Value::Str("label")),
+            FieldType::Type => Ok(Value::Str("type")),
+            FieldType::Index => Ok(Value::Str("index")),
         }
     }
 }

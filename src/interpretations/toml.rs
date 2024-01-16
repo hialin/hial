@@ -37,7 +37,7 @@ impl DomainTrait for Domain {
     }
 
     fn origin(&self) -> Res<XCell> {
-        self.origin.as_ref().map(|c| *c.clone()).ok_or(HErr::None)
+        self.origin.as_ref().map(|c| *c.clone()).ok_or(noerr())
     }
 }
 
@@ -85,7 +85,7 @@ pub enum Node {
 
 impl From<toml::de::Error> for HErr {
     fn from(e: toml::de::Error) -> HErr {
-        HErr::Toml(format!("{}", e))
+        caused(HErrKind::InvalidFormat, "bad toml", e)
     }
 }
 
@@ -101,14 +101,19 @@ impl Cell {
             }
             "file" => {
                 let path = cell.as_file_path()?;
-                Self::make_cell(&std::fs::read_to_string(path)?, Some(cell))
+                Self::make_cell(
+                    &std::fs::read_to_string(path)
+                        .map_err(|e| caused(HErrKind::IO, "cannot read file", e))?,
+                    Some(cell),
+                )
             }
             _ => nores(),
         }
     }
 
     pub fn from_path(path: &Path) -> Res<XCell> {
-        let source = std::fs::read_to_string(path)?;
+        let source = std::fs::read_to_string(path)
+            .map_err(|e| caused(HErrKind::IO, "cannot read file", e))?;
         Self::make_cell(&source, None)
     }
 
@@ -169,14 +174,14 @@ impl CellTrait for Cell {
         self.group.domain.clone()
     }
 
-    fn typ(&self) -> Res<&str> {
+    fn ty(&self) -> Res<&str> {
         match self.group.nodes {
             NodeGroup::Array(ref a) => match a.get(self.pos) {
-                Some(n) => Ok(get_typ(n)),
+                Some(n) => Ok(get_ty(n)),
                 None => fault(""),
             },
             NodeGroup::Table(ref t) => match t.get_index(self.pos) {
-                Some(x) => Ok(get_typ(x.1)),
+                Some(x) => Ok(get_ty(x.1)),
                 None => fault(""),
             },
         }
@@ -223,9 +228,13 @@ impl CellTrait for Cell {
     fn attr(&self) -> Res<Group> {
         nores()
     }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        todo!()
+    }
 }
 
-fn get_typ(node: &Node) -> &str {
+fn get_ty(node: &Node) -> &str {
     match node {
         Node::Bool(_) => "bool",
         Node::I64(_) => "int",

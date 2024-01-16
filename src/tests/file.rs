@@ -10,8 +10,14 @@ fn test_files() -> Res<()> {
     }
     let examples = Cell::from(".").be("path").be("file").sub().get("examples");
     // assert_eq!(std::mem::size_of_val(&examples), 4 * 8); // todo file cell is too large
-    assert_eq!(examples.read().label(), Ok("examples".into()));
-    assert_eq!(examples.read().value(), Ok("examples".into()));
+    assert_eq!(
+        examples.read().label().unwrap_or(Value::None),
+        Value::Str("examples")
+    );
+    assert_eq!(
+        examples.read().value().unwrap_or(Value::None),
+        Value::Str("examples")
+    );
     Ok(())
 }
 

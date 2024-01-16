@@ -7,7 +7,7 @@ use quick_xml::{events::Event, Error as XmlError, Reader};
 
 use crate::{
     base::{Cell as XCell, *},
-    debug, guard_some,
+    debug,
 };
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
@@ -174,11 +174,10 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
 
     loop {
         if !decoder.encoding().is_ascii_compatible() {
-            return Err(HErr::Xml("not ascii compatible".to_string()));
+            return Err(deformed("not ascii compatible"));
         }
         match reader.read_event_into(&mut buf) {
             Ok(Event::Decl(ref e)) => {
-                println!("decl: {:?}", e);
                 counts.count_decl += 1;
                 let mut attrs = vec![];
                 let rawversion = e.version()?;
@@ -194,27 +193,26 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                     let standalone = decoder.decode(rawstandalone.as_ref())?;
                     attrs.push(Attribute::Attribute("standalone".into(), standalone.into()));
                 }
-                let v = guard_some!(stack.last_mut(), {
-                    return Err(HErr::Xml("no element in stack".to_string()));
-                });
-                println!("attrs: {:?}", attrs);
-                v.push(Node::Decl(Rc::new(attrs)));
+                stack
+                    .last_mut()
+                    .ok_or_else(|| faulterr("no element in stack"))?
+                    .push(Node::Decl(Rc::new(attrs)));
             }
             Ok(Event::DocType(ref e)) => {
                 counts.count_doc_type += 1;
                 let doctype = e.unescape()?;
-                let v = guard_some!(stack.last_mut(), {
-                    return Err(HErr::Xml("no element in stack".to_string()));
-                });
-                v.push(Node::DocType(doctype.into()));
+                stack
+                    .last_mut()
+                    .ok_or_else(|| faulterr("no element in stack"))?
+                    .push(Node::DocType(doctype.into()));
             }
             Ok(Event::PI(ref e)) => {
                 counts.count_pi += 1;
                 let text = decoder.decode(e.as_ref())?;
-                let v = guard_some!(stack.last_mut(), {
-                    return Err(HErr::Xml("no element in stack".to_string()));
-                });
-                v.push(Node::PI(text.into()));
+                stack
+                    .last_mut()
+                    .ok_or_else(|| faulterr("no element in stack"))?
+                    .push(Node::PI(text.into()));
             }
             Ok(Event::Start(ref e)) => {
                 let mut attrs = vec![];
@@ -235,55 +233,56 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
             Ok(Event::Text(e)) => {
                 counts.count_text += 1;
                 let text = decoder.decode(e.as_ref())?;
-                let v = &mut stack
+                stack
                     .last_mut()
-                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
-                v.push(Node::Text(text.into()));
+                    .ok_or_else(|| faulterr("no element in stack"))?
+                    .push(Node::Text(text.into()));
             }
             Ok(Event::Comment(e)) => {
                 counts.count_comment += 1;
                 let text = decoder.decode(e.as_ref())?;
-                let v = &mut stack
+                stack
                     .last_mut()
-                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
-                v.push(Node::Comment(text.into()));
+                    .ok_or_else(|| faulterr("no element in stack"))?
+                    .push(Node::Comment(text.into()));
             }
             Ok(Event::CData(e)) => {
                 counts.count_cdata += 1;
-                let v = &mut stack
+                let v = stack
                     .last_mut()
-                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
+                    .ok_or_else(|| faulterr("no element in stack"))?;
                 let mut u = e.to_vec();
                 u.shrink_to_fit();
-                v.push(Node::CData(u));
+                stack
+                    .last_mut()
+                    .ok_or_else(|| faulterr("no element in stack"))?
+                    .push(Node::CData(u));
             }
             Ok(Event::End(ref e)) => {
                 counts.count_element += 1;
-                let mut v = stack
-                    .pop()
-                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
+                let mut v = stack.pop().ok_or_else(|| faulterr("no element in stack"))?;
                 v.shrink_to_fit();
                 let mut a = attribute_stack
                     .pop()
-                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
+                    .ok_or_else(|| faulterr("no element in attr stack"))?;
                 a.shrink_to_fit();
                 counts.count_attributes += a.len();
                 let name = decoder.decode(e.name().0)?;
-                let x = Node::Element((name.into(), Rc::new(a), Rc::new(v)));
-                let v = &mut stack
+                let element = Node::Element((name.into(), Rc::new(a), Rc::new(v)));
+                stack
                     .last_mut()
-                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
-                v.push(x);
+                    .ok_or_else(|| faulterr("no element in stack"))?
+                    .push(element);
             }
             Ok(Event::Empty(ref _e)) => {
                 // should not happed because we use reader.expand_empty_elements(true);
             }
             Err(err) => {
                 let text = format!("{}", err);
-                let v = &mut stack
+                stack
                     .last_mut()
-                    .ok_or(HErr::Xml("no element in stack".to_string()))?;
-                v.push(Node::Error(text));
+                    .ok_or_else(|| faulterr("no element in stack"))?
+                    .push(Node::Error(text));
             }
 
             Ok(Event::Eof) => break,
@@ -293,9 +292,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
         // if we don't keep a borrow elsewhere, we can clear the buffer to keep memory usage low
         buf.clear();
     }
-    let v = stack
-        .pop()
-        .ok_or(HErr::Xml("no element in stack".to_string()))?;
+    let v = stack.pop().ok_or_else(|| faulterr("no element in stack"))?;
     let document = Node::Document(Rc::new(v));
 
     debug!("xml stats: {:?}", counts);
@@ -353,7 +350,7 @@ impl CellTrait for Cell {
         self.group.domain.clone()
     }
 
-    fn typ(&self) -> Res<&str> {
+    fn ty(&self) -> Res<&str> {
         match &self.group.nodes {
             NodeGroup::Node(group) => match &group.0[self.pos] {
                 Node::Document(_) => Ok("document"),
@@ -414,6 +411,10 @@ impl CellTrait for Cell {
             _ => nores(),
         }
     }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        todo!()
+    }
 }
 
 impl GroupTrait for Group {
@@ -462,6 +463,6 @@ impl GroupTrait for Group {
 
 impl From<XmlError> for HErr {
     fn from(e: XmlError) -> HErr {
-        HErr::Xml(format!("{}", e))
+        caused(HErrKind::InvalidFormat, "xml error", e)
     }
 }

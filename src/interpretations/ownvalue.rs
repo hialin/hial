@@ -51,6 +51,14 @@ impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
         Ok(self.0.as_value())
     }
+
+    fn label(&self) -> Res<Value> {
+        nores()
+    }
+
+    fn index(&self) -> Res<usize> {
+        nores()
+    }
 }
 
 impl CellWriterTrait for CellWriter {
@@ -70,7 +78,7 @@ impl CellTrait for Cell {
         self.clone()
     }
 
-    fn typ(&self) -> Res<&str> {
+    fn ty(&self) -> Res<&str> {
         Ok("value")
     }
 
@@ -80,5 +88,9 @@ impl CellTrait for Cell {
 
     fn write(&self) -> Res<Self::CellWriter> {
         Ok(CellWriter(self.0.tap()))
+    }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        nores()
     }
 }

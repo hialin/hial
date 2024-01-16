@@ -17,7 +17,7 @@ fn test_multihop_trace() -> Res<()> {
     // How do we implement a path() method for a multihop without keeping
     //  the parent cell in a box, which makes an allocation for every cell?
     // This current result is incorrect, and should be fixed.
-    assert_eq!(result.path()?, CellPath("limit".to_string()));
+    assert_eq!(result.path()?, "limit".to_string());
 
     Ok(())
 }

@@ -40,8 +40,8 @@ pub extern "C" fn interpretation(cell: &Cell) -> &str {
 }
 
 #[no_mangle]
-pub extern "C" fn typ(cell: &Cell) -> Res<&str> {
-    cell.typ()
+pub extern "C" fn ty(cell: &Cell) -> Res<&str> {
+    cell.ty()
 }
 
 #[no_mangle]

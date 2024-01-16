@@ -30,9 +30,9 @@ pub fn perftests(alloc_count: usize) {
 
 fn random_sizes(sizes: &mut [usize], max_size_in_words: usize) {
     use rand::Rng;
-    for i in 0..sizes.len() {
+    for sz in sizes.iter_mut() {
         let v = rand::thread_rng().gen_range(0..max_size_in_words);
-        sizes[i] = 8 * (v + 1);
+        *sz = 8 * (v + 1);
     }
 }
 

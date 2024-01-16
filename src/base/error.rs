@@ -1,103 +1,194 @@
-use std::io;
+use std::{cell::OnceCell, error::Error, rc::Rc};
 
-use crate::base::*;
+use crate::{base::*, warning};
 
 pub type Res<T> = Result<T, HErr>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone)]
 #[repr(C)]
-pub enum HErr {
-    None,
-    User(String),
-    Internal(String),
-
-    IO(std::io::ErrorKind, String),
-    ReadOnly(String),
-
-    // cannot change data because there are other readers
-    ExclusivityRequired { path: String, op: &'static str },
-
-    Json(String),
-    Toml(String),
-    Yaml(String),
-    Xml(String),
-    Url(String),
-    Http(String),
-    Sitter(String),
-    Other(String),
-
-    NotYetImplemented,
+pub struct HErr {
+    pub kind: HErrKind,
+    pub data: Rc<HErrData>,
 }
 
-fn print_stack_trace() {
-    let s = format!("{}", std::backtrace::Backtrace::capture())
-        .split('\n')
-        .filter(|s| s.contains("hiallib::") || s.contains("./src"))
-        .fold(String::new(), |mut acc, s| {
-            acc.push_str(s);
-            acc.push('\n');
-            acc
-        });
-    println!("{}", s);
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub enum HErrKind {
+    // item not found
+    None,
+    // error caused by some parameter controlled by the user
+    User,
+    // error caused by an IO/fmt operation
+    IO,
+    // error caused by an net operation
+    Net,
+    // error caused by some error in the program
+    Internal,
+    // error caused by trying to write to a read-only data structure
+    ReadOnly,
+    // cannot change data because there are other readers
+    ExclusivityRequired,
+    // invalid format (e.g. invalid json)
+    InvalidFormat,
+}
+
+#[derive(Debug)]
+pub struct HErrData {
+    pub msg: String,
+    pub cell_path: OnceCell<String>,
+    pub cause: Option<Box<dyn Error>>,
+    pub backtrace: Option<Box<[String]>>,
+}
+
+impl HErr {
+    pub(crate) fn with_path(self, path: impl Into<String>) -> Self {
+        let path = path.into();
+        if let Err(old_path) = self.data.cell_path.set(path.clone()) {
+            warning!(
+                "overwrote cell path to augment HErr: {} -> {}",
+                old_path,
+                path
+            );
+        }
+        self
+    }
+    pub(crate) fn with_path_res(self, path: impl Into<Res<String>>) -> Self {
+        match path.into() {
+            Ok(p) => self.with_path(p),
+            Err(e) => {
+                warning!("cannot get cell path to augment HErr: {}", e);
+                self
+            }
+        }
+    }
+}
+
+pub trait ResHErrAugmentation {
+    fn with_path(self, path: impl Into<String>) -> Self;
+    fn with_path_res(self, path: impl Into<Res<String>>) -> Self;
+}
+
+impl<T> ResHErrAugmentation for Res<T> {
+    fn with_path(self, path: impl Into<String>) -> Self {
+        let path = path.into();
+        self.map_err(|err| err.with_path(path))
+    }
+
+    fn with_path_res(self, path: impl Into<Res<String>>) -> Self {
+        let pathres = path.into();
+        self.map_err(|err| err.with_path_res(pathres))
+    }
+}
+
+pub fn noerr() -> HErr {
+    HErr {
+        kind: HErrKind::None,
+        data: Rc::new(HErrData {
+            msg: String::new(),
+            cell_path: OnceCell::new(),
+            cause: None,
+            backtrace: Some(capture_stack_trace()),
+        }),
+    }
 }
 
 pub fn nores<T>() -> Res<T> {
-    // print_stack_trace();
-    Err(HErr::None)
-}
-
-pub fn unimplemented<T>() -> Res<T> {
-    print_stack_trace();
-    Err(HErr::NotYetImplemented)
+    Err(noerr())
 }
 
 pub fn userr<T>(reason: impl Into<String>) -> Res<T> {
-    Err(HErr::User(reason.into()))
+    Err(HErr {
+        kind: HErrKind::User,
+        data: Rc::new(HErrData {
+            msg: reason.into(),
+            cell_path: OnceCell::new(),
+            cause: None,
+            backtrace: Some(capture_stack_trace()),
+        }),
+    })
 }
 
 pub fn fault<T>(reason: impl Into<String>) -> Res<T> {
+    Err(faulterr(reason))
+}
+
+pub fn faulterr(reason: impl Into<String>) -> HErr {
+    let err = HErr {
+        kind: HErrKind::Internal,
+        data: Rc::new(HErrData {
+            msg: reason.into(),
+            cell_path: OnceCell::new(),
+            cause: None,
+            backtrace: Some(capture_stack_trace()),
+        }),
+    };
+
     if cfg!(debug_assertions) {
-        eprintln!("{}", reason.into());
+        println!("{}", err);
         panic!("internal error");
     } else {
-        Err(HErr::Internal(reason.into()))
+        err
+    }
+}
+
+pub fn caused(kind: HErrKind, reason: impl Into<String>, cause: impl Error + 'static) -> HErr {
+    HErr {
+        kind,
+        data: Rc::new(HErrData {
+            msg: reason.into(),
+            cell_path: OnceCell::new(),
+            cause: Some(Box::new(cause) as Box<dyn Error>),
+            backtrace: Some(capture_stack_trace()),
+        }),
+    }
+}
+
+pub fn deformed(reason: impl Into<String>) -> HErr {
+    HErr {
+        kind: HErrKind::InvalidFormat,
+        data: Rc::new(HErrData {
+            msg: reason.into(),
+            cell_path: OnceCell::new(),
+            cause: None,
+            backtrace: Some(capture_stack_trace()),
+        }),
     }
 }
 
 impl std::error::Error for HErr {}
 impl std::fmt::Display for HErr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            HErr::None => write!(f, "no result"),
-            HErr::NotYetImplemented => write!(f, "not yet implemented"),
-            HErr::User(msg) => write!(f, "user error: {}", msg),
-            HErr::Internal(msg) => write!(f, "internal error: {}", msg),
-            HErr::IO(kind, msg) => write!(f, "io error: {:?}: {}", kind, msg),
-            HErr::ReadOnly(msg) => write!(f, "read only: {}", msg),
-            HErr::ExclusivityRequired { path, op } => {
-                write!(f, "exclusivity required for {}: {}", path, op)
-            }
-            HErr::Json(msg) => write!(f, "json error: {}", msg),
-            HErr::Toml(msg) => write!(f, "toml error: {}", msg),
-            HErr::Yaml(msg) => write!(f, "yaml error: {}", msg),
-            HErr::Xml(msg) => write!(f, "xml error: {}", msg),
-            HErr::Url(msg) => write!(f, "url error: {}", msg),
-            HErr::Http(msg) => write!(f, "http error: {}", msg),
-            HErr::Sitter(msg) => write!(f, "sitter error: {}", msg),
-            HErr::Other(msg) => write!(f, "other error: {}", msg),
+        let header = match self.kind {
+            HErrKind::None => "no result",
+            HErrKind::User => "user error",
+            HErrKind::Internal => "internal error",
+            HErrKind::IO => "io error",
+            HErrKind::Net => "net error",
+            HErrKind::ReadOnly => "read only",
+            HErrKind::ExclusivityRequired => "exclusivity required",
+            HErrKind::InvalidFormat => "invalid format",
+        };
+        if !self.data.msg.is_empty() {
+            write!(f, "{}: {}", header, self.data.msg)?;
+        } else {
+            write!(f, "{}", header)?;
         }
+
+        if let Some(path) = self.data.cell_path.get() {
+            write!(f, " -- at cell path `{}`", path)?;
+        }
+        if let Some(ref cause) = self.data.cause {
+            write!(f, " -- caused by: {}", cause)?;
+        }
+        if let Some(ref backtrace) = self.data.backtrace {
+            write!(f, "\n{}", backtrace.join("\n"))?;
+        }
+        Ok(())
     }
 }
-
-impl From<io::Error> for HErr {
-    fn from(e: io::Error) -> HErr {
-        HErr::IO(e.kind(), format!("{}", e))
-    }
-}
-
-impl<T> From<HErr> for Res<T> {
-    fn from(e: HErr) -> Self {
-        Err(e)
+impl std::fmt::Debug for HErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
     }
 }
 
@@ -125,6 +216,14 @@ impl CellReaderTrait for HErr {
     fn value(&self) -> Res<Value> {
         Err(self.clone())
     }
+
+    fn label(&self) -> Res<Value> {
+        Err(self.clone())
+    }
+
+    fn index(&self) -> Res<usize> {
+        Err(self.clone())
+    }
 }
 
 impl CellWriterTrait for HErr {
@@ -143,7 +242,7 @@ impl CellTrait for HErr {
         self.clone()
     }
 
-    fn typ(&self) -> Res<&str> {
+    fn ty(&self) -> Res<&str> {
         Ok("error")
     }
 
@@ -153,6 +252,10 @@ impl CellTrait for HErr {
 
     fn write(&self) -> Res<Self::CellWriter> {
         Err(self.clone())
+    }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        nores()
     }
 }
 
@@ -177,4 +280,15 @@ impl GroupTrait for HErr {
     fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::Cell> {
         Err(self.clone())
     }
+}
+
+pub(crate) fn capture_stack_trace() -> Box<[String]> {
+    let v = format!("{}", std::backtrace::Backtrace::capture())
+        .split('\n')
+        .filter(|s| s.contains("hiallib::") || s.contains("./src"))
+        .fold(Vec::new(), |mut acc, s| {
+            acc.push(s.to_string());
+            acc
+        });
+    v.into_boxed_slice()
 }

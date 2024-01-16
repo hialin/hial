@@ -1,5 +1,4 @@
-use std::fmt::Debug;
-use std::marker::PhantomData;
+use std::{fmt::Debug, marker::PhantomData};
 
 use crate::base::*;
 
@@ -10,7 +9,7 @@ pub trait CellTrait: Clone + Debug {
     type CellWriter: CellWriterTrait;
 
     fn domain(&self) -> Self::Domain;
-    fn typ(&self) -> Res<&str>;
+    fn ty(&self) -> Res<&str>;
 
     fn read(&self) -> Res<Self::CellReader>;
     fn write(&self) -> Res<Self::CellWriter>;
@@ -23,9 +22,7 @@ pub trait CellTrait: Clone + Debug {
         nores()
     }
 
-    fn head(&self) -> Res<(Self, Relation)> {
-        todo!()
-    }
+    fn head(&self) -> Res<(Self, Relation)>;
 }
 
 pub trait DomainTrait: Debug + SaveTrait {
@@ -40,15 +37,15 @@ pub trait DomainTrait: Debug + SaveTrait {
 
 pub trait SaveTrait: Debug {
     fn write_policy(&self) -> Res<WritePolicy> {
-        unimplemented()
+        todo!() // remove this default implementation
     }
 
     fn set_write_policy(&mut self, policy: WritePolicy) -> Res<()> {
-        unimplemented()
+        todo!() // remove this default implementation
     }
 
     fn save(&self, target: SaveTarget) -> Res<()> {
-        unimplemented()
+        todo!() // remove this default implementation
     }
 }
 
@@ -73,32 +70,26 @@ pub enum SaveTarget {
 }
 
 pub trait CellReaderTrait: Debug {
-    fn index(&self) -> Res<usize> {
-        nores()
-    }
+    fn index(&self) -> Res<usize>;
 
-    fn label(&self) -> Res<Value> {
-        nores()
-    }
+    fn label(&self) -> Res<Value>;
 
-    fn value(&self) -> Res<Value> {
-        nores()
-    }
+    fn value(&self) -> Res<Value>;
 
     // TODO: add fn to get the subtree as serialized data
 }
 
 pub trait CellWriterTrait: Debug {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
-        unimplemented()
+        todo!() // remove this default implementation
     }
 
     fn set_label(&mut self, value: OwnValue) -> Res<()> {
-        unimplemented()
+        todo!() // remove this default implementation
     }
 
     fn delete(&mut self) -> Res<()> {
-        unimplemented()
+        todo!() // remove this default implementation
     }
 }
 
@@ -109,14 +100,14 @@ pub trait GroupTrait: Clone + Debug {
     fn label_type(&self) -> LabelType;
     fn len(&self) -> Res<usize>;
     fn is_empty(&self) -> bool {
-        self.len() == Ok(0)
+        self.len().map_or(false, |l| l == 0)
     }
     fn at(&self, index: usize) -> Res<Self::Cell>;
     fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::Cell>;
     // fn get_all<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::SelectIterator>;
 
     fn add(&mut self) -> Res<()> {
-        unimplemented()
+        todo!() // remove this default implementation
     }
 }
 

@@ -18,15 +18,13 @@ pub type NomRes<T, U> = IResult<T, U, VerboseError<T>>;
 impl<'a> Path<'a> {
     pub fn parse(input: &str) -> Res<Path> {
         let path_res = all_consuming(path_items)(input);
-        let path =
-            guard_ok!(path_res, err => { return HErr::User(convert_error(input, err)).into()});
+        let path = guard_ok!(path_res, err => { return userr(convert_error(input, err))});
         Ok(path.1)
     }
 
     pub fn parse_with_starter(input: &str) -> Res<(PathStart, Path)> {
         let path_res = all_consuming(path_with_starter)(input);
-        let path =
-            guard_ok!(path_res, err => { return HErr::User(convert_error(input, err)).into()});
+        let path = guard_ok!(path_res, err => { return userr(convert_error(input, err))});
         Ok(path.1)
     }
 }
@@ -53,7 +51,6 @@ fn path_start(input: &str) -> NomRes<&str, PathStart> {
         "path_start",
         alt((path_start_url, path_start_file, path_start_string)),
     )(input)
-    .map(|(next_input, res)| (next_input, res))
 }
 
 fn path_start_url(input: &str) -> NomRes<&str, PathStart> {
@@ -86,7 +83,6 @@ fn path_start_string(input: &str) -> NomRes<&str, PathStart> {
 
 fn value(input: &str) -> NomRes<&str, Value> {
     context("value", alt((value_string, value_uint)))(input)
-        .map(|(next_input, res)| (next_input, res))
 }
 
 fn value_string(input: &str) -> NomRes<&str, Value> {
@@ -104,7 +100,6 @@ fn value_uint(input: &str) -> NomRes<&str, Value> {
 
 fn string(input: &str) -> NomRes<&str, &str> {
     context("string", alt((parse_quoted_single, parse_quoted_double)))(input)
-        .map(|(next_input, res)| (next_input, res))
 }
 
 fn parse_quoted_single(input: &str) -> NomRes<&str, &str> {
@@ -175,7 +170,6 @@ fn path_item_index(input: &str) -> NomRes<&str, usize> {
         "path_item_index",
         delimited(tag("["), number_usize, tag("]")),
     )(input)
-    .map(|(next_input, res)| (next_input, res))
 }
 
 fn filter(input: &str) -> NomRes<&str, Filter> {
@@ -201,7 +195,7 @@ fn expression(input: &str) -> NomRes<&str, Expression> {
 }
 
 fn expression_left(input: &str) -> NomRes<&str, Path> {
-    context("expression_left", path_items)(input).map(|(next_input, res)| (next_input, res))
+    context("expression_left", path_items)(input)
 }
 
 fn path_item_start(input: &str) -> NomRes<&str, char> {
@@ -226,5 +220,4 @@ fn number_usize(input: &str) -> NomRes<&str, usize> {
 
 fn operation(input: &str) -> NomRes<&str, &str> {
     context("operation", alt((tag("=="), tag("!="))))(input)
-        .map(|(next_input, res)| (next_input, res))
 }

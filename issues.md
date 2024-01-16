@@ -12,7 +12,6 @@
 - rename XCell -> Nex, Cell -> Inex, CellTrait -> InexTrait
 - implement cell head for each interpretation
 - replace ownrc with a native implementation, then fix it
-- printing errors should show the cell path and the cell operation that failed
 - fix tests using the error's cell path
 - implement policy(): set on cells and propagated, not set by interpretations
 - json: use SerdeValue directly instead of Node

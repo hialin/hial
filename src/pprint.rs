@@ -92,7 +92,7 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
         buffer,
         "{} {}",
         cell.domain().interpretation(),
-        cell.typ().unwrap_or_else(|e| {
+        cell.ty().unwrap_or_else(|e| {
             typ = format!("⚠{:?}⚠", e);
             &typ
         })
@@ -114,10 +114,13 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
                         write!(buffer, "")
                     }
                 }
-                Err(HErr::None) => write!(buffer, ""),
                 Err(err) => {
-                    empty = false;
-                    write!(buffer, "⚠{:?}⚠ ", err)
+                    if err.kind == HErrKind::None {
+                        write!(buffer, "")
+                    } else {
+                        empty = false;
+                        write!(buffer, "⚠{:?}⚠ ", err)
+                    }
                 }
             }?;
             match value {
@@ -128,16 +131,21 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
                     }
                     write!(buffer, "{}", v)
                 }
-                Err(HErr::None) => write!(buffer, ""),
                 Err(err) => {
-                    empty = false;
-                    write!(buffer, "⚠{:?}⚠", err)
+                    if err.kind == HErrKind::None {
+                        write!(buffer, "")
+                    } else {
+                        empty = false;
+                        write!(buffer, "⚠{:?}⚠", err)
+                    }
                 }
             }?;
         }
         Err(err) => {
-            empty = false;
-            write!(buffer, "⚠cannot read: {:?}⚠", err)?
+            if err.kind != HErrKind::None {
+                empty = false;
+                write!(buffer, "⚠cannot read: {:?}⚠", err)?
+            }
         }
     }
     if empty {
@@ -149,8 +157,13 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
             let kt = group.label_type();
             write!(buffer, "{}", if kt.is_indexed { "" } else { " ∤" })
         }
-        Err(HErr::None) => write!(buffer, ""),
-        Err(err) => write!(buffer, "⚠{:?}⚠", err),
+        Err(err) => {
+            if err.kind == HErrKind::None {
+                write!(buffer, "")
+            } else {
+                write!(buffer, "⚠{:?}⚠", err)
+            }
+        }
     }?;
 
     println!("{}", buffer);

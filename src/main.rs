@@ -55,11 +55,14 @@ fn main() -> Res<()> {
             debug!("Command: print {}", path);
             let (path_start, path) = match Path::parse_with_starter(path) {
                 Ok(x) => x,
-                Err(HErr::User(msg)) => {
-                    eprintln!("Bad path: {}", msg);
-                    return Ok(());
+                Err(err) => {
+                    if err.kind == HErrKind::User {
+                        eprintln!("Bad path: {}", err);
+                        return Ok(());
+                    } else {
+                        return Err(err);
+                    }
                 }
-                Err(err) => return Err(err),
             };
             debug!("Root: {}", path_start);
             debug!("Path: {}", path);

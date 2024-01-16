@@ -21,6 +21,7 @@ macro_rules! eval_debug {
 pub struct EvalIter<'s> {
     path: Vec<PathItem<'s>>,
     stack: Vec<CellNode>,
+    next_max_path_index: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -47,7 +48,28 @@ impl<'s> EvalIter<'s> {
         EvalIter {
             path: path.0,
             stack,
+            next_max_path_index: 0,
         }
+    }
+
+    fn update_next_max_path_index(&mut self) {
+        let max_i = self
+            .stack
+            .iter()
+            .map(|cn| cn.path_indices.iter().copied().max().unwrap_or(0))
+            .max()
+            .unwrap_or(0);
+        if max_i > self.next_max_path_index {
+            self.next_max_path_index = max_i;
+        }
+    }
+
+    pub fn get_max_accepted_path(&self) -> String {
+        let mut path = String::new();
+        for i in 0..self.next_max_path_index {
+            path.push_str(self.path[i].to_string().as_str());
+        }
+        path
     }
 
     fn is_doublestar_match(cell: &Cell, path_index: usize, path: &[PathItem<'s>]) -> bool {
@@ -71,6 +93,7 @@ impl<'s> EvalIter<'s> {
     fn eval_next(&mut self) -> Option<Res<Cell>> {
         while !self.stack.is_empty() {
             if let Some(cell) = self.pump() {
+                self.update_next_max_path_index();
                 return Some(cell);
             }
         }
@@ -350,7 +373,7 @@ impl<'s> EvalIter<'s> {
             Relation::Sub => cell.sub().err(),
             Relation::Attr => cell.attr().err(),
             Relation::Interpretation => cell.elevate().err(),
-            Relation::Field => cell.field(),
+            Relation::Field => cell.field().err(),
         }
     }
 
@@ -479,7 +502,7 @@ impl<'s> EvalIter<'s> {
 
     fn eval_expr(op: &str, left: Value, right: Value) -> Res<bool> {
         if !["==", "!="].contains(&op) {
-            return Err(HErr::Other(format!("bad operand: {}", op)));
+            return userr(format!("bad operand: {}", op));
         }
         match op {
             "==" if left == right => Ok(true),

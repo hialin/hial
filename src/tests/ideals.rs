@@ -1,4 +1,4 @@
-use crate::{base::*, utils::log::set_verbose};
+use crate::{base::*, pprint::pprint, utils::log::set_verbose};
 
 const TREE: &str = r#"
 a:
@@ -18,12 +18,12 @@ fn tree() -> Res<()> {
 
     // this should set the json value on the cell
     // and write back by doing a put request
-    assert!(Cell::from("http://api.github.com")
-        .policy(WritePolicy::WriteBackOnDrop)
-        .to("^http^json/hosts/[1]/labels/power")
-        .write()
-        .set_value("weak as putty".into())
-        .is_ok());
+    let cell = Cell::from("http://api.github.com").policy(WritePolicy::WriteBackOnDrop);
+    // .to("^http^json/hosts/[1]/labels/power");
+    pprint(&cell, 0, 0);
+    println!("cell err: {}", cell.clone().err().unwrap_err());
+    assert!(cell.clone().err().is_ok());
+    // assert!(cell.write().set_value("weak as putty".into()).is_ok());
 
     // let cell = Cell::from(".")
     //     .policy(WritePolicy::WriteBackOnDrop)

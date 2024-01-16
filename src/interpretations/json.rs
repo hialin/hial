@@ -121,7 +121,9 @@ impl Cell {
             }
             "file" => {
                 let path = cell.as_file_path()?;
-                serde_json::from_reader(File::open(path)?)?
+                serde_json::from_reader(
+                    File::open(path).map_err(|e| caused(HErrKind::IO, "cannot read json", e))?,
+                )?
             }
             "http" => {
                 let s = cell.read().value()?.to_string();
@@ -138,7 +140,7 @@ impl Cell {
     }
 
     pub fn from_path(path: impl AsRef<Path>) -> Res<XCell> {
-        let file = File::open(path)?;
+        let file = File::open(path).map_err(|e| caused(HErrKind::IO, "cannot read json", e))?;
         let json: SerdeValue = serde_json::from_reader(file)?;
         Self::from_serde_value(json, None)
     }
@@ -180,14 +182,14 @@ impl CellTrait for Cell {
         self.group.domain.clone()
     }
 
-    fn typ(&self) -> Res<&str> {
+    fn ty(&self) -> Res<&str> {
         match self.group.nodes {
             NodeGroup::Array(ref a) => match a.tap().get(self.pos) {
-                Some(n) => Ok(get_typ(n)),
+                Some(n) => Ok(get_ty(n)),
                 None => fault(format!("bad index {}", self.pos)),
             },
             NodeGroup::Object(ref o) => match o.tap().get_index(self.pos) {
-                Some(x) => Ok(get_typ(x.1)),
+                Some(x) => Ok(get_ty(x.1)),
                 None => fault(format!("bad index {}", self.pos)),
             },
         }
@@ -244,37 +246,14 @@ impl CellTrait for Cell {
         }
     }
 
-    // TODO: remove this after implementing writer
-    // fn delete(&mut self) -> Res<()> {
-    //     match self.group.nodes {
-    //         NodeGroup::Array(ref mut a) => {
-    //             let mut urca = a.urc();
-    //             let v = guard_some!(urca.get_mut(), {
-    //                 return Err(HErr::ExclusivityRequired {
-    //                     path: "".into(),
-    //                     op: "delete",
-    //                 });
-    //             });
-    //             v.remove(self.pos);
-    //         }
-    //         NodeGroup::Object(ref mut o) => {
-    //             let mut urco = o.urc();
-    //             let v = guard_some!(urco.get_mut(), {
-    //                 return Err(HErr::ExclusivityRequired {
-    //                     path: "".into(),
-    //                     op: "delete",
-    //                 });
-    //             });
-    //             v.remove(self.pos);
-    //         }
-    //     };
-    //     Ok(())
-    // }
+    fn head(&self) -> Res<(Self, Relation)> {
+        todo!()
+    }
 }
 
 impl From<serde_json::Error> for HErr {
     fn from(e: serde_json::Error) -> HErr {
-        HErr::Json(format!("{}", e))
+        caused(HErrKind::InvalidFormat, "cannot read json", e)
     }
 }
 
@@ -343,15 +322,41 @@ impl CellWriterTrait for CellWriter {
             UrcNodeGroup::Object(ref mut o) => {
                 let (_, node) = o
                     .get_index_mut(self.pos)
-                    .ok_or_else(|| HErr::Json("bad pos".into()))?;
+                    .ok_or_else(|| faulterr("bad pos"))?;
                 *node = Node::Scalar(value);
             }
         };
         Ok(())
     }
+
+    // fn delete(&mut self) -> Res<()> {
+    //     match self.group.nodes {
+    //         NodeGroup::Array(ref mut a) => {
+    //             let mut urca = a.urc();
+    //             let v = guard_some!(urca.get_mut(), {
+    //                 return Err(HErr::ExclusivityRequired {
+    //                     path: "".into(),
+    //                     op: "delete",
+    //                 });
+    //             });
+    //             v.remove(self.pos);
+    //         }
+    //         NodeGroup::Object(ref mut o) => {
+    //             let mut urco = o.urc();
+    //             let v = guard_some!(urco.get_mut(), {
+    //                 return Err(HErr::ExclusivityRequired {
+    //                     path: "".into(),
+    //                     op: "delete",
+    //                 });
+    //             });
+    //             v.remove(self.pos);
+    //         }
+    //     };
+    //     Ok(())
+    // }
 }
 
-fn get_typ(node: &Node) -> &'static str {
+fn get_ty(node: &Node) -> &'static str {
     match node {
         Node::Scalar(OwnValue::None) => "null",
         Node::Scalar(OwnValue::Bool(_)) => "bool",
