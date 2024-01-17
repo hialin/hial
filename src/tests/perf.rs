@@ -3,7 +3,7 @@ use crate::interpretations::*;
 
 #[test]
 fn test_cell_sizes() -> Res<()> {
-    println!("size of file cell: {}", std::mem::size_of::<file::Cell>());
+    println!("size of file cell: {}", std::mem::size_of::<fs::Cell>());
     println!("size of http cell: {}", std::mem::size_of::<http::Cell>());
     println!("size of json cell: {}", std::mem::size_of::<json::Cell>());
     println!(

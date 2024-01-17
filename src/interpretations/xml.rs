@@ -12,7 +12,7 @@ use crate::{
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_XML: ElevationConstructor = ElevationConstructor {
-    source_interpretations: &["value", "file"],
+    source_interpretations: &["value", "fs"],
     target_interpretations: &["xml"],
     constructor: Cell::from_cell,
 };
@@ -116,7 +116,7 @@ impl Cell {
                 let root = xml_to_node(&mut reader)?;
                 Self::from_root_node(root, Some(cell))
             }
-            "file" => {
+            "fs" => {
                 let path = cell.as_file_path()?;
                 let mut reader = Reader::from_file(path).map_err(HErr::from)?;
                 let root = xml_to_node(&mut reader)?;

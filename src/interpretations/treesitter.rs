@@ -10,7 +10,7 @@ use crate::{
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_RUST: ElevationConstructor = ElevationConstructor {
-    source_interpretations: &["value", "file"],
+    source_interpretations: &["value", "fs"],
     target_interpretations: &["rust", "javascript"],
     constructor: Cell::from_cell,
 };
@@ -90,7 +90,7 @@ impl Cell {
                 let source = cell.read().value()?.as_cow_str().into_owned();
                 Self::make_cell(source, lang.to_owned(), Some(cell))
             }
-            "file" => {
+            "fs" => {
                 let path = cell.as_file_path()?;
                 let source = std::fs::read_to_string(path)
                     .map_err(|e| caused(HErrKind::IO, "cannot read file", e))?;

@@ -3,7 +3,7 @@ use crate::pprint;
 
 #[test]
 fn test_files() -> Res<()> {
-    let examples = Cell::from(".").be("path").be("file").sub().get("examples");
+    let examples = Cell::from(".").be("path").be("fs").sub().get("examples");
     assert_eq!(examples.read().label()?, "examples");
     assert_eq!(examples.read().value()?, "examples");
     Ok(())

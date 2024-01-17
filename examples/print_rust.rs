@@ -12,7 +12,7 @@ fn main() -> Res<()> {
 }
 
 fn test_rustapi() -> Res<()> {
-    let examples = Cell::from(".").be("file").sub().get("examples");
+    let examples = Cell::from(".").be("fs").sub().get("examples");
     pprint(&examples, 0, 0);
     let folder = examples.sub();
     let stacks = folder

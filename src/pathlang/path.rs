@@ -124,7 +124,7 @@ impl<'a> PathStart<'a> {
     pub fn eval(&self) -> Res<Cell> {
         match self {
             PathStart::Url(u) => url::Cell::from_str(&u.to_string()),
-            PathStart::File(f) => file::Cell::from_str_path(*f),
+            PathStart::File(f) => fs::Cell::from_str_path(*f),
             PathStart::String(s) => ownvalue::Cell::from_str(s),
         }
     }

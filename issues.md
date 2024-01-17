@@ -9,10 +9,9 @@
     - later: python, git, database, ical, zip, markdown
     - later: separate api module, used by ffi and dependent crates
 
-- rename XCell -> Nex, Cell -> Inex, CellTrait -> InexTrait
-- implement cell head for each interpretation
 - replace ownrc with a native implementation, then fix it
-- fix tests using the error's cell path
+- rename XCell -> Nex, Cell -> Inex, CellTrait -> InexTrait
+- implement cell head **for each** interpretation
 - implement policy(): set on cells and propagated, not set by interpretations
 - json: use SerdeValue directly instead of Node
 - explicit domain save/write: to origin, to new domain
@@ -34,24 +33,24 @@
 | path       |    yes     |            |
 | fs         |    yes     |            |
 | http       |    yes     |            |
-| markdown   |            |            |
 | json       |    yes     |            |
+| yaml       |    yes     |            |
+| toml       |    yes     |            |
+| xml        |    yes     |            |
 | rust       |    yes     |            |
+|            |            |            |
 | git        |            |            |
 | database   |            |            |
 | ical       |            |            |
 | zip        |            |            |
 |            |            |            |
 | plain text |            |            |
-| yaml       |    yes     |            |
-| toml       |    yes     |            |
-| xml        |    yes     |            |
+| markdown   |            |            |
 |            |            |            |
 | python     |            |            |
 | javascript |            |            |
 | go         |            |            |
 |------------|------------|------------|
-
 
 
 

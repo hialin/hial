@@ -8,7 +8,7 @@ use crate::base::{Cell as XCell, *};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_TOML: ElevationConstructor = ElevationConstructor {
-    source_interpretations: &["value", "file"],
+    source_interpretations: &["value", "fs"],
     target_interpretations: &["toml"],
     constructor: Cell::from_cell,
 };
@@ -99,7 +99,7 @@ impl Cell {
                 let value = cow.as_ref();
                 Self::make_cell(value, Some(cell))
             }
-            "file" => {
+            "fs" => {
                 let path = cell.as_file_path()?;
                 Self::make_cell(
                     &std::fs::read_to_string(path)

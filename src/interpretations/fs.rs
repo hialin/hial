@@ -19,7 +19,7 @@ use crate::{
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static PATH_TO_FILE: ElevationConstructor = ElevationConstructor {
     source_interpretations: &["path"],
-    target_interpretations: &["file"],
+    target_interpretations: &["fs"],
     constructor: Cell::from_cell,
 };
 
@@ -75,7 +75,7 @@ impl DomainTrait for Domain {
     type Cell = Cell;
 
     fn interpretation(&self) -> &str {
-        "file"
+        "fs"
     }
 
     fn root(&self) -> Res<Self::Cell> {
@@ -320,7 +320,7 @@ fn from_path(path: &Path, origin: Option<XCell>) -> Res<Domain> {
         .canonicalize()
         .map_err(|e| caused(HErrKind::IO, "cannot canonicalize path", e))?;
     if !path.exists() {
-        debug!("file: path {:?} does not exist", path);
+        debug!("fs: path {:?} does not exist", path);
         return nores();
     }
 
@@ -392,7 +392,7 @@ fn read_files(path: &Path, entries: &mut Vec<Res<FileEntry>>) -> Res<()> {
         }
     }
 
-    // verbose!("file: read children of {:?}", path);
+    // debug!("fs: read children of {:?}", path);
     let files_iterator = std::fs::read_dir(path).map_err(|e| {
         caused(
             HErrKind::IO,

@@ -91,7 +91,7 @@ fn elevation_map(interpretation: &str) -> Res<Arc<IndexMap<&'static str, Elevate
 }
 
 pub(crate) fn top_interpretation(cell: &Cell) -> Option<&str> {
-    if cell.domain().interpretation() == "file" && cell.ty().ok()? == "file" {
+    if cell.domain().interpretation() == "fs" && cell.ty().ok()? == "fs" {
         if let Ok(reader) = cell.read().err() {
             if let Ok(Value::Str(name)) = reader.label() {
                 if name.ends_with(".c") {
@@ -118,7 +118,7 @@ pub(crate) fn top_interpretation(cell: &Cell) -> Option<&str> {
                 if s.starts_with("http://") || s.starts_with("https://") {
                     return Some("http");
                 } else if s.starts_with('.') || s.starts_with('/') {
-                    return Some("file");
+                    return Some("fs");
                 }
             }
         }

@@ -9,7 +9,7 @@ use crate::base::{Cell as XCell, *};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_YAML: ElevationConstructor = ElevationConstructor {
-    source_interpretations: &["value", "file"],
+    source_interpretations: &["value", "fs"],
     target_interpretations: &["yaml"],
     constructor: Cell::from_cell,
 };
@@ -115,7 +115,7 @@ impl Cell {
                 let value = cow.as_ref();
                 Cell::make_cell(value, Some(cell))
             }
-            "file" => {
+            "fs" => {
                 let mut source = String::new();
                 let path = cell.as_file_path()?;
                 File::open(path)

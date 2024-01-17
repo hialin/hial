@@ -13,7 +13,7 @@ use crate::{
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_JSON: ElevationConstructor = ElevationConstructor {
-    source_interpretations: &["value", "file", "http"],
+    source_interpretations: &["value", "fs", "http"],
     target_interpretations: &["json"],
     constructor: Cell::from_cell,
 };
@@ -119,7 +119,7 @@ impl Cell {
                 let s = cell.read().value()?.to_string();
                 serde_json::from_str(s.as_ref())?
             }
-            "file" => {
+            "fs" => {
                 let path = cell.as_file_path()?;
                 serde_json::from_reader(
                     File::open(path).map_err(|e| caused(HErrKind::IO, "cannot read json", e))?,

@@ -9,7 +9,7 @@ use crate::base::{Cell as XCell, *};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_PATH: ElevationConstructor = ElevationConstructor {
-    source_interpretations: &["value", "file"],
+    source_interpretations: &["value", "fs"],
     target_interpretations: &["path"],
     constructor: Cell::from_cell,
 };
@@ -60,7 +60,7 @@ impl Cell {
                 let value = cow.as_ref();
                 Self::make_cell(PathBuf::from(value), value.to_owned(), Some(cell))
             }
-            "file" => {
+            "fs" => {
                 let path = cell.as_file_path()?;
                 Self::make_cell(
                     path.to_owned(),
