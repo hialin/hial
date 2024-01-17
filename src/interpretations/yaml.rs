@@ -136,7 +136,19 @@ impl Cell {
                     })?;
                 Cell::make_cell(source, Some(cell))
             }
-            _ => fault(""),
+            _ => {
+                let r = cell.read();
+                let v = r.value()?;
+                let cow = v.as_cow_str();
+                let value = cow.as_ref();
+                Cell::make_cell(value, Some(cell)).map_err(|e| {
+                    if e.kind == HErrKind::InvalidFormat {
+                        noerr()
+                    } else {
+                        e
+                    }
+                })
+            }
         }
     }
 

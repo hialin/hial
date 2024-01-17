@@ -247,7 +247,10 @@ impl CellTrait for Cell {
     }
 
     fn head(&self) -> Res<(Self, Relation)> {
-        todo!()
+        match self.group.head {
+            Some(ref head) => Ok((head.0.clone(), head.1)),
+            None => nores(),
+        }
     }
 }
 

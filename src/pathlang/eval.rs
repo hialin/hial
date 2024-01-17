@@ -64,10 +64,14 @@ impl<'s> EvalIter<'s> {
         }
     }
 
-    pub fn get_max_accepted_path(&self) -> String {
+    /// returns the minimal path that failed to match
+    pub fn unmatched_path(&self) -> String {
         let mut path = String::new();
         for i in 0..self.next_max_path_index {
             path.push_str(self.path[i].to_string().as_str());
+        }
+        if self.next_max_path_index < self.path.len() {
+            path.push_str(self.path[self.next_max_path_index].to_string().as_str());
         }
         path
     }

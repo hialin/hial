@@ -65,9 +65,11 @@ impl CellWriterTrait for CellWriter {}
 
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
-        let url_cell = from_url_str(cell.as_url_str()?, Some(cell.clone()))?.root()?;
+        let reader = cell.read().err()?;
+        let value = reader.value()?;
+        let domain = from_url_str(value.as_cow_str().as_ref(), Some(cell.clone()))?;
         Ok(XCell {
-            dyn_cell: DynCell::from(url_cell),
+            dyn_cell: DynCell::from(domain.root()?),
         })
     }
 

@@ -1,7 +1,6 @@
 mod cell_path;
 mod file;
 mod ideals;
-mod multihops;
 mod mut_json;
 mod nested;
 mod perf;

@@ -122,7 +122,20 @@ impl Cell {
                 let root = xml_to_node(&mut reader)?;
                 Self::from_root_node(root, Some(cell))
             }
-            _ => nores(),
+            _ => {
+                let r = cell.read();
+                let v = r.value()?;
+                let cow = v.as_cow_str();
+                let mut reader = Reader::from_str(cow.as_ref());
+                let root = xml_to_node(&mut reader)?;
+                Self::from_root_node(root, Some(cell)).map_err(|e| {
+                    if e.kind == HErrKind::InvalidFormat {
+                        noerr()
+                    } else {
+                        e
+                    }
+                })
+            }
         }
     }
 

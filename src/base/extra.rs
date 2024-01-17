@@ -337,7 +337,7 @@ impl Cell {
         }
         Group::Dyn(DynGroup::from(FieldGroup {
             cell: Rc::new(self.clone()),
-            // interpretation: self.domain().interpretation().to_string(),
+            interpretation: self.domain().interpretation().to_string(),
         }))
     }
 
@@ -421,51 +421,53 @@ impl Cell {
         }
 
         let mut s = String::new();
-        for (i, (c, r)) in self.domain_path_items()?.iter().enumerate() {
+        let path_items = self.domain_path_items()?;
+        for (i, (c, r)) in path_items.iter().enumerate() {
             let reader = c.read().err()?;
             if i == 0 {
                 write!(s, "{}", r).map_err(|e| caused(HErrKind::IO, "write error", e))?;
-            } else {
-                let lres = reader.label();
-                match lres {
-                    Ok(l) => {
-                        if !l.is_empty() {
-                            write!(s, "{}{}", l, r)
-                                .map_err(|e| caused(HErrKind::IO, "write error", e))?;
-                        } else {
-                            write_index(reader, &mut s)?;
-                            write!(s, "{}", r)
-                                .map_err(|e| caused(HErrKind::IO, "write error", e))?;
-                        }
+                continue;
+            }
+            let lres = reader.label();
+            match lres {
+                Ok(l) => {
+                    if !l.is_empty() {
+                        write!(s, "{}{}", l, r)
+                            .map_err(|e| caused(HErrKind::IO, "write error", e))?;
+                    } else {
+                        write_index(reader, &mut s)?;
+                        write!(s, "{}", r).map_err(|e| caused(HErrKind::IO, "write error", e))?;
                     }
-                    Err(e) => {
-                        if e.kind == HErrKind::None {
-                            write_index(reader, &mut s)?;
-                            write!(s, "{}", r)
-                                .map_err(|e| caused(HErrKind::IO, "write error", e))?;
-                        } else {
-                            return Err(e);
-                        }
+                }
+                Err(e) => {
+                    if e.kind == HErrKind::None {
+                        write_index(reader, &mut s)?;
+                        write!(s, "{}", r).map_err(|e| caused(HErrKind::IO, "write error", e))?;
+                    } else {
+                        return Err(e);
                     }
                 }
             }
         }
 
-        let reader = self.read().err()?;
-        let lres = reader.label();
-        match lres {
-            Ok(l) => {
-                if !l.is_empty() {
-                    write!(s, "{}", l).map_err(|e| caused(HErrKind::IO, "write error", e))?;
-                } else {
-                    write_index(reader, &mut s)?;
+        if !path_items.is_empty() {
+            // write current cell's label/index, if it's not the root
+            let reader = self.read().err()?;
+            let lres = reader.label();
+            match lres {
+                Ok(l) => {
+                    if !l.is_empty() {
+                        write!(s, "{}", l).map_err(|e| caused(HErrKind::IO, "write error", e))?;
+                    } else {
+                        write_index(reader, &mut s)?;
+                    }
                 }
-            }
-            Err(e) => {
-                if e.kind == HErrKind::None {
-                    write_index(reader, &mut s)?;
-                } else {
-                    return Err(e);
+                Err(e) => {
+                    if e.kind == HErrKind::None {
+                        write_index(reader, &mut s)?;
+                    } else {
+                        return Err(e);
+                    }
                 }
             }
         }
@@ -495,7 +497,7 @@ impl Cell {
                             s.truncate(16);
                             s += "...";
                         }
-                        v.push(format!("\"{}\"", s));
+                        v.push(format!("`{}`", s));
                     }
                 }
             } else {
@@ -545,35 +547,21 @@ impl Cell {
         }
         nores().with_path_res(self.path())
     }
+}
 
-    pub fn as_url_str(&self) -> Res<&str> {
-        if let DynCell::Url(ref url) = self.dyn_cell {
-            return Ok(url.as_url_str());
-        }
-        nores().with_path_res(self.path())
-    }
-    // fn http_as_string(cell: &Cell) -> Res<String> {
-    //     if let Cell {
-    //         dyn_cell: DynCell::Http(ref h),
-    //         ..
-    //     } = cell
-    //     {
-    //         return http::to_string(h);
-    //     }
-    //     fault("elevation: not a http cell")
-    // }
-    // fn ts_as_string(cell: &Cell) -> Res<String> {
-    //     if let Cell {
-    //         dyn_cell: DynCell::TreeSitter(ref ts),
-    //         ..
-    //     } = cell
-    //     {
-    //         let s = treesitter::get_underlying_string(ts)?;
-    //         Ok(s.to_string())
-    //     } else {
-    //         fault("rust to string elevation")
-    //     }
-    // }
+#[test]
+fn test_cell_domain_path() -> Res<()> {
+    let tree = r#"{"a": {"x": "xa", "b": {"x": "xb", "c": {"x": "xc"}}}, "m": [1, 2, 3]}"#;
+    let root = Cell::from(tree).be("yaml");
+    assert_eq!(root.domain_path()?, r#""#);
+    let leaf = root.to("/a/b/c/x");
+    assert_eq!(leaf.domain_path()?, r#"/a/b/c/x"#);
+
+    assert_eq!(root.path()?, r#"`{"a": {"x": "xa"...`^yaml"#);
+
+    assert_eq!(leaf.path()?, r#"`{"a": {"x": "xa"...`^yaml/a/b/c/x"#);
+
+    Ok(())
 }
 
 impl Group {
@@ -677,11 +665,13 @@ impl Iterator for GroupIter {
 
 #[derive(Clone, Debug)]
 pub struct PathSearch<'a> {
+    start: Cell,
     eval_iter: EvalIter<'a>,
 }
 impl<'a> PathSearch<'a> {
     pub fn new(cell: Cell, path: Path<'a>) -> Self {
         PathSearch {
+            start: cell.clone(),
             eval_iter: EvalIter::new(cell, path),
         }
     }
@@ -692,9 +682,14 @@ impl<'a> PathSearch<'a> {
             Some(Err(e)) => Cell {
                 dyn_cell: DynCell::from(e),
             },
-            None => Cell {
-                dyn_cell: DynCell::from(noerr().with_path(self.eval_iter.get_max_accepted_path())),
-            },
+            None => {
+                let mut path = self.start.path().unwrap_or_default();
+                path += self.eval_iter.unmatched_path().as_str();
+                println!("💥 path search failed: {}", path);
+                Cell {
+                    dyn_cell: DynCell::from(noerr().with_path(path)),
+                }
+            }
         }
     }
 

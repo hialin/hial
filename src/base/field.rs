@@ -18,17 +18,14 @@ pub enum FieldType {
 pub struct FieldGroup {
     pub(crate) cell: Rc<Cell>,
     // copy of original cell's interpretation, need to own it
-    // pub(crate) interpretation: String,
+    pub(crate) interpretation: String,
 }
 
 impl DomainTrait for FieldGroup {
     type Cell = FieldCell;
 
     fn interpretation(&self) -> &str {
-        // TODO: should we return the right interpretation here?
-        // self.interpretation.as_str() -- if we do this, then some elevations
-        // won't work anymore, e.g. ^json/one#value^xml
-        "value"
+        self.interpretation.as_str()
     }
 
     fn root(&self) -> Res<FieldCell> {
@@ -150,7 +147,7 @@ impl CellTrait for FieldCell {
     fn domain(&self) -> FieldGroup {
         FieldGroup {
             cell: self.cell.clone(),
-            // interpretation: self.cell.domain().interpretation().to_string(),
+            interpretation: self.cell.domain().interpretation().to_string(),
         }
     }
 
@@ -197,12 +194,13 @@ impl CellReaderTrait for FieldReader {
     }
 
     fn label(&self) -> Res<Value> {
-        match self.ty {
-            FieldType::Value => Ok(Value::Str("value")),
-            FieldType::Label => Ok(Value::Str("label")),
-            FieldType::Type => Ok(Value::Str("type")),
-            FieldType::Index => Ok(Value::Str("index")),
-        }
+        nores()
+        // match self.ty {
+        //     FieldType::Value => Ok(Value::Str("value")),
+        //     FieldType::Label => Ok(Value::Str("label")),
+        //     FieldType::Type => Ok(Value::Str("type")),
+        //     FieldType::Index => Ok(Value::Str("index")),
+        // }
     }
 }
 

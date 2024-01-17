@@ -149,17 +149,18 @@ fn path_kleene() -> Res<()> {
                     y: yc
             m: mval
             n: nval
+            o: null
         "#;
     let root = Cell::from(TREE).be("yaml");
 
     let eval = str_eval(root.clone(), pr("/*"))?;
-    assert_eq!(eval, ["a:ø", "m:mval", "n:nval"]);
+    assert_eq!(eval, ["a:", "m:mval", "n:nval", "o:ø"]);
 
     let eval = str_eval(root.clone(), pr("/*#label"))?;
-    assert_eq!(eval, [":a", ":m", ":n"]);
+    assert_eq!(eval, [":a", ":m", ":n", ":o"]);
 
     let eval = str_eval(root.clone(), pr("/*[#label=='a']"))?;
-    assert_eq!(eval, ["a:ø"]);
+    assert_eq!(eval, ["a:"]);
 
     let eval = str_eval(root.clone(), pr("/*[#label=='a']#index"))?;
     assert_eq!(eval, [":0"]);
@@ -185,9 +186,9 @@ fn path_filter() -> Res<()> {
         "#;
     let root = Cell::from(TREE).be("yaml");
     let eval = str_eval(root.clone(), pr("/*[/x]"))?;
-    assert_eq!(eval, ["a:ø"]);
+    assert_eq!(eval, ["a:"]);
     let eval = str_eval(root.clone(), pr("/a/*[/x]"))?;
-    assert_eq!(eval, ["b:ø"]);
+    assert_eq!(eval, ["b:"]);
     let eval = str_eval(root.clone(), pr("/a/*[/x]#label"))?;
     assert_eq!(eval, [":b"]);
     Ok(())
@@ -243,7 +244,7 @@ fn path_double_kleene() -> Res<()> {
     assert_eq!(eval, ["m:mval"]);
 
     let eval = str_eval(root.clone(), "/a/**/b")?;
-    assert_eq!(eval, ["b:ø"]);
+    assert_eq!(eval, ["b:"]);
 
     Ok(())
 }
@@ -319,7 +320,7 @@ fn path_double_kleene_all() -> Res<()> {
     assert_eq!(
         eval,
         [
-            ":ø", "a:ø", "x:xa", "b:ø", "x:xb", "c:ø", "x:xc", "y:yc", "z:ø", ":r", ":s", "m:mval",
+            ":", "a:", "x:xa", "b:", "x:xb", "c:", "x:xc", "y:yc", "z:", ":r", ":s", "m:mval",
             "n:nval"
         ]
     );
@@ -406,10 +407,10 @@ fn path_double_kleene_repeat() -> Res<()> {
     // println!("\npath: {}\n", "/**/b/b");
 
     let eval = str_eval(root.clone(), "/**/b/b")?;
-    assert_eq!(eval, ["b:ø", "b:bval"]);
+    assert_eq!(eval, ["b:", "b:bval"]);
 
     let eval = str_eval(root.clone(), "/**/b/**/b")?;
-    assert_eq!(eval, ["b:ø", "b:bval"]);
+    assert_eq!(eval, ["b:", "b:bval"]);
 
     Ok(())
 }
@@ -419,7 +420,7 @@ fn path_double_kleene_with_filter() -> Res<()> {
     const TREE: &str = r#"
         dir1:
             f1:
-                size: 1
+                size: null
             dir2:
                 f2:
                     size: 2
@@ -428,15 +429,12 @@ fn path_double_kleene_with_filter() -> Res<()> {
     let root = Cell::from(TREE).be("yaml");
 
     let eval = str_eval(root.clone(), "/dir1/**")?;
-    assert_eq!(
-        eval,
-        ["dir1:ø", "f1:ø", "size:1", "dir2:ø", "f2:ø", "size:2"]
-    );
+    assert_eq!(eval, ["dir1:", "f1:", "size:ø", "dir2:", "f2:", "size:2"]);
 
     let eval = str_eval(root.clone(), "/dir1/**[/size]")?;
-    assert_eq!(eval, ["f1:ø"]);
+    assert_eq!(eval, ["f1:"]);
     // TODO: the above is wrong, correct is:
-    // assert_eq!(eval, ["f1:ø", "f2:ø"]);
+    // assert_eq!(eval, ["f1:", "f2:"]);
 
     Ok(())
 }

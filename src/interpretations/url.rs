@@ -72,10 +72,6 @@ impl Cell {
             dyn_cell: DynCell::from(cell),
         })
     }
-
-    pub fn as_url_str(&self) -> &str {
-        self.0 .0 .0.as_str()
-    }
 }
 
 impl CellReaderTrait for CellReader {
@@ -115,7 +111,7 @@ impl CellTrait for Cell {
     }
 
     fn head(&self) -> Res<(Self, Relation)> {
-        todo!()
+        nores()
     }
 }
 

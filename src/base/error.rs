@@ -1,4 +1,4 @@
-use std::{cell::OnceCell, error::Error, rc::Rc};
+use std::{cell::OnceCell, error::Error, fmt, rc::Rc};
 
 use crate::{base::*, warning};
 
@@ -27,9 +27,24 @@ pub enum HErrKind {
     // error caused by trying to write to a read-only data structure
     ReadOnly,
     // cannot change data because there are other readers
-    ExclusivityRequired,
+    CannotLock,
     // invalid format (e.g. invalid json)
     InvalidFormat,
+}
+
+impl fmt::Display for HErrKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            HErrKind::None => write!(f, "no result"),
+            HErrKind::User => write!(f, "user error"),
+            HErrKind::Internal => write!(f, "internal error"),
+            HErrKind::IO => write!(f, "io error"),
+            HErrKind::Net => write!(f, "net error"),
+            HErrKind::ReadOnly => write!(f, "read only"),
+            HErrKind::CannotLock => write!(f, "cannot lock"),
+            HErrKind::InvalidFormat => write!(f, "invalid format"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -158,24 +173,14 @@ pub fn deformed(reason: impl Into<String>) -> HErr {
 impl std::error::Error for HErr {}
 impl std::fmt::Display for HErr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let header = match self.kind {
-            HErrKind::None => "no result",
-            HErrKind::User => "user error",
-            HErrKind::Internal => "internal error",
-            HErrKind::IO => "io error",
-            HErrKind::Net => "net error",
-            HErrKind::ReadOnly => "read only",
-            HErrKind::ExclusivityRequired => "exclusivity required",
-            HErrKind::InvalidFormat => "invalid format",
-        };
         if !self.data.msg.is_empty() {
-            write!(f, "{}: {}", header, self.data.msg)?;
+            write!(f, "{}: {}", self.kind, self.data.msg)?;
         } else {
-            write!(f, "{}", header)?;
+            write!(f, "{}", self.kind)?;
         }
 
         if let Some(path) = self.data.cell_path.get() {
-            write!(f, " -- at cell path `{}`", path)?;
+            write!(f, " -- at cell path: {}", path)?;
         }
         if let Some(ref cause) = self.data.cause {
             write!(f, " -- caused by: {}", cause)?;
@@ -243,7 +248,16 @@ impl CellTrait for HErr {
     }
 
     fn ty(&self) -> Res<&str> {
-        Ok("error")
+        Ok(match self.kind {
+            HErrKind::None => "none",
+            HErrKind::User => "user",
+            HErrKind::IO => "io",
+            HErrKind::Net => "net",
+            HErrKind::Internal => "internal",
+            HErrKind::ReadOnly => "readonly",
+            HErrKind::CannotLock => "cannotlock",
+            HErrKind::InvalidFormat => "invalidformat",
+        })
     }
 
     fn read(&self) -> Res<Self::CellReader> {

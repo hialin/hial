@@ -181,7 +181,7 @@ impl ElevationGroup {
         if let Ok(e) = elevation_map("value") {
             if let Some((_, target_interpretation, func)) = e.get_full(interp) {
                 debug!("elevate as value from {} to {}", old_interp, key);
-                return func(self.0.clone().field().at(0), target_interpretation);
+                return func(self.0.clone(), target_interpretation);
             }
         }
         debug!("no elevation from {} to {}", old_interp, interp);
