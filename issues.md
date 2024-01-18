@@ -9,7 +9,6 @@
     - later: python, git, database, ical, zip, markdown
     - later: separate api module, used by ffi and dependent crates
 
-- json: use SerdeValue directly instead of Node
 - add #flat as Field option (tree serialization)
 - rename XCell -> Nex, Cell -> Inex, CellTrait -> InexTrait
 - **for each interpretation**: test path, implement cell head

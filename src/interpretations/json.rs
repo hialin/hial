@@ -2,7 +2,7 @@ use std::{fs::File, path::Path};
 
 use indexmap::IndexMap;
 use linkme::distributed_slice;
-use serde_json::Value as SerdeValue;
+use serde_json::Value as SValue;
 
 use crate::{
     base::{Cell as XCell, *},
@@ -48,7 +48,7 @@ pub enum NodeGroup {
 
 #[derive(Clone, Debug)]
 pub enum Node {
-    Scalar(OwnValue),
+    Scalar(SValue),
     Array(OwnRc<Vec<Node>>),
     Object(OwnRc<IndexMap<String, Node>>),
 }
@@ -156,18 +156,18 @@ impl Cell {
     }
 
     pub fn from_string(s: impl AsRef<str>) -> Res<XCell> {
-        let json: SerdeValue = serde_json::from_str(s.as_ref())?;
+        let json: SValue = serde_json::from_str(s.as_ref())?;
         Self::from_serde_value(json, None)
     }
 
     pub fn from_path(path: impl AsRef<Path>) -> Res<XCell> {
         let file = File::open(path).map_err(|e| caused(HErrKind::IO, "cannot read json", e))?;
-        let json: SerdeValue = serde_json::from_reader(file)?;
+        let json: SValue = serde_json::from_reader(file)?;
         Self::from_serde_value(json, None)
     }
 
-    pub fn from_serde_value(json: SerdeValue, origin: Option<XCell>) -> Res<XCell> {
-        let nodes = OwnRc::new(vec![node_from_json(json)]);
+    pub fn from_serde_value(json: SValue, origin: Option<XCell>) -> Res<XCell> {
+        let nodes = OwnRc::new(vec![serde_to_node(json)]);
         let domain = Domain(OwnRc::new(DomainData {
             nodes,
             write_policy: WritePolicy::ReadOnly,
@@ -332,7 +332,7 @@ impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
         fn get_value(node: &Node) -> Res<Value> {
             match node {
-                Node::Scalar(v) => Ok(v.as_value()),
+                Node::Scalar(sv) => Ok(serde_to_value(sv)),
                 _ => nores(),
             }
         }
@@ -373,13 +373,13 @@ impl CellWriterTrait for CellWriter {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
         match self.nodes {
             WriteNodeGroup::Array(ref mut a) => {
-                a[self.pos] = Node::Scalar(value);
+                a[self.pos] = Node::Scalar(ownvalue_to_serde(value));
             }
             WriteNodeGroup::Object(ref mut o) => {
                 let (_, node) = o
                     .get_index_mut(self.pos)
                     .ok_or_else(|| faulterr("bad pos"))?;
-                *node = Node::Scalar(value);
+                *node = Node::Scalar(ownvalue_to_serde(value));
             }
         };
         Ok(())
@@ -414,12 +414,11 @@ impl CellWriterTrait for CellWriter {
 
 fn get_ty(node: &Node) -> &'static str {
     match node {
-        Node::Scalar(OwnValue::None) => "null",
-        Node::Scalar(OwnValue::Bool(_)) => "bool",
-        Node::Scalar(OwnValue::Int(_)) => "number",
-        Node::Scalar(OwnValue::Float(_)) => "number",
-        Node::Scalar(OwnValue::String(_)) => "string",
-        Node::Scalar(OwnValue::Bytes(_)) => "string",
+        Node::Scalar(SValue::Null) => "null",
+        Node::Scalar(SValue::Bool(_)) => "bool",
+        Node::Scalar(SValue::Number(_)) => "number",
+        Node::Scalar(SValue::String(_)) => "string",
+        Node::Scalar(_) => "??", // should not happen
         Node::Array(_) => "array",
         Node::Object(_) => "object",
     }
@@ -492,56 +491,68 @@ impl GroupTrait for Group {
     }
 }
 
-fn node_from_json(sv: SerdeValue) -> Node {
+fn serde_to_value(sv: &SValue) -> Value<'_> {
     match sv {
-        SerdeValue::Null => Node::Scalar(OwnValue::None),
-        SerdeValue::Bool(b) => Node::Scalar(OwnValue::Bool(b)),
-        SerdeValue::Number(n) => {
+        SValue::Bool(b) => Value::Bool(*b),
+        SValue::Number(n) => {
             if n.is_i64() {
-                Node::Scalar(Value::from(n.as_i64().unwrap()).to_owned_value())
+                Value::from(n.as_i64().unwrap())
             } else if n.is_u64() {
-                Node::Scalar(Value::from(n.as_u64().unwrap()).to_owned_value())
+                Value::from(n.as_u64().unwrap())
             } else {
-                Node::Scalar(Value::from(n.as_f64().unwrap()).to_owned_value())
+                Value::from(n.as_f64().unwrap())
             }
         }
-        SerdeValue::String(s) => Node::Scalar(OwnValue::String(s)),
-        SerdeValue::Array(a) => {
-            let mut na = vec![];
-            for v in a {
-                na.push(node_from_json(v));
-            }
-            Node::Array(OwnRc::new(na))
-        }
-        SerdeValue::Object(o) => {
-            let mut no = IndexMap::new();
-            for (k, v) in o {
-                no.insert(k, node_from_json(v));
-            }
-            Node::Object(OwnRc::new(no))
-        }
+        SValue::String(s) => Value::Str(s),
+        _ => Value::None,
     }
 }
 
-fn node_to_serde(node: &Node) -> Res<SerdeValue> {
+fn ownvalue_to_serde(v: OwnValue) -> SValue {
+    match v {
+        OwnValue::None => SValue::Null,
+        OwnValue::Bool(b) => SValue::Bool(b),
+        OwnValue::Int(Int::I32(i)) => SValue::Number(i.into()),
+        OwnValue::Int(Int::U32(i)) => SValue::Number(i.into()),
+        OwnValue::Int(Int::I64(i)) => SValue::Number(i.into()),
+        OwnValue::Int(Int::U64(i)) => SValue::Number(i.into()),
+        OwnValue::Float(StrFloat(f)) => {
+            SValue::Number(serde_json::Number::from_f64(f).unwrap_or(serde_json::Number::from(0)))
+        }
+        OwnValue::String(s) => SValue::String(s),
+        OwnValue::Bytes(b) => SValue::String(String::from_utf8_lossy(&b).into()),
+    }
+}
+
+fn serde_to_node(sv: SValue) -> Node {
+    match sv {
+        SValue::Array(a) => {
+            let mut na = vec![];
+            for v in a {
+                na.push(serde_to_node(v));
+            }
+            Node::Array(OwnRc::new(na))
+        }
+        SValue::Object(o) => {
+            let mut no = IndexMap::new();
+            for (k, v) in o {
+                no.insert(k, serde_to_node(v));
+            }
+            Node::Object(OwnRc::new(no))
+        }
+        _ => Node::Scalar(sv),
+    }
+}
+
+fn node_to_serde(node: &Node) -> Res<SValue> {
     Ok(match node {
-        Node::Scalar(OwnValue::None) => SerdeValue::Null,
-        Node::Scalar(OwnValue::Bool(b)) => SerdeValue::Bool(*b),
-        Node::Scalar(OwnValue::Int(Int::I32(i))) => SerdeValue::Number((*i).into()),
-        Node::Scalar(OwnValue::Int(Int::U32(i))) => SerdeValue::Number((*i).into()),
-        Node::Scalar(OwnValue::Int(Int::I64(i))) => SerdeValue::Number((*i).into()),
-        Node::Scalar(OwnValue::Int(Int::U64(i))) => SerdeValue::Number((*i).into()),
-        Node::Scalar(OwnValue::Float(StrFloat(f))) => SerdeValue::Number(
-            serde_json::Number::from_f64(*f).unwrap_or(serde_json::Number::from(0)),
-        ),
-        Node::Scalar(OwnValue::String(s)) => SerdeValue::String(s.clone()),
-        Node::Scalar(OwnValue::Bytes(b)) => SerdeValue::String(String::from_utf8_lossy(b).into()),
+        Node::Scalar(sv) => sv.clone(),
         Node::Array(a) => {
             let mut na = vec![];
             for v in &*a.write().ok_or_else(|| lockerr("cannot write nodes"))? {
                 na.push(node_to_serde(v)?);
             }
-            SerdeValue::Array(na)
+            SValue::Array(na)
         }
         Node::Object(o) => {
             let mut no = serde_json::map::Map::new();
@@ -552,7 +563,7 @@ fn node_to_serde(node: &Node) -> Res<SerdeValue> {
             {
                 no.insert(k.clone(), node_to_serde(v)?);
             }
-            SerdeValue::Object(no)
+            SValue::Object(no)
         }
     })
 }
