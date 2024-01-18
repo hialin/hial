@@ -7,20 +7,20 @@ An uniform data API is a programmatic interface to different types of data repre
 
 ### Why is it needed?
 
-The uniform data API maximizes user comfort and speed because it requires a single mental model. This model allows data search and manipulation in most cases, with the remaining cases being handled by the usual specialized APIs. A simple and uniform data model makes it easy to create, transform, filter and delete any kind of data, manually or programmatically.
+The uniform data API aims to make common data read/search/write operations easy to declare and execute. It maximizes user comfort and speed because it requires a single mental model, which is suitable for most use cases. A simple and uniform data model makes it easy to create, transform, filter and delete any kind of data, manually or programmatically.
 
 The following tasks should be easy with such an API:
 - pinpoint changes in configuration files (e.g. change a specific value in a json/yaml/toml/text file)
 - interactive or automated data exploration (structured grep)
-- complex data conversions
 - semantic diffs
-- custom verification of programs, e.g. testing program invariants
+- custom program refactoring
+<!-- - complex data conversions -->
 
 ## The data model
 
 🚧 **Hial is currently under construction. Some things may change**. 🚧
 
-The data model is that of a graph of simple data nodes. The graph is always represented as a spanning tree, with a single root node and a hierarchy of children nodes.
+The data model is that of a tree of simple data nodes. The tree has a root node and a hierarchy of children nodes.
 
 Each data node is called a **cell**. It may have a **value** (a simple data type like string, number, bool or blob).
 
@@ -31,6 +31,27 @@ All cells except the root cell have a **super** cell and are part of the **super
 A cell is always an **interpretation** of some underlying data. For example a series of bytes `7b 22 61 22 3a 31 7d` can be interpreted as a byte array (a single cell with a blob value of `7b 22 61 22 3a 31 7d`) or as an utf-8 encoded string (another cell with a string value of `{"a":1}`) or as a json tree of cells (the root cell being the json object `{}` with a sub cell with label `a` and value `1`). A cell with some value can be always explicitly re-interpreted as another type of cell.
 
 A cell also has a string **type** describing its kind, depending on the interpretation. Such types can be: "file" or "folder" (in the fs interpretation), "array" (in the json interpretation), "function_item" (in the rust interpretation), "response" (in the http interpretation), etc.
+
+```ascii
+          ┌----------┐
+          |   Cell   |
+          |----------|
+          | [index]  |
+          | [label]  |
+          | [value]  |
+          | [type]   |
+          └----------┘
+          /         \
+         /           \
+  ┌-----------┐    ┌------------┐
+  | Sub Group |    | Attr Group |
+  └-----------┘    └------------┘
+     /                   \
+    /                     \
+  Cell                    Cell
+  Cell                    ...
+  ...
+```
 
 ### Examples:
 

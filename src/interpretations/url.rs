@@ -102,11 +102,11 @@ impl CellTrait for Cell {
         Ok("url")
     }
 
-    fn read(&self) -> Res<Self::CellReader> {
+    fn read(&self) -> Res<CellReader> {
         Ok(CellReader(self.0.clone()))
     }
 
-    fn write(&self) -> Res<Self::CellWriter> {
+    fn write(&self) -> Res<CellWriter> {
         Ok(CellWriter {})
     }
 

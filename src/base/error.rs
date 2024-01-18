@@ -170,6 +170,18 @@ pub fn deformed(reason: impl Into<String>) -> HErr {
     }
 }
 
+pub fn lockerr(reason: impl Into<String>) -> HErr {
+    HErr {
+        kind: HErrKind::CannotLock,
+        data: Rc::new(HErrData {
+            msg: reason.into(),
+            cell_path: OnceCell::new(),
+            cause: None,
+            backtrace: Some(capture_stack_trace()),
+        }),
+    }
+}
+
 impl std::error::Error for HErr {}
 impl std::fmt::Display for HErr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -249,7 +261,7 @@ impl CellTrait for HErr {
 
     fn ty(&self) -> Res<&str> {
         Ok(match self.kind {
-            HErrKind::None => "none",
+            HErrKind::None => "nores",
             HErrKind::User => "user",
             HErrKind::IO => "io",
             HErrKind::Net => "net",

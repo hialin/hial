@@ -41,7 +41,7 @@ pub struct Cell {
 #[derive(Debug)]
 pub struct CellReader {
     kind: GroupKind,
-    response: UseRc<Response>,
+    response: ReadRc<Response>,
     pos: usize,
 }
 
@@ -133,7 +133,13 @@ impl DomainTrait for Domain {
     }
 
     fn origin(&self) -> Res<XCell> {
-        self.0.tap().origin.as_ref().cloned().ok_or_else(noerr)
+        self.0
+            .read()
+            .ok_or_else(|| lockerr("cannot read domain"))?
+            .origin
+            .as_ref()
+            .cloned()
+            .ok_or_else(noerr)
     }
 }
 
@@ -166,7 +172,12 @@ impl CellTrait for Cell {
     fn read(&self) -> Res<Self::CellReader> {
         Ok(CellReader {
             kind: self.group.kind,
-            response: self.group.response.0.tap(),
+            response: self
+                .group
+                .response
+                .0
+                .read()
+                .ok_or_else(|| lockerr("cannot read cell"))?,
             pos: self.pos,
         })
     }
@@ -286,7 +297,13 @@ impl GroupTrait for Group {
             GroupKind::Root => 0,
             GroupKind::Attr => 2,
             GroupKind::Status => 2,
-            GroupKind::Headers => self.response.0.tap().headers.len(),
+            GroupKind::Headers => self
+                .response
+                .0
+                .read()
+                .ok_or_else(|| lockerr("cannot read group"))?
+                .headers
+                .len(),
         })
     }
 
@@ -300,10 +317,20 @@ impl GroupTrait for Group {
                 group: self.clone(),
                 pos: index,
             }),
-            (GroupKind::Headers, i) if i < self.response.0.tap().headers.len() => Ok(Cell {
-                group: self.clone(),
-                pos: index,
-            }),
+            (GroupKind::Headers, i)
+                if i < self
+                    .response
+                    .0
+                    .read()
+                    .ok_or_else(|| lockerr("cannot read group"))?
+                    .headers
+                    .len() =>
+            {
+                Ok(Cell {
+                    group: self.clone(),
+                    pos: index,
+                })
+            }
             _ => nores(),
         }
     }
@@ -330,7 +357,14 @@ impl GroupTrait for Group {
             (GroupKind::Headers, sel) => match sel {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
                 Selector::Str(k) => {
-                    if let Some((i, _, _)) = self.response.0.tap().headers.get_full(k) {
+                    if let Some((i, _, _)) = self
+                        .response
+                        .0
+                        .read()
+                        .ok_or_else(|| lockerr("cannot read group"))?
+                        .headers
+                        .get_full(k)
+                    {
                         Ok(Cell {
                             group: self.clone(),
                             pos: i,

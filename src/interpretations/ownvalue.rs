@@ -1,5 +1,5 @@
 use crate::base::{Cell as XCell, *};
-use crate::utils::ownrc::{OwnRc, UseRc};
+use crate::utils::ownrc::{OwnRc, ReadRc, WriteRc};
 
 #[derive(Clone, Debug)]
 pub struct Cell(OwnRc<OwnValue>);
@@ -25,10 +25,10 @@ impl SaveTrait for Cell {
 }
 
 #[derive(Debug)]
-pub struct CellReader(UseRc<OwnValue>);
+pub struct CellReader(ReadRc<OwnValue>);
 
 #[derive(Debug)]
-pub struct CellWriter(UseRc<OwnValue>);
+pub struct CellWriter(WriteRc<OwnValue>);
 
 impl Cell {
     pub fn from_str(s: &str) -> Res<XCell> {
@@ -68,7 +68,7 @@ impl CellWriterTrait for CellWriter {
     }
 }
 
-impl CellTrait for Cell {
+impl<'a> CellTrait for Cell {
     type Domain = Cell;
     type Group = VoidGroup<Self>;
     type CellReader = CellReader;
@@ -82,12 +82,14 @@ impl CellTrait for Cell {
         Ok("value")
     }
 
-    fn read(&self) -> Res<Self::CellReader> {
-        Ok(CellReader(self.0.tap()))
+    fn read(&self) -> Res<CellReader> {
+        let r = self.0.read().ok_or_else(|| lockerr("cannot read cell"))?;
+        Ok(CellReader(r))
     }
 
-    fn write(&self) -> Res<Self::CellWriter> {
-        Ok(CellWriter(self.0.tap()))
+    fn write(&self) -> Res<CellWriter> {
+        let w = self.0.write().ok_or_else(|| lockerr("cannot write cell"))?;
+        Ok(CellWriter(w))
     }
 
     fn head(&self) -> Res<(Self, Relation)> {

@@ -4,10 +4,9 @@ use indexmap::IndexMap;
 use linkme::distributed_slice;
 use serde_json::Value as SerdeValue;
 
-use crate::guard_some;
-use crate::utils::ownrc::UseRc;
 use crate::{
     base::{Cell as XCell, *},
+    guard_some,
     utils::ownrc::*,
 };
 
@@ -56,20 +55,26 @@ pub enum Node {
 
 #[derive(Debug)]
 pub struct CellReader {
-    nodes: UrcNodeGroup,
+    nodes: ReadNodeGroup,
     pos: usize,
 }
 
 #[derive(Debug)]
 pub struct CellWriter {
-    nodes: UrcNodeGroup,
+    nodes: WriteNodeGroup,
     pos: usize,
 }
 
 #[derive(Debug)]
-pub enum UrcNodeGroup {
-    Array(UseRc<Vec<Node>>),
-    Object(UseRc<IndexMap<String, Node>>),
+pub enum ReadNodeGroup {
+    Array(ReadRc<Vec<Node>>),
+    Object(ReadRc<IndexMap<String, Node>>),
+}
+
+#[derive(Debug)]
+pub enum WriteNodeGroup {
+    Array(WriteRc<Vec<Node>>),
+    Object(WriteRc<IndexMap<String, Node>>),
 }
 
 impl DomainTrait for Domain {
@@ -83,7 +88,13 @@ impl DomainTrait for Domain {
         Ok(Cell {
             group: Group {
                 domain: self.clone(),
-                nodes: NodeGroup::Array(self.0.tap().nodes.clone()),
+                nodes: NodeGroup::Array(
+                    self.0
+                        .read()
+                        .ok_or_else(|| lockerr("cannot read domain to get root"))?
+                        .nodes
+                        .clone(),
+                ),
                 head: None,
             },
             pos: 0,
@@ -91,7 +102,12 @@ impl DomainTrait for Domain {
     }
 
     fn origin(&self) -> Res<XCell> {
-        match &self.0.tap().origin {
+        match &self
+            .0
+            .read()
+            .ok_or_else(|| lockerr("cannot read domain to get origin"))?
+            .origin
+        {
             Some(c) => Ok(c.clone()),
             None => nores(),
         }
@@ -101,7 +117,12 @@ impl SaveTrait for Domain {
     fn save(&self, target: SaveTarget) -> Res<()> {
         let s = self.root()?.serialize()?;
         match target {
-            SaveTarget::Origin => match self.0.tap().origin {
+            SaveTarget::Origin => match self
+                .0
+                .read()
+                .ok_or_else(|| lockerr("cannot read domain to get origin"))?
+                .origin
+            {
                 Some(ref origin) => origin.write().set_value(OwnValue::String(s))?,
                 None => return userr("no origin, cannot save"),
             },
@@ -159,12 +180,20 @@ impl Cell {
 
     pub fn serialize(&self) -> Res<String> {
         let serde_value = match self.group.nodes {
-            NodeGroup::Array(ref a) => match a.tap().get(self.pos) {
-                Some(node) => node_to_serde(node),
+            NodeGroup::Array(ref a) => match a
+                .read()
+                .ok_or_else(|| lockerr("cannot read nodes"))?
+                .get(self.pos)
+            {
+                Some(node) => node_to_serde(node)?,
                 None => return fault(format!("bad index {}", self.pos)),
             },
-            NodeGroup::Object(ref o) => match o.tap().get_index(self.pos) {
-                Some(x) => node_to_serde(x.1),
+            NodeGroup::Object(ref o) => match o
+                .read()
+                .ok_or_else(|| lockerr("cannot read nodes"))?
+                .get_index(self.pos)
+            {
+                Some(x) => node_to_serde(x.1)?,
                 None => return fault(format!("bad index {}", self.pos)),
             },
         };
@@ -184,11 +213,19 @@ impl CellTrait for Cell {
 
     fn ty(&self) -> Res<&str> {
         match self.group.nodes {
-            NodeGroup::Array(ref a) => match a.tap().get(self.pos) {
+            NodeGroup::Array(ref a) => match a
+                .read()
+                .ok_or_else(|| lockerr("cannot read cell"))?
+                .get(self.pos)
+            {
                 Some(n) => Ok(get_ty(n)),
                 None => fault(format!("bad index {}", self.pos)),
             },
-            NodeGroup::Object(ref o) => match o.tap().get_index(self.pos) {
+            NodeGroup::Object(ref o) => match o
+                .read()
+                .ok_or_else(|| lockerr("cannot read cell"))?
+                .get_index(self.pos)
+            {
                 Some(x) => Ok(get_ty(x.1)),
                 None => fault(format!("bad index {}", self.pos)),
             },
@@ -198,8 +235,12 @@ impl CellTrait for Cell {
     fn read(&self) -> Res<Self::CellReader> {
         Ok(CellReader {
             nodes: match self.group.nodes {
-                NodeGroup::Array(ref a) => UrcNodeGroup::Array(a.tap()),
-                NodeGroup::Object(ref o) => UrcNodeGroup::Object(o.tap()),
+                NodeGroup::Array(ref a) => {
+                    ReadNodeGroup::Array(a.read().ok_or_else(|| lockerr("cannot read cell"))?)
+                }
+                NodeGroup::Object(ref o) => {
+                    ReadNodeGroup::Object(o.read().ok_or_else(|| lockerr("cannot read cell"))?)
+                }
             },
             pos: self.pos,
         })
@@ -208,8 +249,12 @@ impl CellTrait for Cell {
     fn write(&self) -> Res<Self::CellWriter> {
         Ok(CellWriter {
             nodes: match self.group.nodes {
-                NodeGroup::Array(ref a) => UrcNodeGroup::Array(a.tap()),
-                NodeGroup::Object(ref o) => UrcNodeGroup::Object(o.tap()),
+                NodeGroup::Array(ref a) => {
+                    WriteNodeGroup::Array(a.write().ok_or_else(|| lockerr("cannot write cell"))?)
+                }
+                NodeGroup::Object(ref o) => {
+                    WriteNodeGroup::Object(o.write().ok_or_else(|| lockerr("cannot write cell"))?)
+                }
             },
             pos: self.pos,
         })
@@ -217,7 +262,11 @@ impl CellTrait for Cell {
 
     fn sub(&self) -> Res<Group> {
         match self.group.nodes {
-            NodeGroup::Array(ref array) => match &array.tap().get(self.pos) {
+            NodeGroup::Array(ref array) => match &array
+                .read()
+                .ok_or_else(|| lockerr("cannot read cell"))?
+                .get(self.pos)
+            {
                 Some(Node::Array(a)) => Ok(Group {
                     head: Some(Box::new((self.clone(), Relation::Sub))),
                     domain: self.group.domain.clone(),
@@ -230,7 +279,11 @@ impl CellTrait for Cell {
                 }),
                 _ => nores(),
             },
-            NodeGroup::Object(ref object) => match object.tap().get_index(self.pos) {
+            NodeGroup::Object(ref object) => match object
+                .read()
+                .ok_or_else(|| lockerr("cannot read cell"))?
+                .get_index(self.pos)
+            {
                 Some((_, Node::Array(a))) => Ok(Group {
                     head: Some(Box::new((self.clone(), Relation::Sub))),
                     domain: self.group.domain.clone(),
@@ -266,7 +319,7 @@ impl CellReaderTrait for CellReader {
     }
 
     fn label(&self) -> Res<Value> {
-        if let UrcNodeGroup::Object(ref o) = self.nodes {
+        if let ReadNodeGroup::Object(ref o) = self.nodes {
             if let Some(x) = o.get_index(self.pos) {
                 return Ok(Value::Str(x.0));
             } else {
@@ -285,11 +338,11 @@ impl CellReaderTrait for CellReader {
         }
 
         match self.nodes {
-            UrcNodeGroup::Array(ref a) => match a.get(self.pos) {
+            ReadNodeGroup::Array(ref a) => match a.get(self.pos) {
                 Some(x) => get_value(x),
                 None => fault(""),
             },
-            UrcNodeGroup::Object(ref o) => match o.get_index(self.pos) {
+            ReadNodeGroup::Object(ref o) => match o.get_index(self.pos) {
                 Some(x) => get_value(x.1),
                 None => fault(""),
             },
@@ -304,10 +357,10 @@ impl CellWriterTrait for CellWriter {
     // }
     fn set_label(&mut self, label: OwnValue) -> Res<()> {
         match self.nodes {
-            UrcNodeGroup::Array(_) => {
+            WriteNodeGroup::Array(_) => {
                 return userr("cannot set label on array object");
             }
-            UrcNodeGroup::Object(ref mut o) => {
+            WriteNodeGroup::Object(ref mut o) => {
                 let (_, v) = guard_some!(o.swap_remove_index(self.pos), {
                     return fault("bad pos");
                 });
@@ -319,10 +372,10 @@ impl CellWriterTrait for CellWriter {
     }
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
         match self.nodes {
-            UrcNodeGroup::Array(ref mut a) => {
+            WriteNodeGroup::Array(ref mut a) => {
                 a[self.pos] = Node::Scalar(value);
             }
-            UrcNodeGroup::Object(ref mut o) => {
+            WriteNodeGroup::Object(ref mut o) => {
                 let (_, node) = o
                     .get_index_mut(self.pos)
                     .ok_or_else(|| faulterr("bad pos"))?;
@@ -387,7 +440,11 @@ impl GroupTrait for Group {
             NodeGroup::Array(a) => nores(),
             NodeGroup::Object(o) => match key.into() {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
-                Selector::Str(k) => match o.tap().get_index_of(k) {
+                Selector::Str(k) => match o
+                    .read()
+                    .ok_or_else(|| lockerr("cannot read group"))?
+                    .get_index_of(k)
+                {
                     Some(pos) => Ok(Cell {
                         group: self.clone(),
                         pos,
@@ -400,21 +457,36 @@ impl GroupTrait for Group {
 
     fn len(&self) -> Res<usize> {
         Ok(match &self.nodes {
-            NodeGroup::Array(array) => array.tap().len(),
-            NodeGroup::Object(o) => o.tap().len(),
+            NodeGroup::Array(array) => array
+                .read()
+                .ok_or_else(|| lockerr("cannot read group"))?
+                .len(),
+            NodeGroup::Object(o) => o.read().ok_or_else(|| lockerr("cannot read group"))?.len(),
         })
     }
 
     fn at(&self, index: usize) -> Res<Cell> {
         match &self.nodes {
-            NodeGroup::Array(ref array) if index < array.tap().len() => Ok(Cell {
-                group: self.clone(),
-                pos: index,
-            }),
-            NodeGroup::Object(ref o) if index < o.tap().len() => Ok(Cell {
-                group: self.clone(),
-                pos: index,
-            }),
+            NodeGroup::Array(ref array)
+                if index
+                    < array
+                        .read()
+                        .ok_or_else(|| lockerr("cannot read group"))?
+                        .len() =>
+            {
+                Ok(Cell {
+                    group: self.clone(),
+                    pos: index,
+                })
+            }
+            NodeGroup::Object(ref o)
+                if index < o.read().ok_or_else(|| lockerr("cannot read group"))?.len() =>
+            {
+                Ok(Cell {
+                    group: self.clone(),
+                    pos: index,
+                })
+            }
             _ => nores(),
         }
     }
@@ -451,8 +523,8 @@ fn node_from_json(sv: SerdeValue) -> Node {
     }
 }
 
-fn node_to_serde(node: &Node) -> SerdeValue {
-    match node {
+fn node_to_serde(node: &Node) -> Res<SerdeValue> {
+    Ok(match node {
         Node::Scalar(OwnValue::None) => SerdeValue::Null,
         Node::Scalar(OwnValue::Bool(b)) => SerdeValue::Bool(*b),
         Node::Scalar(OwnValue::Int(Int::I32(i))) => SerdeValue::Number((*i).into()),
@@ -466,17 +538,21 @@ fn node_to_serde(node: &Node) -> SerdeValue {
         Node::Scalar(OwnValue::Bytes(b)) => SerdeValue::String(String::from_utf8_lossy(b).into()),
         Node::Array(a) => {
             let mut na = vec![];
-            for v in &*a.tap() {
-                na.push(node_to_serde(v));
+            for v in &*a.write().ok_or_else(|| lockerr("cannot write nodes"))? {
+                na.push(node_to_serde(v)?);
             }
             SerdeValue::Array(na)
         }
         Node::Object(o) => {
             let mut no = serde_json::map::Map::new();
-            for (k, v) in o.tap().as_slice() {
-                no.insert(k.clone(), node_to_serde(v));
+            for (k, v) in o
+                .write()
+                .ok_or_else(|| lockerr("cannot write nodes"))?
+                .as_slice()
+            {
+                no.insert(k.clone(), node_to_serde(v)?);
             }
             SerdeValue::Object(no)
         }
-    }
+    })
 }

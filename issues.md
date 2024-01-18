@@ -9,15 +9,23 @@
     - later: python, git, database, ical, zip, markdown
     - later: separate api module, used by ffi and dependent crates
 
-- replace ownrc with a native implementation, then fix it
-- rename XCell -> Nex, Cell -> Inex, CellTrait -> InexTrait
-- implement cell head **for each** interpretation
-- implement policy(): set on cells and propagated, not set by interpretations
 - json: use SerdeValue directly instead of Node
+- add #flat as Field option (tree serialization)
+- rename XCell -> Nex, Cell -> Inex, CellTrait -> InexTrait
+- **for each interpretation**: test path, implement cell head
+- implement policy(): set on cells and propagated, not set by interpretations
 - explicit domain save/write: to origin, to new domain
 - write policies on domain (interpretation):
     - read only, write ignore, write back, write to new domain
 - fix double kleene error (see test)
+
+- operations:
+    - assign to variables;
+    - search with assignment of results
+    - pretty print of variables/results
+    - write values/trees to variables/results
+    - diff with assignment of results in variables
+- add tree diff operation
 
 - ?treesitter representations are too detailed, unsure what to do
 - ?explore python implementation and usage
