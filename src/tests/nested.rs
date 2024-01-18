@@ -6,20 +6,39 @@ fn test_nested() -> Res<()> {
 
     let yxj = r#"{"one": ["<?xml?><root>mytext: This is my yaml string</root>"]}"#;
 
-    let cell = Cell::from(yxj)
-        .search("^json/one/[0]#value^xml/root/[0]")?
-        .first();
+    let cell = Cell::from(yxj).to("^json/one/[0]^xml/root/[0]");
+    assert_eq!(cell.read().value()?, "mytext: This is my yaml string");
+
+    let cell = Cell::from(yxj).to("^json/one/[0]^xml/root/[0]^yaml/mytext");
+    assert_eq!(cell.read().value()?, "This is my yaml string");
+
+    Ok(())
+}
+
+#[test]
+fn test_nested_mut() -> Res<()> {
+    set_verbose(true);
+
+    let yxj = r#"{"one": ["<?xml?><root>mytext: yaml string</root>"]}"#;
+    let root = Cell::from(yxj);
 
     assert_eq!(
-        cell.read().value()?,
-        Value::Str("mytext: This is my yaml string")
+        root.to("^json/one/[0]^xml/root/[0]^yaml/mytext")
+            .read()
+            .value()?,
+        "yaml string"
     );
 
-    let cell = Cell::from(yxj)
-        .search("^json/one/[0]#value^xml/root/[0]#value^yaml/mytext#value")?
-        .first();
+    {
+        let cell = root.to("^json/one/[0]^xml/root/[0]^yaml/mytext");
+        assert_eq!(cell.read().value()?, "yaml string");
+        cell.write().set_value("new yaml string".into())?;
+    }
 
-    assert_eq!(cell.read().value()?, Value::Str("This is my yaml string"));
+    assert_eq!(
+        root.read().value()?,
+        r#"{"one": ["<?xml?><root>mytext: new yaml string</root>"]}"#
+    );
 
     Ok(())
 }

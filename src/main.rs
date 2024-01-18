@@ -69,7 +69,8 @@ fn main() -> Res<()> {
             let root = path_start.eval()?;
 
             let mut anyfound = false;
-            for cell in path.eval(root) {
+            let mut eval_iter = path.eval(root);
+            for cell in &mut eval_iter {
                 anyfound = true;
                 match cell {
                     Ok(cell) => pprint(&cell, depth, breadth),
@@ -77,7 +78,7 @@ fn main() -> Res<()> {
                 }
             }
             if !anyfound {
-                debug!("No matches.")
+                println!("No match for {}", eval_iter.unmatched_path());
             }
         }
     }

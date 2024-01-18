@@ -52,15 +52,14 @@ impl<'s> EvalIter<'s> {
         }
     }
 
-    fn update_next_max_path_index(&mut self) {
-        let max_i = self
-            .stack
+    fn update_next_max_path_index(stack: &[CellNode], next_max_path_index: &mut usize) {
+        let max_i = stack
             .iter()
             .map(|cn| cn.path_indices.iter().copied().max().unwrap_or(0))
             .max()
             .unwrap_or(0);
-        if max_i > self.next_max_path_index {
-            self.next_max_path_index = max_i;
+        if max_i > *next_max_path_index {
+            *next_max_path_index = max_i;
         }
     }
 
@@ -97,7 +96,7 @@ impl<'s> EvalIter<'s> {
     fn eval_next(&mut self) -> Option<Res<Cell>> {
         while !self.stack.is_empty() {
             if let Some(cell) = self.pump() {
-                self.update_next_max_path_index();
+                Self::update_next_max_path_index(&self.stack, &mut self.next_max_path_index);
                 return Some(cell);
             }
         }
@@ -146,6 +145,7 @@ impl<'s> EvalIter<'s> {
                 cell: Ok(cell.clone()),
                 path_indices,
             });
+            Self::update_next_max_path_index(&self.stack, &mut self.next_max_path_index);
             return Some(Ok(cell));
         }
 
@@ -154,9 +154,13 @@ impl<'s> EvalIter<'s> {
         if has_relation(Relation::Interpretation, &self.path) {
             match Self::subgroup(Relation::Interpretation, &cell) {
                 Err(err) => debug_err!(err),
-                Ok(group) => {
-                    Self::push_interpretations(&group, &path_indices, &self.path, &mut self.stack)
-                }
+                Ok(group) => Self::push_interpretations(
+                    &group,
+                    &path_indices,
+                    &self.path,
+                    &mut self.stack,
+                    &mut self.next_max_path_index,
+                ),
             }
         }
 
@@ -174,6 +178,7 @@ impl<'s> EvalIter<'s> {
                                 &path_indices,
                                 &self.path,
                                 &mut self.stack,
+                                &mut self.next_max_path_index,
                                 doublestar,
                             );
                         } else {
@@ -183,6 +188,7 @@ impl<'s> EvalIter<'s> {
                                 &path_indices,
                                 &self.path,
                                 &mut self.stack,
+                                &mut self.next_max_path_index,
                             )
                         }
                     }
@@ -193,7 +199,13 @@ impl<'s> EvalIter<'s> {
         if has_relation(Relation::Field, &self.path) {
             match Self::subgroup(Relation::Field, &cell) {
                 Err(err) => debug_err!(err),
-                Ok(group) => Self::push_field(&group, &path_indices, &self.path, &mut self.stack),
+                Ok(group) => Self::push_field(
+                    &group,
+                    &path_indices,
+                    &self.path,
+                    &mut self.stack,
+                    &mut self.next_max_path_index,
+                ),
             }
         }
 
@@ -205,6 +217,7 @@ impl<'s> EvalIter<'s> {
         path_indices: &HashSet<usize>,
         path: &[PathItem<'s>],
         stack: &mut Vec<CellNode>,
+        next_max_path_index: &mut usize,
     ) {
         for path_index in path_indices {
             let path_item = &path[*path_index];
@@ -232,6 +245,7 @@ impl<'s> EvalIter<'s> {
                     cell: Ok(subcell),
                     path_indices: HashSet::from([path_index + 1]),
                 });
+                Self::update_next_max_path_index(stack, next_max_path_index);
             }
         }
     }
@@ -242,6 +256,7 @@ impl<'s> EvalIter<'s> {
         path_indices: &HashSet<usize>,
         path: &[PathItem<'s>],
         stack: &mut Vec<CellNode>,
+        next_max_path_index: &mut usize,
         double_stars: bool,
     ) {
         let len = group.len().unwrap_or(0);
@@ -286,6 +301,7 @@ impl<'s> EvalIter<'s> {
                     cell: Ok(subcell),
                     path_indices: accepted_path_indices,
                 });
+                Self::update_next_max_path_index(stack, next_max_path_index);
             }
         }
     }
@@ -296,6 +312,7 @@ impl<'s> EvalIter<'s> {
         path_indices: &HashSet<usize>,
         path: &[PathItem<'s>],
         stack: &mut Vec<CellNode>,
+        next_max_path_index: &mut usize,
     ) {
         for path_index in path_indices {
             let path_item = &path[*path_index];
@@ -336,6 +353,7 @@ impl<'s> EvalIter<'s> {
                     cell: Ok(subcell),
                     path_indices: accepted_path_indices,
                 });
+                Self::update_next_max_path_index(stack, next_max_path_index);
             }
         }
     }
@@ -345,6 +363,7 @@ impl<'s> EvalIter<'s> {
         path_indices: &HashSet<usize>,
         path: &[PathItem<'s>],
         stack: &mut Vec<CellNode>,
+        next_max_path_index: &mut usize,
     ) {
         for path_index in path_indices {
             let path_item = &path[*path_index];
@@ -368,6 +387,7 @@ impl<'s> EvalIter<'s> {
                     cell: Ok(subcell),
                     path_indices: HashSet::from([path_index + 1]),
                 });
+                Self::update_next_max_path_index(stack, next_max_path_index);
             }
         }
     }

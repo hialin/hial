@@ -85,7 +85,7 @@ Examples:
 - `http://api.github.com` is a url cell.
 - `http://api.github.com^http` is the http response of a GET request to this url.
 - `http://api.github.com^http^json` is the json tree interpretation of a http response of a GET request to this url.
-- `http://api.github.com^http^json/rate_limit_url#value^http^json/resources/core/remaining` makes one http call and uses a field in the respose to make another http call, then select a subfield in the returning json.
+- `http://api.github.com^http^json/rate_limit_url^http^json/resources/core/remaining` makes one http call and uses a field in the respose to make another http call, then select a subfield in the returning json.
 
 - `./src/**^rust` returns a list of all rust files (all files that have a rust interpretation) descending from the `src` folder.
 - `./src/**^rust/**/*[#type=="function_item"]` lists all rust functions in all rust files in the `src` folder.
@@ -133,7 +133,7 @@ for cell in hial.path('./**'):
 ```bash
 # shell, works
 echo "Bad images:"
-hial ls "./config.yaml^yaml/services[/image#value^http@status/code!=200]/name"
+hial ls "./examples/productiondump.json^json/stacks/*/services/*[/image^http@status/code!=200]/name"
 ```
 
 ```rust
