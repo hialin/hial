@@ -132,6 +132,6 @@ impl CellTrait for Cell {
     }
 
     fn head(&self) -> Res<(Self, Relation)> {
-        todo!()
+        nores()
     }
 }

@@ -8,6 +8,8 @@ use crate::{
     pathlang::Path,
 };
 
+const MAX_PATH_ITEMS: usize = 100;
+
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
     pub(crate) enum DynDomain {
@@ -389,6 +391,9 @@ impl Cell {
         while let Ok(h) = head {
             v.push((h.0.clone(), h.1));
             head = h.0.head();
+            if v.len() > MAX_PATH_ITEMS {
+                return fault("domain path item iteration limit reached");
+            }
         }
 
         let err = head.unwrap_err();
@@ -428,6 +433,10 @@ impl Cell {
                 write!(s, "{}", r).map_err(|e| caused(HErrKind::IO, "write error", e))?;
                 continue;
             }
+            if i > MAX_PATH_ITEMS {
+                return fault("domain path iteration limit reached");
+            }
+
             let lres = reader.label();
             match lres {
                 Ok(l) => {
@@ -481,7 +490,12 @@ impl Cell {
     pub fn path(&self) -> Res<String> {
         let mut v: Vec<String> = Vec::new();
         let mut some_cell = Some(self.clone());
+        let mut iteration = 0;
         while let Some(cell) = some_cell {
+            iteration += 1;
+            if iteration > MAX_PATH_ITEMS {
+                return fault("path iteration limit reached");
+            }
             let domain = cell.domain();
             v.push(cell.domain_path()?);
             if let Err(e) = domain.origin().err() {

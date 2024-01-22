@@ -1,0 +1,83 @@
+use crate::{base::*, pprint};
+
+#[test]
+fn test_xml() -> Res<()> {
+    let xml = r#"
+            <?xml version="1.0"?>
+            <!DOCTYPE entity PUBLIC "-//no idea//EN" "http://example.com/dtd">
+            <doc>
+                <first>1</first>
+                <double>2</double>
+                <double>2+</double>
+                <triple/>
+                <q>
+                    <qq>4</qq>
+                </q>
+            </doc>
+        "#;
+    let xml = Cell::from(xml.to_string()).be("xml");
+    pprint::pprint(&xml, 0, 0);
+
+    let decl = xml.sub().at(0);
+    assert_eq!(decl.read().label()?, "xml");
+    assert_eq!(decl.attr().len()?, 1);
+    let decl_reader = decl.attr().at(0).read();
+    assert_eq!(decl_reader.label()?, "version");
+    assert_eq!(decl_reader.value()?, Value::Str("1.0"));
+
+    let doctype = xml.sub().at(1);
+    assert_eq!(doctype.read().label()?, "DOCTYPE");
+    assert_eq!(
+        doctype.read().value()?,
+        "entity PUBLIC \"-//no idea//EN\" \"http://example.com/dtd\""
+    );
+
+    let doc = xml.sub().at(2);
+    assert_eq!(doc.sub().len()?, 5);
+
+    assert_eq!(doc.sub().at(0).read().label()?, "first");
+    assert_eq!(doc.sub().get("first").read().label()?, "first");
+    assert_eq!(doc.sub().get("first").read().value()?, "1");
+    assert_eq!(doc.sub().get("first").sub().len()?, 0);
+
+    assert_eq!(doc.sub().get("double").read().label()?, "double");
+    assert_eq!(doc.sub().at(1).read().label()?, "double");
+    assert_eq!(doc.sub().at(1).read().value()?, "2");
+    assert_eq!(doc.sub().at(1).sub().len()?, 0);
+
+    assert_eq!(doc.sub().at(2).read().label()?, "double");
+    assert_eq!(doc.sub().at(2).read().value()?, "2+");
+    assert_eq!(doc.sub().at(2).sub().len()?, 0);
+
+    assert_eq!(doc.sub().at(3).read().value()?, "");
+    assert_eq!(doc.sub().get("triple").read().value()?, "");
+    assert_eq!(doc.sub().get("triple").sub().len()?, 0);
+
+    assert_eq!(doc.sub().at(4).sub().at(0).read().label()?, "qq");
+    assert_eq!(doc.sub().get("q").sub().get("qq").read().value()?, "4");
+    assert_eq!(xml.to("/doc/q/qq").read().value()?, Value::Str("4"));
+    assert_eq!(xml.to("/doc/q/qq").sub().len()?, 0);
+
+    xml.to("/doc/q/qq").write().set_value("4".into())?;
+    assert_eq!(xml.to("/doc/q/qq").read().value()?, "4");
+
+    Ok(())
+}
+
+#[test]
+fn xml_write() -> Res<()> {
+    assert_eq!(1, 0);
+    Ok(())
+}
+
+#[test]
+fn xml_path() -> Res<()> {
+    assert_eq!(1, 0);
+    Ok(())
+}
+
+#[test]
+fn xml_save() -> Res<()> {
+    assert_eq!(1, 0);
+    Ok(())
+}

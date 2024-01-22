@@ -15,16 +15,27 @@ pub enum Int {
     U32(u32),
 }
 
+impl Int {
+    pub fn as_i128(&self) -> i128 {
+        match self {
+            Int::I64(x) => *x as i128,
+            Int::U64(x) => *x as i128,
+            Int::I32(x) => *x as i128,
+            Int::U32(x) => *x as i128,
+        }
+    }
+}
+
 impl Hash for Int {
     fn hash<H: Hasher>(&self, state: &mut H) {
         core::mem::discriminant(self).hash(state);
-        embiggen(*self).hash(state);
+        self.as_i128().hash(state);
     }
 }
 
 impl PartialEq for Int {
     fn eq(&self, other: &Self) -> bool {
-        embiggen(*self) == embiggen(*other)
+        self.as_i128() == other.as_i128()
     }
 }
 
@@ -32,22 +43,13 @@ impl Eq for Int {}
 
 impl PartialOrd for Int {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(embiggen(*self).cmp(&embiggen(*other)))
+        Some(self.as_i128().cmp(&other.as_i128()))
     }
 }
 
 impl Ord for Int {
     fn cmp(&self, other: &Self) -> Ordering {
-        embiggen(*self).cmp(&embiggen(*other))
-    }
-}
-
-fn embiggen(x: Int) -> i128 {
-    match x {
-        Int::I64(a) => a as i128,
-        Int::U64(a) => a as i128,
-        Int::I32(a) => a as i128,
-        Int::U32(a) => a as i128,
+        self.as_i128().cmp(&other.as_i128())
     }
 }
 
@@ -291,6 +293,13 @@ impl Value<'_> {
             Value::Float(x) => OwnValue::Float(*x),
             Value::Str(x) => OwnValue::String(x.to_string()),
             Value::Bytes(x) => OwnValue::Bytes(Vec::from(*x)),
+        }
+    }
+
+    pub fn as_i128(&self) -> Option<i128> {
+        match self {
+            Value::Int(x) => Some(x.as_i128()),
+            _ => None,
         }
     }
 

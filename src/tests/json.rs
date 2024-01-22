@@ -1,4 +1,40 @@
-use crate::{base::*, pprint::pprint};
+use crate::base::*;
+use crate::pprint::pprint;
+
+#[test]
+fn test_json() -> Res<()> {
+    let json = r#"{
+            "hosts": [
+                {
+                    "host_id": "1h48",
+                    "labels": {
+                        "power": "weak",
+                        "gateway": "true"
+                    }
+                },
+                {
+                    "host_id": "1h51",
+                    "labels": {
+                        "group2": true,
+                        "power": "strong"
+                    }
+                }
+            ]
+        }"#;
+    let json = Cell::from(json).be("json");
+    // pprint::pprint(&json, 0, 0);
+    let hosts = json.sub().get("hosts").sub();
+    assert_eq!(hosts.len()?, 2);
+    let host1 = hosts.at(0);
+    let host2 = hosts.at(1);
+    let power1 = host1.sub().get("labels").sub().get("power");
+    let power2 = host2.sub().get("labels").sub().get("power");
+    let group2 = host2.sub().get("labels").sub().get("group2");
+    assert_eq!(power1.read().value()?, Value::Str("weak"));
+    assert_eq!(power2.read().value()?, Value::Str("strong"));
+    assert_eq!(group2.read().value()?, Value::Bool(true));
+    Ok(())
+}
 
 #[test]
 fn mutate_json() -> Res<()> {
@@ -45,7 +81,7 @@ fn mutate_json() -> Res<()> {
 }
 
 #[test]
-fn mutate_and_write_json() -> Res<()> {
+fn json_save() -> Res<()> {
     let treestring = r#"{
         "hosts": [
             {
@@ -88,5 +124,32 @@ fn mutate_and_write_json() -> Res<()> {
         r#"{"hosts":[{"host_id":null,"dummy":true},{"host_id":"1h51","labels":{"group2":true,"power":"weak as putty"}}]}"#
     );
 
+    Ok(())
+}
+
+#[test]
+fn json_path() -> Res<()> {
+    let treestring = r#"{
+        "hosts": [
+            {
+                "host_id": "1h48",
+                "dummy": true
+            },
+                {
+                        "host_id": "1h51",
+                        "labels": {
+                                "group2": true,
+                                "power": "strong"
+                        }
+                }
+        ]
+}"#
+    .replace([' ', '\t', '\n'], "");
+    let json = Cell::from(treestring).be("json");
+    let path = "/hosts/[1]/labels/power";
+    assert_eq!(
+        json.to(path).err()?.path()?,
+        r#"`{"hosts":[{"host...`^json"#.to_string() + path,
+    );
     Ok(())
 }

@@ -1,7 +1,7 @@
 use crate::{base::*, utils::log::set_verbose};
 
 #[test]
-fn simple_path() -> Res<()> {
+fn test_simple_path() -> Res<()> {
     const TREE: &str = r#"
             a:
               x: xa
@@ -10,8 +10,6 @@ fn simple_path() -> Res<()> {
                 c:
                     x: xc
                     y: yc
-            m: mval
-            n: nval
         "#;
     let root = Cell::from(TREE).be("yaml");
     let x = root.to("/a/b/c/x");
@@ -20,7 +18,7 @@ fn simple_path() -> Res<()> {
 }
 
 #[test]
-fn test_multihop_trace() -> Res<()> {
+fn test_multihop_path() -> Res<()> {
     set_verbose(true);
 
     let start = Cell::from("http://api.github.com");

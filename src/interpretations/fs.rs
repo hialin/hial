@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::collections::HashMap;
+use std::cell::OnceCell;
 use std::{
     cmp::Ordering,
     ffi::OsString,
@@ -10,7 +10,6 @@ use std::{
 
 use linkme::distributed_slice;
 
-use crate::debug;
 use crate::{
     base::{Cell as XCell, *},
     guard_ok, guard_some,
@@ -28,9 +27,7 @@ pub struct Domain(Rc<DomainData>);
 
 #[derive(Debug)]
 pub struct DomainData {
-    file_map: HashMap<PathBuf, Rc<Vec<Res<FileEntry>>>>,
     root_path: PathBuf,
-    root_pos: u32,
     origin: Option<XCell>,
 }
 
@@ -44,17 +41,27 @@ pub struct Cell {
 pub struct Group {
     domain: Domain,
     files: Rc<Vec<Res<FileEntry>>>,
-    attribute_group_file_pos: u32,
+    ty: GroupType,
+}
+
+#[derive(Clone, Debug)]
+pub enum GroupType {
+    Folder,
+    FileAttributes(u32),
 }
 
 #[derive(Debug)]
 pub struct CellReader {
     group: Group,
     pos: u32,
+    cached_value: OnceCell<String>,
 }
 
 #[derive(Debug)]
-pub struct CellWriter {}
+pub struct CellWriter {
+    group: Group,
+    pos: u32,
+}
 
 #[derive(Clone, Debug)]
 struct FileEntry {
@@ -79,19 +86,12 @@ impl DomainTrait for Domain {
     }
 
     fn root(&self) -> Res<Self::Cell> {
-        let files = guard_some!(self.0.file_map.get(self.0.root_path.as_path()), {
-            return fault("initial path not found");
-        })
-        .clone();
         let group = Group {
             domain: self.clone(),
-            files,
-            attribute_group_file_pos: u32::MAX,
+            files: Rc::new(vec![read_file(&self.0.root_path)]),
+            ty: GroupType::Folder,
         };
-        Ok(Cell {
-            group,
-            pos: self.0.root_pos,
-        })
+        Ok(Cell { group, pos: 0 })
     }
 
     fn origin(&self) -> Res<XCell> {
@@ -112,38 +112,121 @@ impl CellReaderTrait for CellReader {
     }
 
     fn label(&self) -> Res<Value> {
-        if self.group.attribute_group_file_pos == u32::MAX {
-            let fileentry =
-                guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
-            let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
-            Ok(Value::Str(md.name.as_str()))
-        } else if self.pos == 0 {
-            Ok(Value::Str("size"))
-        } else {
-            fault("invalid attribute index")
+        match self.group.ty {
+            GroupType::Folder => {
+                let fileentry = guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
+                let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
+                Ok(Value::Str(md.name.as_str()))
+            }
+            GroupType::FileAttributes(_) => {
+                if self.pos != 0 {
+                    return fault("invalid attribute index");
+                }
+                Ok(Value::Str("size"))
+            }
         }
     }
 
     fn value(&self) -> Res<Value> {
-        let fpos = if self.group.attribute_group_file_pos == u32::MAX {
-            self.pos
-        } else {
-            self.group.attribute_group_file_pos
-        };
-        let fileentry =
-            guard_ok!(&self.group.files[fpos as usize], err => {return Err(err.clone())});
-        let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
-        if self.group.attribute_group_file_pos == u32::MAX {
-            Ok(Value::Str(md.name.as_str()))
-        } else if self.pos == 0 {
-            Ok(Value::Int(Int::U64(md.filesize)))
-        } else {
-            fault("invalid attribute index")
+        match self.group.ty {
+            GroupType::Folder => {
+                let fileentry = guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
+                let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
+                if md.is_dir {
+                    return nores();
+                }
+                if self.cached_value.get().is_none() {
+                    // TODO: reading file value should return bytes, not string
+                    let content = std::fs::read_to_string(&fileentry.path).map_err(|e| {
+                        caused(
+                            HErrKind::IO,
+                            format!("cannot read file: {:?}", fileentry.path),
+                            e,
+                        )
+                    })?;
+                    self.cached_value
+                        .set(content)
+                        .map_err(|_| faulterr("cannot set cached value, it is already set"))?;
+                }
+                Ok(Value::Str(self.cached_value.get().unwrap()))
+            }
+            GroupType::FileAttributes(fpos) => {
+                let fileentry =
+                    guard_ok!(&self.group.files[fpos as usize], err => {return Err(err.clone())});
+                let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
+                if self.pos != 0 {
+                    return fault("invalid attribute index");
+                }
+                Ok(Value::Int(Int::U64(md.filesize)))
+            }
         }
     }
 }
 
-impl CellWriterTrait for CellWriter {}
+impl CellWriterTrait for CellWriter {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+        let string_value = value.to_string();
+        match self.group.ty {
+            GroupType::Folder => {
+                let fileentry = guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
+                let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
+                if md.is_dir {
+                    return fault("cannot write to a directory");
+                }
+                std::fs::write(&fileentry.path, string_value).map_err(|e| {
+                    caused(
+                        HErrKind::IO,
+                        format!("cannot write to file: {:?}", fileentry.path),
+                        e,
+                    )
+                })
+            }
+            GroupType::FileAttributes(fpos) => {
+                let fileentry =
+                    guard_ok!(&self.group.files[fpos as usize], err => {return Err(err.clone())});
+                let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
+                if self.pos != 0 {
+                    return fault("invalid attribute index");
+                }
+                let new_len = guard_some!(value.as_value().as_i128(), {
+                    return userr("new file size must be an integer");
+                });
+                if new_len < 0 {
+                    return userr("new file size must be positive");
+                }
+                if new_len > u64::MAX as i128 {
+                    return userr("new file size must be smaller than 2^64");
+                }
+
+                let file = std::fs::File::options()
+                    .write(true)
+                    .open(&fileentry.path)
+                    .map_err(|e| {
+                        caused(
+                            HErrKind::IO,
+                            format!("cannot open file for writing: {:?}", fileentry.path),
+                            e,
+                        )
+                    })?;
+                file.set_len(new_len as u64).map_err(|e| {
+                    caused(
+                        HErrKind::IO,
+                        format!("cannot set file length: {:?}", fileentry.path),
+                        e,
+                    )
+                })
+            }
+        }
+    }
+
+    fn set_label(&mut self, value: OwnValue) -> Res<()> {
+        todo!() // add implementation
+    }
+
+    fn delete(&mut self) -> Res<()> {
+        todo!() // add implementation
+    }
+}
 
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
@@ -169,7 +252,9 @@ impl Cell {
     }
 
     pub fn as_path(&self) -> Res<&Path> {
-        get_path(self)
+        let fileentry =
+            guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
+        Ok(fileentry.path.as_path())
     }
 }
 
@@ -184,15 +269,19 @@ impl CellTrait for Cell {
     }
 
     fn ty(&self) -> Res<&str> {
-        if self.group.attribute_group_file_pos == u32::MAX {
-            let fileentry =
-                guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
-            let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
-            Ok(if md.is_dir { "dir" } else { "file" })
-        } else if self.pos == 0 {
-            Ok("attribute")
-        } else {
-            fault("invalid attribute index")
+        match self.group.ty {
+            GroupType::Folder => {
+                let fileentry = guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
+                let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
+                Ok(if md.is_dir { "dir" } else { "file" })
+            }
+            GroupType::FileAttributes(_) => {
+                if self.pos == 0 {
+                    Ok("attribute")
+                } else {
+                    fault("invalid attribute index")
+                }
+            }
         }
     }
 
@@ -200,53 +289,85 @@ impl CellTrait for Cell {
         Ok(CellReader {
             group: self.group.clone(),
             pos: self.pos,
+            cached_value: OnceCell::new(),
         })
     }
 
     fn write(&self) -> Res<Self::CellWriter> {
-        Ok(CellWriter {})
+        Ok(CellWriter {
+            group: self.group.clone(),
+            pos: self.pos,
+        })
     }
 
     fn sub(&self) -> Res<Group> {
-        if self.group.attribute_group_file_pos == u32::MAX {
-            let fileentry =
-                guard_ok!(&self.group.files[self.pos  as usize], err => {return Err(err.clone())});
-            let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
-            if !md.is_dir {
-                return nores();
+        match self.group.ty {
+            GroupType::Folder => {
+                let fileentry = guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
+                let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
+                if !md.is_dir {
+                    return nores();
+                }
+                let files = read_files(&fileentry.path)?;
+                Ok(Group {
+                    domain: self.group.domain.clone(),
+                    files: Rc::new(files),
+                    ty: GroupType::Folder,
+                })
             }
-            let mut siblings = vec![];
-            read_files(&fileentry.path, &mut siblings)?;
-            Ok(Group {
-                domain: self.group.domain.clone(),
-                files: Rc::new(siblings),
-                attribute_group_file_pos: u32::MAX,
-            })
-        } else {
-            nores()
+            GroupType::FileAttributes(_) => nores(),
         }
     }
 
     fn attr(&self) -> Res<Group> {
-        if self.group.attribute_group_file_pos == u32::MAX {
-            let fileentry =
-                guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
-            let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
-            if md.is_dir {
-                return nores();
+        match self.group.ty {
+            GroupType::Folder => {
+                let fileentry = guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
+                let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
+                if md.is_dir {
+                    return nores();
+                }
+                Ok(Group {
+                    domain: self.group.domain.clone(),
+                    files: self.group.files.clone(),
+                    ty: GroupType::FileAttributes(self.pos),
+                })
             }
-            Ok(Group {
-                domain: self.group.domain.clone(),
-                files: self.group.files.clone(),
-                attribute_group_file_pos: self.pos,
-            })
-        } else {
-            nores()
+            GroupType::FileAttributes(_) => nores(),
         }
     }
 
     fn head(&self) -> Res<(Self, Relation)> {
-        todo!()
+        match self.group.ty {
+            GroupType::Folder => {
+                let fileentry = guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
+                let md = guard_ok!(&fileentry.metadata, err => {return Err(err.clone())});
+                let parent = guard_some!(fileentry.path.parent(), {
+                    return nores();
+                });
+                if parent.as_os_str().is_empty() {
+                    return nores();
+                }
+                let f = read_file(parent)?;
+                let cell = Cell {
+                    group: Group {
+                        domain: self.group.domain.clone(),
+                        files: Rc::new(vec![read_file(parent)]),
+                        ty: GroupType::Folder,
+                    },
+                    pos: 0,
+                };
+                println!("return : {:?}", cell);
+                Ok((cell, Relation::Sub))
+            }
+            GroupType::FileAttributes(fpos) => {
+                let mut group = self.group.clone();
+                group.ty = GroupType::Folder;
+                let cell = Cell { group, pos: fpos };
+                println!("return : {:?}", cell);
+                Ok((cell, Relation::Attr))
+            }
+        }
     }
 }
 
@@ -262,114 +383,96 @@ impl GroupTrait for Group {
     }
 
     fn len(&self) -> Res<usize> {
-        if self.attribute_group_file_pos == u32::MAX {
-            Ok(self.files.len())
-        } else {
-            Ok(1)
+        match self.ty {
+            GroupType::Folder => Ok(self.files.len()),
+            GroupType::FileAttributes(_) => Ok(1),
         }
     }
 
     fn at(&self, index: usize) -> Res<Cell> {
-        if self.attribute_group_file_pos == u32::MAX {
-            if index < self.files.len() {
-                Ok(Cell {
-                    group: self.clone(),
-                    pos: index as u32,
-                })
-            } else {
-                nores()
+        match self.ty {
+            GroupType::Folder => {
+                if index < self.files.len() {
+                    Ok(Cell {
+                        group: self.clone(),
+                        pos: index as u32,
+                    })
+                } else {
+                    nores()
+                }
             }
-        } else if index < 1 {
-            Ok(Cell {
-                group: self.clone(),
-                pos: index as u32,
-            })
-        } else {
-            nores()
+            GroupType::FileAttributes(_) => {
+                if index == 0 {
+                    Ok(Cell {
+                        group: self.clone(),
+                        pos: 0,
+                    })
+                } else {
+                    nores()
+                }
+            }
         }
     }
 
     fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, key: S) -> Res<Cell> {
         let key = key.into();
         // verbose!("get by key: {};   group.kind = {:?}", key, self.kind);
-        if self.attribute_group_file_pos == u32::MAX {
-            for (pos, f) in self.files.iter().enumerate() {
-                let fileentry = guard_ok!(f, err => {continue});
-                let md = guard_ok!(&fileentry.metadata, err => {continue});
-                if key == md.name.as_str() {
-                    return Ok(Cell {
+        match self.ty {
+            GroupType::Folder => {
+                for (pos, f) in self.files.iter().enumerate() {
+                    let fileentry = guard_ok!(f, err => {continue});
+                    let md = guard_ok!(&fileentry.metadata, err => {continue});
+                    if key == md.name.as_str() {
+                        return Ok(Cell {
+                            group: self.clone(),
+                            pos: pos as u32,
+                        });
+                    }
+                }
+                nores()
+            }
+            GroupType::FileAttributes(_) => {
+                if key == "size" {
+                    Ok(Cell {
                         group: self.clone(),
-                        pos: pos as u32,
-                    });
+                        pos: 0,
+                    })
+                } else {
+                    nores()
                 }
             }
-            nores()
-        } else if key == "size" {
-            Ok(Cell {
-                group: self.clone(),
-                pos: 0,
-            })
-        } else {
-            nores()
         }
     }
 }
 
 fn from_path(path: &Path, origin: Option<XCell>) -> Res<Domain> {
-    let path = path
-        .canonicalize()
-        .map_err(|e| caused(HErrKind::IO, "cannot canonicalize path", e))?;
-    if !path.exists() {
-        debug!("fs: path {:?} does not exist", path);
-        return nores();
-    }
-
-    let mut siblings = vec![];
-    let mut pos = 0;
-    if let Some(parent) = path.clone().parent() {
-        read_files(parent, &mut siblings)?;
-        let pos_res = siblings
-            .iter()
-            .position(|f| f.is_ok() && f.as_ref().unwrap().path == path);
-        pos = match pos_res {
-            Some(pos) => pos,
-            None => return nores(),
-        };
-    } else {
-        let os_name = path
-            .file_name()
-            .map(|x| x.to_os_string())
-            .unwrap_or(OsString::new());
-        let metadata = fs::metadata(path.clone())
-            .map(|xmd| Metadata {
-                name: os_name.to_string_lossy().to_string(),
-                os_name,
-                filesize: xmd.len(),
-                is_dir: xmd.is_dir(),
-                is_link: xmd.file_type().is_symlink(),
-            })
-            .map_err(|e| caused(HErrKind::IO, "cannot query file metadata", e));
-        siblings.push(Ok(FileEntry {
-            path: path.clone(),
-            metadata,
-        }));
-    }
-    let roots = Rc::new(siblings);
     Ok(Domain(Rc::new(DomainData {
-        file_map: HashMap::from([(path.clone(), roots.clone())]),
-        root_pos: pos as u32,
-        root_path: path,
+        root_path: path.to_path_buf(),
         origin,
     })))
 }
 
-fn get_path(file: &Cell) -> Res<&Path> {
-    let fileentry =
-        guard_ok!(&file.group.files[file.pos as usize], err => {return Err(err.clone())});
-    Ok(fileentry.path.as_path())
+fn read_file(path: &Path) -> Res<FileEntry> {
+    let os_name = path
+        .file_name()
+        .map(|x| x.to_os_string())
+        .unwrap_or_default();
+    let metadata = fs::metadata(path)
+        .map(|xmd| Metadata {
+            name: os_name.to_string_lossy().to_string(),
+            os_name,
+            filesize: xmd.len(),
+            is_dir: xmd.is_dir(),
+            is_link: xmd.file_type().is_symlink(),
+        })
+        .map_err(|e| caused(HErrKind::IO, "cannot query file metadata", e));
+    Ok(FileEntry {
+        path: path.to_path_buf(),
+        metadata,
+    })
 }
 
-fn read_files(path: &Path, entries: &mut Vec<Res<FileEntry>>) -> Res<()> {
+fn read_files(parent_path: &Path) -> Res<Vec<Res<FileEntry>>> {
     fn custom_metadata(direntry: &fs::DirEntry, md: &fs::Metadata) -> Metadata {
         let is_link = md.file_type().is_symlink();
         let is_dir = {
@@ -393,10 +496,11 @@ fn read_files(path: &Path, entries: &mut Vec<Res<FileEntry>>) -> Res<()> {
     }
 
     // debug!("fs: read children of {:?}", path);
-    let files_iterator = std::fs::read_dir(path).map_err(|e| {
+    let mut entries: Vec<Res<FileEntry>> = vec![];
+    let files_iterator = std::fs::read_dir(parent_path).map_err(|e| {
         caused(
             HErrKind::IO,
-            format!("cannot read dir: {}", path.to_string_lossy()),
+            format!("cannot read dir: {}", parent_path.to_string_lossy()),
             e,
         )
     })?;
@@ -434,5 +538,5 @@ fn read_files(path: &Path, entries: &mut Vec<Res<FileEntry>>) -> Res<()> {
         (Err(_), Ok(_)) => Ordering::Greater,
         (Err(e1), Err(e2)) => format!("{:?}", e1).cmp(&format!("{:?}", e2)),
     });
-    Ok(())
+    Ok(entries)
 }

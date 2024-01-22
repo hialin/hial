@@ -9,9 +9,9 @@
     - later: python, git, database, ical, zip, markdown
     - later: separate api module, used by ffi and dependent crates
 
-- add #flat as Field option (tree serialization)
-- rename XCell -> Nex, Cell -> Inex, CellTrait -> InexTrait
+- fix the fs interpretation, fix fs tests
 - **for each interpretation**: test path, implement cell head
+- add #flat as Field option (tree serialization)
 - implement policy(): set on cells and propagated, not set by interpretations
 - explicit domain save/write: to origin, to new domain
 - write policies on domain (interpretation):
@@ -30,6 +30,7 @@
 - ?explore python implementation and usage
 - ?search should return all matches embedded in a delegation cell, which has all results
     as subs and delegates write operations to all the subs
+- ?rename XCell -> Nex, Cell -> Inex, CellTrait -> InexTrait
 
 
 ### Feature implementation status

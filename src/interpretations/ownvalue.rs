@@ -68,7 +68,7 @@ impl CellWriterTrait for CellWriter {
     }
 }
 
-impl<'a> CellTrait for Cell {
+impl CellTrait for Cell {
     type Domain = Cell;
     type Group = VoidGroup<Self>;
     type CellReader = CellReader;

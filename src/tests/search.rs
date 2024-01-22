@@ -4,8 +4,6 @@ use crate::{
     utils::log::set_verbose,
 };
 
-use super::utils::*;
-
 #[test]
 fn path_simple_item() -> Res<()> {
     let path = Path::parse("/a[2]")?;
@@ -82,7 +80,7 @@ fn path_items() -> Res<()> {
 }
 
 #[test]
-fn path_simple_search() -> Res<()> {
+fn search_simple_search() -> Res<()> {
     const TREE: &str = r#"
             a:
               x: xa
@@ -109,7 +107,7 @@ fn path_simple_search() -> Res<()> {
 }
 
 #[test]
-fn path_simple_search_with_index() -> Res<()> {
+fn search_simple_search_with_index() -> Res<()> {
     const TREE: &str = r#"
     <test>
         <a>
@@ -138,7 +136,7 @@ fn path_simple_search_with_index() -> Res<()> {
 }
 
 #[test]
-fn path_kleene() -> Res<()> {
+fn search_kleene() -> Res<()> {
     const TREE: &str = r#"
             a:
               x: xa
@@ -172,7 +170,7 @@ fn path_kleene() -> Res<()> {
 }
 
 #[test]
-fn path_filter() -> Res<()> {
+fn search_filter() -> Res<()> {
     const TREE: &str = r#"
             a:
               x: xa
@@ -195,7 +193,7 @@ fn path_filter() -> Res<()> {
 }
 
 #[test]
-fn path_double_kleene_simple() -> Res<()> {
+fn search_double_kleene_simple() -> Res<()> {
     const TREE_SIMPLE: &str = r#"
             a:
               x: xval
@@ -216,7 +214,7 @@ fn path_double_kleene_simple() -> Res<()> {
 }
 
 #[test]
-fn path_double_kleene() -> Res<()> {
+fn search_double_kleene() -> Res<()> {
     const TREE: &str = r#"
             a:
               x: xa
@@ -250,7 +248,7 @@ fn path_double_kleene() -> Res<()> {
 }
 
 #[test]
-fn path_double_kleene_top_filter() -> Res<()> {
+fn search_double_kleene_top_filter() -> Res<()> {
     const TREE: &str = r#"
             a:
               x: xa
@@ -275,7 +273,7 @@ fn path_double_kleene_top_filter() -> Res<()> {
 }
 
 #[test]
-fn path_double_kleene_deep_filter() -> Res<()> {
+fn search_double_kleene_deep_filter() -> Res<()> {
     const TREE: &str = r#"
             a:
               x: xa
@@ -299,7 +297,7 @@ fn path_double_kleene_deep_filter() -> Res<()> {
 }
 
 #[test]
-fn path_double_kleene_all() -> Res<()> {
+fn search_double_kleene_all() -> Res<()> {
     set_verbose(true);
     const TREE: &str = r#"
             a:
@@ -329,7 +327,7 @@ fn path_double_kleene_all() -> Res<()> {
 }
 
 #[test]
-fn path_double_kleene_labels_json() -> Res<()> {
+fn search_double_kleene_labels_json() -> Res<()> {
     set_verbose(true);
     const TREE: &str = r#"{
         "a": {
@@ -360,7 +358,7 @@ fn path_double_kleene_labels_json() -> Res<()> {
 }
 
 #[test]
-fn path_double_kleene_labels_yaml() -> Res<()> {
+fn search_double_kleene_labels_yaml() -> Res<()> {
     set_verbose(true);
     const TREE: &str = r#"
         a:
@@ -388,7 +386,7 @@ fn path_double_kleene_labels_yaml() -> Res<()> {
 }
 
 #[test]
-fn path_double_kleene_repeat() -> Res<()> {
+fn search_double_kleene_repeat() -> Res<()> {
     const TREE: &str = r#"
             a:
               x: xa
@@ -416,7 +414,7 @@ fn path_double_kleene_repeat() -> Res<()> {
 }
 
 #[test]
-fn path_double_kleene_with_filter() -> Res<()> {
+fn search_double_kleene_with_filter() -> Res<()> {
     const TREE: &str = r#"
         dir1:
             f1:
@@ -437,4 +435,24 @@ fn path_double_kleene_with_filter() -> Res<()> {
     // assert_eq!(eval, ["f1:", "f2:"]);
 
     Ok(())
+}
+
+pub fn str_eval(root: Cell, path: &str) -> Res<Vec<String>> {
+    root.search(path)?
+        .all()?
+        .into_iter()
+        .map(|cell| -> Res<String> {
+            // if let Ok(ref cell) = cres {
+            //     if let Ok(path) = cell.path() {
+            //         println!("--> found path: {}", path);
+            //     }
+            // }
+            Ok(cell.err()?.debug_string())
+        })
+        .collect::<Res<Vec<_>>>()
+}
+
+pub fn pr<T: std::fmt::Debug>(x: T) -> T {
+    // println!("\npr: {:?}", x);
+    x
 }

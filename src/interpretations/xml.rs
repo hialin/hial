@@ -7,7 +7,7 @@ use quick_xml::{events::Event, Error as XmlError, Reader};
 
 use crate::{
     base::{Cell as XCell, *},
-    debug,
+    debug, guard_variant,
 };
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
@@ -92,7 +92,7 @@ enum Node {
     Decl(Rc<Vec<Attribute>>), // version, encoding, standalone
     DocType(String),
     PI(String),
-    Element((String, Rc<Vec<Attribute>>, Rc<Vec<Node>>)),
+    Element((String, Rc<Vec<Attribute>>, String, Rc<Vec<Node>>)),
     Text(String),
     Comment(String),
     CData(Vec<u8>),
@@ -281,7 +281,14 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 a.shrink_to_fit();
                 counts.count_attributes += a.len();
                 let name = decoder.decode(e.name().0)?;
-                let element = Node::Element((name.into(), Rc::new(a), Rc::new(v)));
+                let mut text = String::new();
+                if let Some(Node::Text(t)) = v.first() {
+                    if !t.trim().is_empty() {
+                        // TODO: use a deque to avoid shifting elements on remove
+                        text = guard_variant!(v.remove(0), Node::Text).unwrap();
+                    }
+                }
+                let element = Node::Element((name.into(), Rc::new(a), text, Rc::new(v)));
                 stack
                     .last_mut()
                     .ok_or_else(|| faulterr("no element in stack"))?
@@ -320,7 +327,7 @@ impl CellReaderTrait for CellReader {
     fn label(&self) -> Res<Value> {
         match &self.group.nodes {
             NodeGroup::Node(group) => match &group.0[self.pos] {
-                Node::Element((x, _, _)) => Ok(Value::Str(x.as_str())),
+                Node::Element((x, _, _, _)) => Ok(Value::Str(x.as_str())),
                 Node::Decl(_) => Ok(Value::Str("xml")),
                 Node::DocType(x) => Ok(Value::Str("DOCTYPE")),
                 x => nores(),
@@ -339,7 +346,9 @@ impl CellReaderTrait for CellReader {
                 Node::Decl(_) => nores(),
                 Node::DocType(x) => Ok(Value::Str(x.trim())),
                 Node::PI(x) => Ok(Value::Str(x)),
-                Node::Element((x, _, _)) => Ok(Value::Str(x)),
+                Node::Element((_, _, text, _)) => {
+                    return Ok(Value::Str(text.as_str()));
+                }
                 Node::Text(x) => Ok(Value::Str(x)),
                 Node::Comment(x) => Ok(Value::Str(x)),
                 Node::CData(x) => Ok(Value::Bytes(x.as_slice())),
@@ -398,7 +407,7 @@ impl CellTrait for Cell {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Node(NodeList(x.clone())),
                 }),
-                Node::Element((_, _, x)) => Ok(Group {
+                Node::Element((_, _, _, x)) => Ok(Group {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Node(NodeList(x.clone())),
                 }),
@@ -415,7 +424,7 @@ impl CellTrait for Cell {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Attr(AttrList(x.clone())),
                 }),
-                Node::Element((_, x, _)) => Ok(Group {
+                Node::Element((_, x, _, _)) => Ok(Group {
                     domain: self.group.domain.clone(),
                     nodes: NodeGroup::Attr(AttrList(x.clone())),
                 }),
