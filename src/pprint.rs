@@ -84,6 +84,33 @@ fn make_indent(indent: usize, buffer: &mut String) -> Result<(), Error> {
     Ok(())
 }
 
+fn print_value(buffer: &mut String, indent: usize, s: &str) -> Result<(), Error> {
+    use std::fmt::Write;
+    if !s.contains('\n') {
+        return write!(buffer, "{}", s);
+    }
+
+    let mut pre = String::new();
+    {
+        while pre.len() < SPACE_TO_SEPARATOR {
+            pre.push(' ');
+        }
+        pre.push('│');
+        while pre.len() < SPACE_TO_SEPARATOR + indent + 5 {
+            pre.push(' ');
+        }
+        pre.push_str("❝ ");
+    }
+
+    for l in s.split('\n') {
+        write!(buffer, "\n{}{}", pre, l)?;
+    }
+    if buffer.ends_with("\n\n") {
+        buffer.pop(); // remove last '\n'
+    }
+    Ok(())
+}
+
 fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> Result<(), Error> {
     use std::fmt::Write;
 
@@ -129,7 +156,7 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
                     if empty {
                         empty = v.is_empty();
                     }
-                    write!(buffer, "{}", v)
+                    print_value(buffer, indent, v.as_cow_str().as_ref())
                 }
                 Err(err) => {
                     if err.kind == HErrKind::None {

@@ -8,7 +8,7 @@ use crate::{
     pathlang::Path,
 };
 
-const MAX_PATH_ITEMS: usize = 100;
+const MAX_PATH_ITEMS: usize = 1000;
 
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
@@ -73,7 +73,7 @@ enumerated_dynamic_type! {
         Url(url::CellReader),
         Path(path::CellReader),
         Http(http::CellReader),
-        TreeSitter(treesitter::CellReader),
+        TreeSitter(treesitter::Cell),
     }
 }
 
@@ -94,7 +94,7 @@ enumerated_dynamic_type! {
         Url(url::CellWriter),
         Path(path::CellWriter),
         Http(http::CellWriter),
-        TreeSitter(treesitter::CellWriter),
+        TreeSitter(treesitter::Cell),
     }
 }
 
@@ -115,7 +115,7 @@ enumerated_dynamic_type! {
         Url(VoidGroup<url::Cell>),
         Path(VoidGroup<path::Cell>),
         Http(http::Group),
-        TreeSitter(treesitter::Group),
+        TreeSitter(treesitter::Cell),
     }
 }
 

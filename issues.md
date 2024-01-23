@@ -9,7 +9,6 @@
     - later: python, git, database, ical, zip, markdown
     - later: separate api module, used by ffi and dependent crates
 
-- fix the fs interpretation, fix fs tests
 - **for each interpretation**: test path, implement cell head
 - add #flat as Field option (tree serialization)
 - implement policy(): set on cells and propagated, not set by interpretations

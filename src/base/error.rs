@@ -309,12 +309,25 @@ impl GroupTrait for HErr {
 }
 
 pub(crate) fn capture_stack_trace() -> Box<[String]> {
-    let v = format!("{}", std::backtrace::Backtrace::capture())
-        .split('\n')
-        .filter(|s| s.contains("hiallib::") || s.contains("./src"))
-        .fold(Vec::new(), |mut acc, s| {
-            acc.push(s.to_string());
-            acc
-        });
-    v.into_boxed_slice()
+    let backtrace = format!("{}", std::backtrace::Backtrace::capture());
+    let mut frames = vec![];
+    for l in backtrace.split('\n') {
+        let l = l.trim();
+        if !l.starts_with("at ") {
+            frames.push((l, String::new()));
+        } else {
+            frames.last_mut().unwrap().1 = l.to_string();
+        }
+    }
+
+    let accepted: Vec<String> = frames
+        .iter()
+        .filter(|(func, point)| !func.contains("error::capture_stack_trace"))
+        .filter(|(func, point)| !func.contains(" core::"))
+        .filter(|(func, point)| !func.contains(" std::"))
+        .filter(|(func, point)| !func.contains(" test::"))
+        .filter(|(func, point)| !func.contains("_pthread_"))
+        .map(|(func, point)| format!("\t{}        {}", func, point))
+        .collect();
+    accepted.into_boxed_slice()
 }

@@ -1,14 +1,13 @@
-use std::{ops::Range, path::Path, rc::Rc};
+use core::fmt;
+use std::{cell::OnceCell, fmt::Debug, path::Path, rc::Rc};
 
 use linkme::distributed_slice;
 use tree_sitter::{Parser, Tree, TreeCursor};
 
 use crate::{
-    base::{Cell as XCell, *},
-    *,
+    base::Cell as XCell, base::*, debug, guard_ok, guard_some, tree_sitter_javascript,
+    tree_sitter_rust,
 };
-
-use self::utils::ownrc::{OwnRc, ReadRc, WriteRc};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_RUST: ElevationConstructor = ElevationConstructor {
@@ -16,6 +15,10 @@ static VALUE_TO_RUST: ElevationConstructor = ElevationConstructor {
     target_interpretations: &["rust", "javascript"],
     constructor: Cell::from_cell,
 };
+
+// TODO: rewrite treesitter interpretation as a thin wrapper around a treesitter cursor
+// will have to solve the lifetime problem (cursor has a lifetime tied to the tree)
+// which is not allowed by the current interpretation traits
 
 #[derive(Clone, Debug)]
 pub struct Domain(Rc<DomainData>);
@@ -28,6 +31,10 @@ pub struct DomainData {
     origin: Option<XCell>,
 }
 
+pub unsafe fn change_lifetime<'old, 'new: 'old, T: 'new>(data: &'old T) -> &'new T {
+    &*(data as *const _)
+}
+
 impl DomainTrait for Domain {
     type Cell = Cell;
 
@@ -36,13 +43,14 @@ impl DomainTrait for Domain {
     }
 
     fn root(&self) -> Res<Self::Cell> {
-        let cnode = node_to_cnode(self.0.tree.walk(), &self.0.source);
-
-        let group = Group {
+        let cursor = self.0.tree.walk();
+        Ok(Cell {
             domain: self.clone(),
-            nodes: OwnRc::new(vec![cnode]),
-        };
-        Ok(Cell { group, pos: 0 })
+            // TODO: unsafe change of lifetime to 'static
+            // should be safe as long as the tree is in Rc and not modified
+            cursor: unsafe { std::mem::transmute(cursor) },
+            value: OnceCell::new(),
+        })
     }
 
     fn origin(&self) -> Res<XCell> {
@@ -54,39 +62,23 @@ impl SaveTrait for Domain {
     // TODO: add implementation
 }
 
-#[derive(Clone, Debug)]
-pub struct Group {
-    domain: Domain,
-    // since the tree is in a Rc, the treecursor is valid on self's lifetime
-    nodes: OwnRc<Vec<CNode>>,
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Cell {
-    group: Group,
-    pos: usize,
+    domain: Domain,
+    // since the tree is in a Rc, the treecursor is valid as long as the cell is valid
+    cursor: TreeCursor<'static>,
+    value: OnceCell<Option<String>>,
 }
 
-#[derive(Debug)]
-pub struct CellReader {
-    nodes: ReadRc<Vec<CNode>>,
-    pos: usize,
-}
-
-#[derive(Debug)]
-pub struct CellWriter {
-    nodes: WriteRc<Vec<CNode>>,
-    pos: usize,
-}
-impl CellWriterTrait for CellWriter {}
-
-#[derive(Clone, Debug)]
-pub struct CNode {
-    typ: &'static str,
-    value: Option<String>,
-    subs: OwnRc<Vec<CNode>>,
-    src: Range<usize>,
-    head: Option<OwnRc<Vec<CNode>>>,
+impl fmt::Debug for Cell {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Cell({:?}, {:?})",
+            self.domain.interpretation(),
+            self.cursor.node().kind()
+        )
+    }
 }
 
 impl Cell {
@@ -121,18 +113,6 @@ impl Cell {
         Ok(XCell {
             dyn_cell: DynCell::from(domain.root()?),
         })
-    }
-
-    pub fn get_underlying_string(cell: &Cell) -> Res<&str> {
-        let reader = cell
-            .group
-            .nodes
-            .read()
-            .ok_or_else(|| lockerr("cannot read nodes"))?;
-        let cnode = guard_some!(reader.get(cell.pos), {
-            return fault("bad pos in rust cell");
-        });
-        Ok(&cell.group.domain.0.source[cnode.src.clone()])
     }
 }
 
@@ -178,211 +158,88 @@ fn sitter_from_source(source: String, language: String, origin: Option<XCell>) -
     })))
 }
 
-fn node_to_cnode(mut cursor: TreeCursor, source: &str) -> CNode {
-    let node = cursor.node();
-    let src = &source[node.byte_range()];
-
-    // node.kind() is treesiter's structural type, we prefer a more semantic type
-    let typ = cursor.field_name().unwrap_or_else(|| {
-        if node.kind() == src {
-            "literal"
-        } else {
-            node.kind()
-        }
-    });
-
-    let mut value = None;
-    if !node.is_named() || node.child_count() == 0 || typ == "string_literal" {
-        value = Some(src.to_string());
-    }
-
-    let subs_rc = OwnRc::new(vec![]);
-    let mut subs = subs_rc.write().unwrap();
-    if cursor.goto_first_child() && typ != "string_literal" {
-        subs.push(node_to_cnode(cursor.clone(), source));
-        while cursor.goto_next_sibling() {
-            subs.push(node_to_cnode(cursor.clone(), source));
-        }
-    }
-
-    for cn in subs.iter_mut() {
-        cn.head = Some(subs_rc.clone());
-    }
-
-    reshape_subs(&mut value, typ, &mut subs, source);
-
-    CNode {
-        typ,
-        value,
-        subs: subs_rc,
-        src: node.start_byte()..node.end_byte(),
-        head: None,
-    }
-}
-
-fn reshape_subs(value: &mut Option<String>, typ: &str, subs: &mut Vec<CNode>, source: &str) {
-    if subs.len() > 1 {
-        let first = &subs[0];
-        let last = &subs[subs.len() - 1];
-        let first_src = &source[first.src.clone()];
-        let last_src = &source[last.src.clone()];
-        if (first_src, last_src) == ("(", ")")
-            || (first_src, last_src) == ("[", "]")
-            || (first_src, last_src) == ("{", "}")
-            || (first_src, last_src) == ("<", ">")
-        {
-            *value = Some(format!(
-                "{}{}{}",
-                first_src,
-                value.as_deref().unwrap_or(""),
-                last_src
-            ));
-            subs.remove(0);
-            subs.remove(subs.len() - 1);
-        } else if is_empty(value)
-            && first.subs.read().unwrap().is_empty()
-            && !is_empty(&first.value)
-            && typ.starts_with(first.value.as_deref().unwrap_or(""))
-        {
-            *value = subs[0].value.clone();
-            subs.remove(0);
-        }
-
-        let mut new_subs = vec![];
-        for s in subs.drain(..) {
-            if s.value.as_deref() == Some(",")
-                && (value.as_deref() == Some("()")
-                    || value.as_deref() == Some("[]")
-                    || value.as_deref() == Some("{}")
-                    || value.as_deref() == Some("<>"))
-            {
-            } else {
-                new_subs.push(s);
-            }
-        }
-        *subs = new_subs;
-    }
-
-    if subs.len() == 1 && typ == "visibility_modifier" && is_empty(value) {
-        *value = subs.remove(0).value;
-    }
-    if subs.len() > 1
-        && subs[subs.len() - 1].typ.is_empty()
-        && subs[subs.len() - 1].value.as_deref() == Some(";")
-    {
-        subs.remove(subs.len() - 1);
-    }
-}
-
-fn is_empty(v: &Option<String>) -> bool {
-    v.as_ref().map_or(true, |v| v.is_empty())
-}
-
-impl CellReaderTrait for CellReader {
+impl CellReaderTrait for Cell {
     fn index(&self) -> Res<usize> {
-        Ok(self.pos)
+        self.cursor.field_id().map(|i| i as usize).ok_or_else(noerr)
     }
 
     fn label(&self) -> Res<Value> {
         nores()
-        // if let Some(label) = self.group.nodes[self.pos].name {
-        //     Ok(Value::Str(label))
-        // } else {
-        //     nores()
-        // }
     }
 
     fn value(&self) -> Res<Value> {
-        let cnode = &self.nodes[self.pos];
-        cnode
-            .value
-            .as_ref()
-            .map_or_else(nores, |v| Ok(Value::Str(v)))
-    }
-}
-
-impl CellTrait for Cell {
-    type Domain = Domain;
-    type Group = Group;
-    type CellReader = CellReader;
-    type CellWriter = CellWriter;
-
-    fn domain(&self) -> Domain {
-        self.group.domain.clone()
-    }
-
-    fn ty(&self) -> Res<&str> {
-        let r = self
-            .group
-            .nodes
-            .read()
-            .ok_or_else(|| lockerr("cannot read nodes"))?;
-        Ok(r[self.pos].typ)
-    }
-
-    fn read(&self) -> Res<Self::CellReader> {
-        Ok(CellReader {
-            nodes: self
-                .group
-                .nodes
-                .read()
-                .ok_or_else(|| lockerr("cannot read nodes"))?,
-            pos: self.pos,
-        })
-    }
-
-    fn write(&self) -> Res<Self::CellWriter> {
-        Ok(CellWriter {
-            nodes: self
-                .group
-                .nodes
-                .write()
-                .ok_or_else(|| lockerr("cannot write nodes"))?,
-            pos: self.pos,
-        })
-    }
-
-    fn sub(&self) -> Res<Group> {
-        let r = self
-            .group
-            .nodes
-            .read()
-            .ok_or_else(|| lockerr("cannot read nodes"))?;
-        let cnode = r
-            .get(self.pos)
-            .ok_or_else(|| faulterr("bad pos in rust cell"))?;
-        let mut group = self.group.clone();
-        group.nodes = cnode.subs.clone();
-        Ok(group)
-    }
-
-    fn head(&self) -> Res<(Self, Relation)> {
-        let r = self
-            .group
-            .nodes
-            .read()
-            .ok_or_else(|| lockerr("cannot read nodes"))?;
-        let cnode = r
-            .get(self.pos)
-            .ok_or_else(|| faulterr("bad pos in rust cell"))?;
-        if let Some(head) = &cnode.head {
-            Ok((
-                Cell {
-                    group: Group {
-                        domain: self.group.domain.clone(),
-                        nodes: head.clone(),
-                    },
-                    pos: 0,
-                },
-                Relation::Sub,
-            ))
+        if self.value.get().is_none() {
+            let mut opt_value = None;
+            let node = self.cursor.node();
+            if !node.is_named() || node.child_count() == 0 || node.kind() == "string_literal" {
+                opt_value = Some(self.domain().0.source[node.byte_range()].to_string());
+            }
+            self.value
+                .set(opt_value)
+                .map_err(|e| faulterr("cannot set value"))?;
+        }
+        // println!("value: {:?}", self.value.get());
+        if let Some(value) = self.value.get().unwrap() {
+            Ok(Value::Str(value))
         } else {
             nores()
         }
     }
 }
 
-impl GroupTrait for Group {
+impl CellWriterTrait for Cell {}
+
+impl CellTrait for Cell {
+    type Domain = Domain;
+    type Group = Cell;
+    type CellReader = Cell;
+    type CellWriter = Cell;
+
+    fn domain(&self) -> Domain {
+        self.domain.clone()
+    }
+
+    fn ty(&self) -> Res<&str> {
+        let node = self.cursor.node();
+        let typ = self.cursor.field_name().unwrap_or_else(|| {
+            if node.kind() == &self.domain().0.source[node.byte_range()] {
+                "literal"
+            } else {
+                node.kind()
+            }
+        });
+        Ok(typ)
+    }
+
+    fn read(&self) -> Res<Self::CellReader> {
+        Ok(self.clone())
+    }
+
+    fn write(&self) -> Res<Self::CellWriter> {
+        Ok(self.clone())
+    }
+
+    fn sub(&self) -> Res<Cell> {
+        Ok(self.clone())
+    }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        let mut cursor = self.cursor.clone();
+        if !cursor.goto_parent() {
+            return nores();
+        }
+        Ok((
+            Cell {
+                domain: self.domain.clone(),
+                cursor,
+                value: OnceCell::new(),
+            },
+            Relation::Sub,
+        ))
+    }
+}
+
+impl GroupTrait for Cell {
     type Cell = Cell;
 
     fn label_type(&self) -> LabelType {
@@ -393,33 +250,37 @@ impl GroupTrait for Group {
     }
 
     fn len(&self) -> Res<usize> {
-        self.nodes
-            .read()
-            .ok_or_else(|| lockerr("cannot read nodes"))
-            .map(|v| v.len())
+        Ok(self.cursor.node().child_count())
     }
 
     fn at(&self, index: usize) -> Res<Cell> {
-        if index < self.len()? {
+        let mut cursor = self.cursor.clone();
+        if !cursor.goto_first_child() {
+            return nores();
+        }
+        for _ in 0..index {
+            if !cursor.goto_next_sibling() {
+                return nores();
+            }
+        }
+        // println!("at: {} {}", index, cursor.node().kind());
+        Ok(Cell {
+            domain: self.domain.clone(),
+            cursor,
+            value: OnceCell::new(),
+        })
+    }
+
+    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
+        let key = key.into();
+        if let Some(child_node) = self.cursor.node().child_by_field_name(key.to_string()) {
             Ok(Cell {
-                group: self.clone(),
-                pos: index,
+                domain: self.domain.clone(),
+                cursor: child_node.walk(),
+                value: OnceCell::new(),
             })
         } else {
             nores()
         }
-    }
-
-    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
-        nores()
-        // let key = key.into();
-        // for (i, node) in self.nodes.iter().enumerate() {
-        //     if let Some(name) = node.name {
-        //         if key == name {
-        //             return self.at(i);
-        //         }
-        //     }
-        // }
-        // nores()
     }
 }

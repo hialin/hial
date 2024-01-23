@@ -357,14 +357,12 @@ impl CellTrait for Cell {
                     },
                     pos: 0,
                 };
-                println!("return : {:?}", cell);
                 Ok((cell, Relation::Sub))
             }
             GroupType::FileAttributes(fpos) => {
                 let mut group = self.group.clone();
                 group.ty = GroupType::Folder;
                 let cell = Cell { group, pos: fpos };
-                println!("return : {:?}", cell);
                 Ok((cell, Relation::Attr))
             }
         }
