@@ -209,26 +209,6 @@ impl std::fmt::Debug for HErr {
     }
 }
 
-impl DomainTrait for HErr {
-    type Cell = HErr;
-
-    fn interpretation(&self) -> &str {
-        "error"
-    }
-
-    fn root(&self) -> Res<Self::Cell> {
-        Err(self.clone())
-    }
-
-    fn origin(&self) -> Res<super::extra::Cell> {
-        Err(self.clone())
-    }
-}
-
-impl SaveTrait for HErr {
-    // TODO: add implementation
-}
-
 impl CellReaderTrait for HErr {
     fn value(&self) -> Res<Value> {
         Err(self.clone())
@@ -250,13 +230,12 @@ impl CellWriterTrait for HErr {
 }
 
 impl CellTrait for HErr {
-    type Domain = HErr;
     type Group = HErr;
     type CellReader = HErr;
     type CellWriter = HErr;
 
-    fn domain(&self) -> HErr {
-        self.clone()
+    fn interpretation(&self) -> &str {
+        "error"
     }
 
     fn ty(&self) -> Res<&str> {
@@ -320,14 +299,25 @@ pub(crate) fn capture_stack_trace() -> Box<[String]> {
         }
     }
 
-    let accepted: Vec<String> = frames
+    let accepted: Vec<(String, String)> = frames
         .iter()
         .filter(|(func, point)| !func.contains("error::capture_stack_trace"))
         .filter(|(func, point)| !func.contains(" core::"))
         .filter(|(func, point)| !func.contains(" std::"))
         .filter(|(func, point)| !func.contains(" test::"))
         .filter(|(func, point)| !func.contains("_pthread_"))
-        .map(|(func, point)| format!("\t{}        {}", func, point))
+        .map(|(func, point)| (func.to_string(), point.to_string()))
         .collect();
-    accepted.into_boxed_slice()
+
+    let columns = accepted
+        .iter()
+        .map(|(func, _)| func.len())
+        .max()
+        .unwrap_or(0);
+
+    let lines: Vec<String> = accepted
+        .into_iter()
+        .map(|(func, point)| format!("    {:columns$} {}", func, point, columns = columns))
+        .collect();
+    lines.into_boxed_slice()
 }

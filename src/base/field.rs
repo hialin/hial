@@ -17,41 +17,26 @@ pub enum FieldType {
 #[derive(Clone, Debug)]
 pub struct FieldGroup {
     pub(crate) cell: Rc<Cell>,
-    // copy of original cell's interpretation, need to own it
-    pub(crate) interpretation: String,
 }
 
-impl DomainTrait for FieldGroup {
-    type Cell = FieldCell;
-
-    fn interpretation(&self) -> &str {
-        self.interpretation.as_str()
-    }
-
-    fn root(&self) -> Res<FieldCell> {
-        // cannot be implemented, we cannot return a FieldCell without knowing the type
-        // is patched by extra::Domain which returns the correct root
-        unimplemented!()
-    }
-
-    fn origin(&self) -> Res<super::extra::Cell> {
-        self.cell.domain().origin().err()
-    }
+#[derive(Clone, Debug)]
+pub struct FieldCell {
+    pub(crate) cell: Rc<Cell>,
+    pub(crate) ty: FieldType,
 }
 
-impl SaveTrait for FieldGroup {
-    // we don't use cell_domain.1 because we can't get mut access to it
-    fn write_policy(&self) -> Res<WritePolicy> {
-        self.cell.domain().write_policy()
-    }
+#[derive(Debug)]
+pub struct FieldReader {
+    pub(crate) cell: Rc<Cell>,
+    pub(crate) ty: FieldType,
+    pub(crate) reader: Box<CellReader>,
+}
 
-    fn set_write_policy(&mut self, policy: WritePolicy) -> Res<()> {
-        self.cell.domain().set_write_policy(policy)
-    }
-
-    fn save(&self, target: SaveTarget) -> Res<()> {
-        self.cell.domain().save(target)
-    }
+#[derive(Debug)]
+pub struct FieldWriter {
+    pub(crate) cell: Rc<Cell>,
+    pub(crate) ty: FieldType,
+    pub(crate) writer: Box<CellWriter>,
 }
 
 impl GroupTrait for FieldGroup {
@@ -118,37 +103,13 @@ impl GroupTrait for FieldGroup {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct FieldCell {
-    pub(crate) cell: Rc<Cell>,
-    pub(crate) ty: FieldType,
-}
-
-#[derive(Debug)]
-pub struct FieldReader {
-    pub(crate) cell: Rc<Cell>,
-    pub(crate) ty: FieldType,
-    pub(crate) reader: Box<CellReader>,
-}
-
-#[derive(Debug)]
-pub struct FieldWriter {
-    pub(crate) cell: Rc<Cell>,
-    pub(crate) ty: FieldType,
-    pub(crate) writer: Box<CellWriter>,
-}
-
 impl CellTrait for FieldCell {
-    type Domain = FieldGroup;
     type Group = FieldGroup;
     type CellReader = FieldReader;
     type CellWriter = FieldWriter;
 
-    fn domain(&self) -> FieldGroup {
-        FieldGroup {
-            cell: self.cell.clone(),
-            interpretation: self.cell.domain().interpretation().to_string(),
-        }
+    fn interpretation(&self) -> &str {
+        self.cell.interpretation()
     }
 
     fn ty(&self) -> Res<&str> {
@@ -176,6 +137,12 @@ impl CellTrait for FieldCell {
         // trait type does not allow us. This is fixed by extra::Cell which
         // returns the correct head.
         unimplemented!()
+    }
+
+    fn save(&self, target: extra::Cell) -> Res<()> {
+        todo!()
+        // not sure if this is the right way to do it:
+        // self.cell.save(target)
     }
 }
 

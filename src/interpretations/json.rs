@@ -1,4 +1,4 @@
-use std::{fs::File, path::Path};
+use std::{fs::File, rc::Rc};
 
 use indexmap::IndexMap;
 use linkme::distributed_slice;
@@ -25,19 +25,8 @@ pub struct Cell {
 
 #[derive(Clone, Debug)]
 pub struct Group {
-    domain: Domain,
     nodes: NodeGroup,
-    head: Option<Box<(Cell, Relation)>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Domain(OwnRc<DomainData>);
-
-#[derive(Clone, Debug)]
-pub struct DomainData {
-    nodes: OwnRc<Vec<Node>>,
-    write_policy: WritePolicy,
-    origin: Option<XCell>,
+    head: Option<Rc<(Cell, Relation)>>,
 }
 
 #[derive(Clone, Debug)]
@@ -77,65 +66,9 @@ pub enum WriteNodeGroup {
     Object(WriteRc<IndexMap<String, Node>>),
 }
 
-impl DomainTrait for Domain {
-    type Cell = Cell;
-
-    fn interpretation(&self) -> &str {
-        "json"
-    }
-
-    fn root(&self) -> Res<Self::Cell> {
-        Ok(Cell {
-            group: Group {
-                domain: self.clone(),
-                nodes: NodeGroup::Array(
-                    self.0
-                        .read()
-                        .ok_or_else(|| lockerr("cannot read domain to get root"))?
-                        .nodes
-                        .clone(),
-                ),
-                head: None,
-            },
-            pos: 0,
-        })
-    }
-
-    fn origin(&self) -> Res<XCell> {
-        match &self
-            .0
-            .read()
-            .ok_or_else(|| lockerr("cannot read domain to get origin"))?
-            .origin
-        {
-            Some(c) => Ok(c.clone()),
-            None => nores(),
-        }
-    }
-}
-impl SaveTrait for Domain {
-    fn save(&self, target: SaveTarget) -> Res<()> {
-        let s = self.root()?.serialize()?;
-        match target {
-            SaveTarget::Origin => match self
-                .0
-                .read()
-                .ok_or_else(|| lockerr("cannot read domain to get origin"))?
-                .origin
-            {
-                Some(ref origin) => origin.write().set_value(OwnValue::String(s))?,
-                None => return userr("no origin, cannot save"),
-            },
-            SaveTarget::Cell(ref cell) => cell.write().set_value(OwnValue::String(s))?,
-        };
-        Ok(())
-    }
-    // TODO: add rest of implementation
-}
-
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
-        let serde_value = match cell.domain().interpretation() {
+        let serde_value = match cell.interpretation() {
             "value" => {
                 let s = cell.read().value()?.to_string();
                 serde_json::from_str(s.as_ref())?
@@ -155,27 +88,16 @@ impl Cell {
         Self::from_serde_value(serde_value, Some(cell))
     }
 
-    pub fn from_string(s: impl AsRef<str>) -> Res<XCell> {
-        let json: SValue = serde_json::from_str(s.as_ref())?;
-        Self::from_serde_value(json, None)
-    }
-
-    pub fn from_path(path: impl AsRef<Path>) -> Res<XCell> {
-        let file = File::open(path).map_err(|e| caused(HErrKind::IO, "cannot read json", e))?;
-        let json: SValue = serde_json::from_reader(file)?;
-        Self::from_serde_value(json, None)
-    }
-
-    pub fn from_serde_value(json: SValue, origin: Option<XCell>) -> Res<XCell> {
+    fn from_serde_value(json: SValue, origin: Option<XCell>) -> Res<XCell> {
         let nodes = OwnRc::new(vec![serde_to_node(json)]);
-        let domain = Domain(OwnRc::new(DomainData {
-            nodes,
-            write_policy: WritePolicy::ReadOnly,
-            origin,
-        }));
-        Ok(XCell {
-            dyn_cell: DynCell::from(domain.root()?),
-        })
+        let json_cell = Cell {
+            group: Group {
+                nodes: NodeGroup::Array(nodes),
+                head: None,
+            },
+            pos: 0,
+        };
+        Ok(new_cell(DynCell::from(json_cell), origin))
     }
 
     pub fn serialize(&self) -> Res<String> {
@@ -203,13 +125,12 @@ impl Cell {
 }
 
 impl CellTrait for Cell {
-    type Domain = Domain;
     type Group = Group;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
 
-    fn domain(&self) -> Domain {
-        self.group.domain.clone()
+    fn interpretation(&self) -> &str {
+        "json"
     }
 
     fn ty(&self) -> Res<&str> {
@@ -269,13 +190,11 @@ impl CellTrait for Cell {
                 .get(self.pos)
             {
                 Some(Node::Array(a)) => Ok(Group {
-                    head: Some(Box::new((self.clone(), Relation::Sub))),
-                    domain: self.group.domain.clone(),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                     nodes: NodeGroup::Array(a.clone()),
                 }),
                 Some(Node::Object(o)) => Ok(Group {
-                    head: Some(Box::new((self.clone(), Relation::Sub))),
-                    domain: self.group.domain.clone(),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                     nodes: NodeGroup::Object(o.clone()),
                 }),
                 _ => nores(),
@@ -286,13 +205,11 @@ impl CellTrait for Cell {
                 .get_index(self.pos)
             {
                 Some((_, Node::Array(a))) => Ok(Group {
-                    head: Some(Box::new((self.clone(), Relation::Sub))),
-                    domain: self.group.domain.clone(),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                     nodes: NodeGroup::Array(a.clone()),
                 }),
                 Some((_, Node::Object(o))) => Ok(Group {
-                    head: Some(Box::new((self.clone(), Relation::Sub))),
-                    domain: self.group.domain.clone(),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                     nodes: NodeGroup::Object(o.clone()),
                 }),
                 _ => nores(),
@@ -305,6 +222,11 @@ impl CellTrait for Cell {
             Some(ref head) => Ok((head.0.clone(), head.1)),
             None => nores(),
         }
+    }
+
+    fn save(&self, target: XCell) -> Res<()> {
+        let s = self.serialize()?;
+        target.write().set_value(OwnValue::String(s))
     }
 }
 

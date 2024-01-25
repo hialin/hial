@@ -14,36 +14,15 @@ static VALUE_TO_URL: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Domain(Rc<(Url, Option<XCell>)>);
-
-impl DomainTrait for Domain {
-    type Cell = Cell;
-
-    fn interpretation(&self) -> &str {
-        "url"
-    }
-
-    fn root(&self) -> Res<Self::Cell> {
-        Ok(Cell(self.clone()))
-    }
-
-    fn origin(&self) -> Res<XCell> {
-        match &self.0 .1 {
-            Some(c) => Ok(c.clone()),
-            None => nores(),
-        }
-    }
-}
-
-impl SaveTrait for Domain {
-    // TODO: add implementation
+pub struct Data {
+    url: Url,
 }
 
 #[derive(Clone, Debug)]
-pub struct Cell(Domain);
+pub struct Cell(Rc<Data>);
 
 #[derive(Debug)]
-pub struct CellReader(Domain);
+pub struct CellReader(Rc<Data>);
 
 #[derive(Debug)]
 pub struct CellWriter {}
@@ -51,32 +30,32 @@ impl CellWriterTrait for CellWriter {}
 
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
-        match cell.domain().interpretation() {
+        match cell.interpretation() {
             "value" => {
                 let r = cell.read();
                 let v = r.value()?;
                 let cow = v.as_cow_str();
                 let value = cow.as_ref();
-                let cell = Domain(Rc::new((Url::parse(value)?, Some(cell)))).root()?;
-                Ok(XCell {
-                    dyn_cell: DynCell::from(cell),
-                })
+                let url_cell = Cell(Rc::new(Data {
+                    url: Url::parse(value)?,
+                }));
+                Ok(new_cell(DynCell::from(url_cell), Some(cell)))
             }
             _ => nores(),
         }
     }
 
     pub fn from_str(s: &str) -> Res<XCell> {
-        let cell = Domain(Rc::new((Url::parse(s)?, None))).root()?;
-        Ok(XCell {
-            dyn_cell: DynCell::from(cell),
-        })
+        let url_cell = Cell(Rc::new(Data {
+            url: Url::parse(s)?,
+        }));
+        Ok(new_cell(DynCell::from(url_cell), None))
     }
 }
 
 impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
-        Ok(Value::Str(self.0 .0 .0.as_str()))
+        Ok(Value::Str(self.0.url.as_str()))
     }
 
     fn label(&self) -> Res<Value> {
@@ -89,13 +68,12 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellTrait for Cell {
-    type Domain = Domain;
     type Group = VoidGroup<Self>;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
 
-    fn domain(&self) -> Domain {
-        self.0.clone()
+    fn interpretation(&self) -> &str {
+        "url"
     }
 
     fn ty(&self) -> Res<&str> {

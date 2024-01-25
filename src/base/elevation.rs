@@ -91,7 +91,7 @@ fn elevation_map(interpretation: &str) -> Res<Arc<IndexMap<&'static str, Elevate
 }
 
 pub(crate) fn top_interpretation(cell: &Cell) -> Option<&str> {
-    if cell.domain().interpretation() == "fs" && cell.ty().ok()? == "fs" {
+    if cell.interpretation() == "fs" && cell.ty().ok()? == "fs" {
         if let Ok(reader) = cell.read().err() {
             if let Ok(Value::Str(name)) = reader.label() {
                 if name.ends_with(".c") {
@@ -112,7 +112,7 @@ pub(crate) fn top_interpretation(cell: &Cell) -> Option<&str> {
             }
         }
     }
-    if cell.domain().interpretation() == "value" {
+    if cell.interpretation() == "value" {
         if let Ok(reader) = cell.read().err() {
             if let Ok(Value::Str(s)) = reader.value() {
                 if s.starts_with("http://") || s.starts_with("https://") {
@@ -138,8 +138,7 @@ impl ElevationGroup {
     }
 
     pub fn len(&self) -> Res<usize> {
-        let e =
-            guard_ok!(elevation_map(self.0.domain().interpretation()), err => { return Err(err) });
+        let e = guard_ok!(elevation_map(self.0.interpretation()), err => { return Err(err) });
         Ok(e.len())
     }
 
@@ -148,8 +147,7 @@ impl ElevationGroup {
     }
 
     pub fn at(&self, index: usize) -> Res<Cell> {
-        let e =
-            guard_ok!(elevation_map(self.0.domain().interpretation()), err => { return Err(err) });
+        let e = guard_ok!(elevation_map(self.0.interpretation()), err => { return Err(err) });
         if let Some((target_interpretation, func)) = e.get_index(index) {
             func(self.0.clone(), target_interpretation)
         } else {
@@ -159,8 +157,7 @@ impl ElevationGroup {
 
     pub fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
         let key = key.into();
-        let domain = self.0.domain();
-        let old_interp = domain.interpretation();
+        let old_interp = self.0.interpretation();
         let interp = match key {
             Selector::Str(k) => k,
             Selector::Top => guard_some!(top_interpretation(&self.0), {

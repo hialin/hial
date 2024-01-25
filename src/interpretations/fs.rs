@@ -23,15 +23,6 @@ static PATH_TO_FILE: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Domain(Rc<DomainData>);
-
-#[derive(Debug)]
-pub struct DomainData {
-    root_path: PathBuf,
-    origin: Option<XCell>,
-}
-
-#[derive(Clone, Debug)]
 pub struct Cell {
     group: Group,
     pos: u32,
@@ -39,7 +30,6 @@ pub struct Cell {
 
 #[derive(Clone, Debug)]
 pub struct Group {
-    domain: Domain,
     files: Rc<Vec<Res<FileEntry>>>,
     ty: GroupType,
 }
@@ -76,34 +66,6 @@ struct Metadata {
     filesize: u64,
     is_dir: bool,
     is_link: bool,
-}
-
-impl DomainTrait for Domain {
-    type Cell = Cell;
-
-    fn interpretation(&self) -> &str {
-        "fs"
-    }
-
-    fn root(&self) -> Res<Self::Cell> {
-        let group = Group {
-            domain: self.clone(),
-            files: Rc::new(vec![read_file(&self.0.root_path)]),
-            ty: GroupType::Folder,
-        };
-        Ok(Cell { group, pos: 0 })
-    }
-
-    fn origin(&self) -> Res<XCell> {
-        match &self.0.origin {
-            Some(c) => Ok(c.clone()),
-            None => nores(),
-        }
-    }
-}
-
-impl SaveTrait for Domain {
-    // TODO: add implementation
 }
 
 impl CellReaderTrait for CellReader {
@@ -231,24 +193,26 @@ impl CellWriterTrait for CellWriter {
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         let path = cell.as_file_path()?;
-        let file_cell = from_path(path, Some(cell.clone()))?.root()?;
-        Ok(XCell {
-            dyn_cell: DynCell::from(file_cell),
-        })
-    }
-
-    pub fn from_path(path: impl Borrow<Path>) -> Res<XCell> {
-        let file_cell = from_path(path.borrow(), None)?.root()?;
-        Ok(XCell {
-            dyn_cell: DynCell::from(file_cell),
-        })
+        let file_cell = Cell {
+            group: Group {
+                files: Rc::new(vec![read_file(path)]),
+                ty: GroupType::Folder,
+            },
+            pos: 0,
+        };
+        Ok(new_cell(DynCell::from(file_cell), Some(cell)))
     }
 
     pub fn from_str_path(path: impl Borrow<str>) -> Res<XCell> {
-        let file_cell = from_path(Path::new(path.borrow()), None)?.root()?;
-        Ok(XCell {
-            dyn_cell: DynCell::from(file_cell),
-        })
+        let path = Path::new(path.borrow());
+        let file_cell = Cell {
+            group: Group {
+                files: Rc::new(vec![read_file(path)]),
+                ty: GroupType::Folder,
+            },
+            pos: 0,
+        };
+        Ok(new_cell(DynCell::from(file_cell), None))
     }
 
     pub fn as_path(&self) -> Res<&Path> {
@@ -259,13 +223,12 @@ impl Cell {
 }
 
 impl CellTrait for Cell {
-    type Domain = Domain;
     type Group = Group;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
 
-    fn domain(&self) -> Domain {
-        self.group.domain.clone()
+    fn interpretation(&self) -> &str {
+        "fs"
     }
 
     fn ty(&self) -> Res<&str> {
@@ -310,7 +273,6 @@ impl CellTrait for Cell {
                 }
                 let files = read_files(&fileentry.path)?;
                 Ok(Group {
-                    domain: self.group.domain.clone(),
                     files: Rc::new(files),
                     ty: GroupType::Folder,
                 })
@@ -328,7 +290,6 @@ impl CellTrait for Cell {
                     return nores();
                 }
                 Ok(Group {
-                    domain: self.group.domain.clone(),
                     files: self.group.files.clone(),
                     ty: GroupType::FileAttributes(self.pos),
                 })
@@ -351,7 +312,6 @@ impl CellTrait for Cell {
                 let f = read_file(parent)?;
                 let cell = Cell {
                     group: Group {
-                        domain: self.group.domain.clone(),
                         files: Rc::new(vec![read_file(parent)]),
                         ty: GroupType::Folder,
                     },
@@ -441,13 +401,6 @@ impl GroupTrait for Group {
             }
         }
     }
-}
-
-fn from_path(path: &Path, origin: Option<XCell>) -> Res<Domain> {
-    Ok(Domain(Rc::new(DomainData {
-        root_path: path.to_path_buf(),
-        origin,
-    })))
 }
 
 fn read_file(path: &Path) -> Res<FileEntry> {

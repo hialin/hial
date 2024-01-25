@@ -30,12 +30,9 @@ fn rust_path() -> Res<()> {
 
     let folder = Cell::from(".").be("path").be("fs").err().unwrap();
     let root = folder.to("/src/tests/rust.rs^rust");
-    root.to("/x").err()?;
-    assert_eq!(
-        root.to("/*[#type=='function_item']/*[#type=='name']")
-            .path()?,
-        "`.`^path^fs/src/tests/rust.rs^rust/",
-    );
+    pprint(&root, 0, 0);
+    let func = root.to("/*[#type=='function_item']/*[#type=='name']");
+    assert_eq!(func.path()?, "`.`^path^fs/src/tests/rust.rs^rust/[2]/[1]",);
 
     Ok(())
 }

@@ -20,16 +20,12 @@ static URL_TO_HTTP: ElevationConstructor = ElevationConstructor {
 //          reason
 //       @headers/...
 
-#[derive(Clone, Debug)]
-pub struct Domain(OwnRc<Response>);
-
 #[derive(Debug)]
 pub struct Response {
     status: i16,
     reason: String,
     headers: IndexMap<String, Vec<String>>,
     body: Vec<u8>,
-    origin: Option<XCell>,
 }
 
 #[derive(Clone, Debug)]
@@ -56,7 +52,7 @@ pub enum GroupKind {
 #[derive(Clone, Debug)]
 pub struct Group {
     kind: GroupKind,
-    response: Domain,
+    response: OwnRc<Response>,
 }
 
 #[derive(Debug)]
@@ -67,94 +63,58 @@ impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         let reader = cell.read().err()?;
         let value = reader.value()?;
-        let domain = from_url_str(value.as_cow_str().as_ref(), Some(cell.clone()))?;
-        Ok(XCell {
-            dyn_cell: DynCell::from(domain.root()?),
-        })
-    }
+        let value_cow = value.as_cow_str();
+        let url = value_cow.as_ref();
 
-    pub fn from_url_str<'a>(url: impl Into<&'a str>) -> Res<XCell> {
-        let url_cell = from_url_str(url.into(), None)?.root()?;
-        Ok(XCell {
-            dyn_cell: DynCell::from(url_cell),
-        })
-    }
-}
+        let response = Client::builder()
+            .user_agent("hial")
+            .build()?
+            .get(url)
+            .send()?;
 
-fn from_url_str(url: &str, origin: Option<XCell>) -> Res<Domain> {
-    let response = Client::builder()
-        .user_agent("hial")
-        .build()?
-        .get(url)
-        .send()?;
-
-    let mut headers = IndexMap::<String, Vec<String>>::new();
-    for (k, v) in response.headers().iter() {
-        let valueheader = v.to_str().map_or(String::from("<blob>"), |x| x.to_string());
-        if let Some(header) = headers.get_mut(k.as_str()) {
-            header.push(valueheader);
-        } else {
-            headers.insert(k.as_str().to_string(), vec![valueheader]);
+        let mut headers = IndexMap::<String, Vec<String>>::new();
+        for (k, v) in response.headers().iter() {
+            let valueheader = v.to_str().map_or(String::from("<blob>"), |x| x.to_string());
+            if let Some(header) = headers.get_mut(k.as_str()) {
+                header.push(valueheader);
+            } else {
+                headers.insert(k.as_str().to_string(), vec![valueheader]);
+            }
         }
-    }
-    let status = response.status().as_u16() as i16;
-    let reason = response
-        .status()
-        .canonical_reason()
-        .unwrap_or("")
-        .to_string();
-    if status >= 400 {
-        eprintln!("Error: http call failed: {} = {} {}", url, status, reason);
-    }
-    Ok(Domain(OwnRc::new(Response {
-        status,
-        reason,
-        headers,
-        body: response.bytes()?.as_ref().to_vec(),
-        origin,
-    })))
-}
+        let status = response.status().as_u16() as i16;
+        let reason = response
+            .status()
+            .canonical_reason()
+            .unwrap_or("")
+            .to_string();
+        if status >= 400 {
+            eprintln!("Error: http call failed: {} = {} {}", url, status, reason);
+        }
+        let response = OwnRc::new(Response {
+            status,
+            reason,
+            headers,
+            body: response.bytes()?.as_ref().to_vec(),
+        });
 
-impl DomainTrait for Domain {
-    type Cell = Cell;
-
-    fn interpretation(&self) -> &str {
-        "http"
-    }
-
-    fn root(&self) -> Res<Self::Cell> {
-        Ok(Cell {
+        let http_cell = Cell {
             group: Group {
                 kind: GroupKind::Root,
-                response: self.clone(),
+                response,
             },
             pos: 0,
-        })
+        };
+        Ok(new_cell(DynCell::from(http_cell), Some(cell)))
     }
-
-    fn origin(&self) -> Res<XCell> {
-        self.0
-            .read()
-            .ok_or_else(|| lockerr("cannot read domain"))?
-            .origin
-            .as_ref()
-            .cloned()
-            .ok_or_else(noerr)
-    }
-}
-
-impl SaveTrait for Domain {
-    // TODO: add implementation
 }
 
 impl CellTrait for Cell {
-    type Domain = Domain;
     type Group = Group;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
 
-    fn domain(&self) -> Domain {
-        self.group.response.clone()
+    fn interpretation(&self) -> &str {
+        "http"
     }
 
     fn ty(&self) -> Res<&str> {
@@ -175,7 +135,6 @@ impl CellTrait for Cell {
             response: self
                 .group
                 .response
-                .0
                 .read()
                 .ok_or_else(|| lockerr("cannot read cell"))?,
             pos: self.pos,
@@ -299,7 +258,6 @@ impl GroupTrait for Group {
             GroupKind::Status => 2,
             GroupKind::Headers => self
                 .response
-                .0
                 .read()
                 .ok_or_else(|| lockerr("cannot read group"))?
                 .headers
@@ -320,7 +278,6 @@ impl GroupTrait for Group {
             (GroupKind::Headers, i)
                 if i < self
                     .response
-                    .0
                     .read()
                     .ok_or_else(|| lockerr("cannot read group"))?
                     .headers
@@ -359,7 +316,6 @@ impl GroupTrait for Group {
                 Selector::Str(k) => {
                     if let Some((i, _, _)) = self
                         .response
-                        .0
                         .read()
                         .ok_or_else(|| lockerr("cannot read group"))?
                         .headers

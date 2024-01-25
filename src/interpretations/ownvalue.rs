@@ -4,26 +4,6 @@ use crate::utils::ownrc::{OwnRc, ReadRc, WriteRc};
 #[derive(Clone, Debug)]
 pub struct Cell(OwnRc<OwnValue>);
 
-impl DomainTrait for Cell {
-    type Cell = Cell;
-
-    fn interpretation(&self) -> &str {
-        "value"
-    }
-
-    fn root(&self) -> Res<Self::Cell> {
-        Ok(self.clone())
-    }
-
-    fn origin(&self) -> Res<XCell> {
-        nores()
-    }
-}
-
-impl SaveTrait for Cell {
-    // TODO: add implementation
-}
-
 #[derive(Debug)]
 pub struct CellReader(ReadRc<OwnValue>);
 
@@ -41,9 +21,7 @@ impl Cell {
 
     pub fn from_value(ov: OwnValue) -> Res<XCell> {
         let cell = Cell(OwnRc::new(ov));
-        Ok(XCell {
-            dyn_cell: DynCell::from(cell),
-        })
+        Ok(new_cell(DynCell::from(cell), None))
     }
 }
 
@@ -69,13 +47,12 @@ impl CellWriterTrait for CellWriter {
 }
 
 impl CellTrait for Cell {
-    type Domain = Cell;
     type Group = VoidGroup<Self>;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
 
-    fn domain(&self) -> Cell {
-        self.clone()
+    fn interpretation(&self) -> &str {
+        "value"
     }
 
     fn ty(&self) -> Res<&str> {

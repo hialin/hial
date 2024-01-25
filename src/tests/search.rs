@@ -430,9 +430,8 @@ fn search_double_kleene_with_filter() -> Res<()> {
     assert_eq!(eval, ["dir1:", "f1:", "size:ø", "dir2:", "f2:", "size:2"]);
 
     let eval = str_eval(root.clone(), "/dir1/**[/size]")?;
-    assert_eq!(eval, ["f1:"]);
-    // TODO: the above is wrong, correct is:
-    // assert_eq!(eval, ["f1:", "f2:"]);
+    // TODO: this assert fails, f1 and f2 should both be returned
+    assert_eq!(eval, ["f1:", "f2:"]);
 
     Ok(())
 }

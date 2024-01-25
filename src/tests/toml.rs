@@ -35,13 +35,17 @@ fn toml_read() -> Res<()> {
 }
 
 #[test]
-fn toml_write() -> Res<()> {
-    assert_eq!(1, 0);
+fn toml_path() -> Res<()> {
+    let toml = Cell::from(TOML).be("toml").to("/database/data/[0]/[1]");
+    assert_eq!(
+        toml.path()?,
+        "`\\n# This is a TO...`^toml/database/data/[0]/[1]"
+    );
     Ok(())
 }
 
 #[test]
-fn toml_path() -> Res<()> {
+fn toml_write() -> Res<()> {
     assert_eq!(1, 0);
     Ok(())
 }

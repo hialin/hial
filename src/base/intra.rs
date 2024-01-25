@@ -3,12 +3,11 @@ use std::{fmt::Debug, marker::PhantomData};
 use crate::base::*;
 
 pub trait CellTrait: Clone + Debug {
-    type Domain: DomainTrait;
     type Group: GroupTrait;
     type CellReader: CellReaderTrait;
     type CellWriter: CellWriterTrait;
 
-    fn domain(&self) -> Self::Domain;
+    fn interpretation(&self) -> &str;
     fn ty(&self) -> Res<&str>;
 
     fn read(&self) -> Res<Self::CellReader>;
@@ -23,50 +22,10 @@ pub trait CellTrait: Clone + Debug {
     }
 
     fn head(&self) -> Res<(Self, Relation)>;
-}
 
-pub trait DomainTrait: Debug + SaveTrait {
-    type Cell: CellTrait;
-
-    fn interpretation(&self) -> &str;
-
-    fn root(&self) -> Res<Self::Cell>;
-
-    fn origin(&self) -> Res<crate::base::extra::Cell>;
-}
-
-pub trait SaveTrait: Debug {
-    fn write_policy(&self) -> Res<WritePolicy> {
+    fn save(&self, target: extra::Cell) -> Res<()> {
         todo!() // remove this default implementation
     }
-
-    fn set_write_policy(&mut self, policy: WritePolicy) -> Res<()> {
-        todo!() // remove this default implementation
-    }
-
-    fn save(&self, target: SaveTarget) -> Res<()> {
-        todo!() // remove this default implementation
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum WritePolicy {
-    // no write access
-    ReadOnly,
-    // write access, but no automatic save
-    ExplicitWrite,
-    // write access, automatic save on every change
-    WriteThrough,
-    // write access, automatic save when all references are dropped
-    WriteBackOnDrop,
-}
-
-#[derive(Clone, Debug)]
-pub enum SaveTarget {
-    // save to the domain origin or source
-    Origin,
-    // save to a new target cell
-    Cell(Cell),
 }
 
 pub trait CellReaderTrait: Debug {

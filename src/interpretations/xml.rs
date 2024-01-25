@@ -1,5 +1,4 @@
 use std::io::BufRead;
-use std::path::Path;
 use std::rc::Rc;
 
 use linkme::distributed_slice;
@@ -16,41 +15,6 @@ static VALUE_TO_XML: ElevationConstructor = ElevationConstructor {
     target_interpretations: &["xml"],
     constructor: Cell::from_cell,
 };
-
-#[derive(Clone, Debug)]
-pub struct Domain {
-    nodes: NodeList,
-    origin: Option<Rc<XCell>>,
-}
-
-impl DomainTrait for Domain {
-    type Cell = Cell;
-
-    fn interpretation(&self) -> &str {
-        "xml"
-    }
-
-    fn root(&self) -> Res<Cell> {
-        Ok(Cell {
-            group: Group {
-                domain: self.clone(),
-                nodes: NodeGroup::Node(self.nodes.clone()),
-            },
-            pos: 0,
-        })
-    }
-
-    fn origin(&self) -> Res<XCell> {
-        match self.origin {
-            Some(ref c) => Ok(c.as_ref().clone()),
-            None => nores(),
-        }
-    }
-}
-
-impl SaveTrait for Domain {
-    // TODO: add implementation
-}
 
 #[derive(Clone, Debug)]
 pub struct Cell {
@@ -70,8 +34,8 @@ impl CellWriterTrait for CellWriter {}
 
 #[derive(Clone, Debug)]
 pub struct Group {
-    domain: Domain,
     nodes: NodeGroup,
+    head: Option<Rc<(Cell, Relation)>>,
 }
 
 #[derive(Clone, Debug)]
@@ -107,7 +71,7 @@ enum Attribute {
 
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
-        match cell.domain().interpretation() {
+        match cell.interpretation() {
             "value" => {
                 let r = cell.read();
                 let v = r.value()?;
@@ -139,26 +103,15 @@ impl Cell {
         }
     }
 
-    pub fn from_path(path: &Path) -> Res<XCell> {
-        let mut reader = Reader::from_file(path).map_err(HErr::from)?;
-        let root = xml_to_node(&mut reader)?;
-        Self::from_root_node(root, None)
-    }
-
-    pub fn from_str(string: &str) -> Res<XCell> {
-        let mut reader = Reader::from_str(string);
-        let root = xml_to_node(&mut reader)?;
-        Self::from_root_node(root, None)
-    }
-
     fn from_root_node(root: Node, origin: Option<XCell>) -> Res<XCell> {
-        let domain = Domain {
-            nodes: NodeList(Rc::new(vec![root])),
-            origin: origin.map(Rc::new),
+        let xml_cell = Cell {
+            group: Group {
+                nodes: NodeGroup::Node(NodeList(Rc::new(vec![root]))),
+                head: None,
+            },
+            pos: 0,
         };
-        Ok(XCell {
-            dyn_cell: DynCell::from(domain.root()?),
-        })
+        Ok(new_cell(DynCell::from(xml_cell), origin))
     }
 }
 
@@ -363,13 +316,12 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellTrait for Cell {
-    type Domain = Domain;
     type Group = Group;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
 
-    fn domain(&self) -> Domain {
-        self.group.domain.clone()
+    fn interpretation(&self) -> &str {
+        "xml"
     }
 
     fn ty(&self) -> Res<&str> {
@@ -404,12 +356,12 @@ impl CellTrait for Cell {
         match &self.group.nodes {
             NodeGroup::Node(group) => match &group.0[self.pos] {
                 Node::Document(x) => Ok(Group {
-                    domain: self.group.domain.clone(),
                     nodes: NodeGroup::Node(NodeList(x.clone())),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                 }),
                 Node::Element((_, _, _, x)) => Ok(Group {
-                    domain: self.group.domain.clone(),
                     nodes: NodeGroup::Node(NodeList(x.clone())),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                 }),
                 _ => nores(),
             },
@@ -421,12 +373,12 @@ impl CellTrait for Cell {
         match &self.group.nodes {
             NodeGroup::Node(group) => match &group.0[self.pos] {
                 Node::Decl(x) => Ok(Group {
-                    domain: self.group.domain.clone(),
                     nodes: NodeGroup::Attr(AttrList(x.clone())),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                 }),
                 Node::Element((_, x, _, _)) => Ok(Group {
-                    domain: self.group.domain.clone(),
                     nodes: NodeGroup::Attr(AttrList(x.clone())),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                 }),
                 _ => nores(),
             },
@@ -435,7 +387,10 @@ impl CellTrait for Cell {
     }
 
     fn head(&self) -> Res<(Self, Relation)> {
-        todo!()
+        match &self.group.head {
+            Some(h) => Ok((h.0.clone(), h.1)),
+            None => nores(),
+        }
     }
 }
 

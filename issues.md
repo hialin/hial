@@ -9,13 +9,15 @@
     - later: python, git, database, ical, zip, markdown
     - later: separate api module, used by ffi and dependent crates
 
-- **for each interpretation**: test path, implement cell head
-- add #flat as Field option (tree serialization)
-- implement policy(): set on cells and propagated, not set by interpretations
-- explicit domain save/write: to origin, to new domain
-- write policies on domain (interpretation):
-    - read only, write ignore, write back, write to new domain
+- eliminate intra::domain, move interp to cell, eliminate root(), keep origin in xcell
+- explicit domain save/write: to origin, to another cell
+- automatic domain save on drop, if
 - fix double kleene error (see test)
+- **for each interpretation**:
+    - test read and search
+    - test path, implement cell head
+    - test manual save and automatic save on drop
+- add #flat as Field option (tree serialization)
 
 - operations:
     - assign to variables;
@@ -25,6 +27,7 @@
     - diff with assignment of results in variables
 - add tree diff operation
 
+- ?implement policy(): set on cells and propagated, not set by interpretations
 - ?treesitter representations are too detailed, unsure what to do
 - ?explore python implementation and usage
 - ?search should return all matches embedded in a delegation cell, which has all results

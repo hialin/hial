@@ -65,13 +65,26 @@ fn test_xml() -> Res<()> {
 }
 
 #[test]
-fn xml_write() -> Res<()> {
-    assert_eq!(1, 0);
+fn xml_path() -> Res<()> {
+    let xml = r#"<?xml version="1.0"?>
+            <!DOCTYPE entity PUBLIC "-//no idea//EN" "http://example.com/dtd">
+            <doc>
+                <first>1</first>
+                <double>2</double>
+                <double>2+</double>
+                <triple/>
+                <q>
+                    <qq>4</qq>
+                </q>
+            </doc>
+        "#;
+    let xml = Cell::from(xml.to_string()).to("^xml/doc/q/qq");
+    assert_eq!(xml.path()?, "`<?xml version=\"1...`^xml/doc/q/qq");
     Ok(())
 }
 
 #[test]
-fn xml_path() -> Res<()> {
+fn xml_write() -> Res<()> {
     assert_eq!(1, 0);
     Ok(())
 }

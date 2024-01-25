@@ -5,34 +5,29 @@ use std::{
 
 use crate::{
     base::*, enumerated_dynamic_type, guard_ok, interpretations::*, pathlang::eval::EvalIter,
-    pathlang::Path,
+    pathlang::Path, warning,
 };
 
 const MAX_PATH_ITEMS: usize = 1000;
 
-enumerated_dynamic_type! {
-    #[derive(Clone, Debug)]
-    pub(crate) enum DynDomain {
-        Error(HErr),
-        // field is only declared for type completeness, not actually used
-        Field(field::FieldGroup),
-        // own value cell is its own domain
-        OwnValue(ownvalue::Cell),
-        File(fs::Domain),
-        Json(json::Domain),
-        Toml(toml::Domain),
-        Yaml(yaml::Domain),
-        Xml(xml::Domain),
-        Url(url::Domain),
-        Path(path::Domain),
-        Http(http::Domain),
-        TreeSitter(treesitter::Domain),
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct Cell {
+    pub(crate) dyn_cell: DynCell,
+    // keep it in a rc to avoid other allocations
+    pub(crate) domain: Rc<Domain>,
+}
+
+pub(crate) fn new_cell(dyn_cell: DynCell, origin: Option<Cell>) -> Cell {
+    Cell {
+        dyn_cell,
+        domain: Rc::new(Domain { origin }),
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct Domain {
-    pub(crate) dyn_domain: DynDomain,
+    origin: Option<Cell>,
 }
 
 enumerated_dynamic_type! {
@@ -51,12 +46,6 @@ enumerated_dynamic_type! {
         Http(http::Cell),
         TreeSitter(treesitter::Cell),
     }
-}
-
-#[repr(C)]
-#[derive(Clone, Debug)]
-pub struct Cell {
-    pub(crate) dyn_cell: DynCell,
 }
 
 enumerated_dynamic_type! {
@@ -121,61 +110,27 @@ enumerated_dynamic_type! {
 
 #[derive(Clone, Debug)]
 pub enum Group {
-    Dyn(DynGroup),
-    Elevation(ElevationGroup),
+    Dyn {
+        dyn_group: DynGroup,
+        domain: Rc<Domain>,
+    },
+    Elevation {
+        elevation_group: ElevationGroup,
+        domain: Rc<Domain>,
+    },
     // Mixed(Vec<Cell>),
 }
 
-impl Domain {
-    pub fn interpretation(&self) -> &str {
-        dispatch_dyn_domain!(&self.dyn_domain, |x| { x.interpretation() })
-    }
-
-    pub fn root(&self) -> Cell {
-        if let DynDomain::Field(field) = &self.dyn_domain {
-            // need to have a special case here, it's not possible to do this in the field::root
-            return field.cell.domain().root();
-        }
-        dispatch_dyn_domain!(&self.dyn_domain, |x| {
-            match x.root() {
-                Ok(c) => Cell {
-                    dyn_cell: DynCell::from(c),
-                },
-                Err(e) => Cell {
-                    dyn_cell: DynCell::from(e),
-                },
-            }
-        })
-    }
-
-    pub fn origin(&self) -> Cell {
-        dispatch_dyn_domain!(&self.dyn_domain, |x| {
-            match x.origin() {
-                Ok(c) => c,
-                Err(e) => Cell {
-                    dyn_cell: DynCell::from(e),
-                },
-            }
-        })
-    }
-
-    pub fn write_policy(&self) -> Res<WritePolicy> {
-        dispatch_dyn_domain!(&self.dyn_domain, |x| { x.write_policy() })
-    }
-    pub fn set_write_policy(&mut self, policy: WritePolicy) -> Res<()> {
-        dispatch_dyn_domain!(&mut self.dyn_domain, |x| { x.set_write_policy(policy) })
-    }
-
-    pub fn save(&self, target: SaveTarget) -> Res<()> {
-        dispatch_dyn_domain!(&self.dyn_domain, |x| { x.save(target) })
-    }
-
-    pub fn err(self) -> Res<Domain> {
-        if let DynDomain::Error(error) = self.dyn_domain {
-            return Err(error);
-        }
-        Ok(self)
-    }
+#[derive(Copy, Clone, Debug)]
+pub enum WritePolicy {
+    // no write access
+    ReadOnly,
+    // write access, but no automatic save
+    ExplicitWrite,
+    // write access, automatic save when all references are dropped
+    WriteBackOnDrop,
+    // write access, automatic save on every change
+    WriteThrough,
 }
 
 impl From<OwnValue> for Cell {
@@ -215,6 +170,7 @@ impl From<HErr> for Cell {
     fn from(herr: HErr) -> Self {
         Cell {
             dyn_cell: DynCell::from(herr),
+            domain: Rc::new(Domain { origin: None }),
         }
     }
 }
@@ -265,9 +221,16 @@ impl Cell {
         Ok(self)
     }
 
-    pub fn domain(&self) -> Domain {
-        let domain = dispatch_dyn_cell!(&self.dyn_cell, |x| { DynDomain::from(x.domain()) });
-        Domain { dyn_domain: domain }
+    pub fn interpretation(&self) -> &str {
+        dispatch_dyn_cell!(&self.dyn_cell, |x| { x.interpretation() })
+    }
+
+    pub fn origin(&self) -> Cell {
+        self.domain
+            .origin
+            .clone()
+            .ok_or_else(|| noerr().with_path_res(self.path()))
+            .unwrap_or_else(Cell::from)
     }
 
     pub fn ty(&self) -> Res<&str> {
@@ -306,7 +269,10 @@ impl Cell {
                 Err(e) => DynGroup::from(e),
             }
         });
-        Group::Dyn(sub)
+        Group::Dyn {
+            dyn_group: sub,
+            domain: self.domain.clone(),
+        }
     }
 
     pub fn attr(&self) -> Group {
@@ -316,7 +282,10 @@ impl Cell {
                 Err(e) => DynGroup::from(e),
             }
         });
-        Group::Dyn(attr)
+        Group::Dyn {
+            dyn_group: attr,
+            domain: self.domain.clone(),
+        }
     }
 
     pub fn top_interpretation(&self) -> Option<&str> {
@@ -328,19 +297,32 @@ impl Cell {
 
     pub fn elevate(&self) -> Group {
         if let DynCell::Error(err) = &self.dyn_cell {
-            return Group::Dyn(DynGroup::from(err.clone()));
+            return Group::Dyn {
+                dyn_group: DynGroup::from(err.clone()),
+                domain: self.domain.clone(),
+            };
         }
-        Group::Elevation(ElevationGroup(self.clone()))
+        Group::Elevation {
+            elevation_group: ElevationGroup(self.clone()),
+            domain: Rc::new(Domain {
+                origin: Some(self.clone()),
+            }),
+        }
     }
 
     pub fn field(&self) -> Group {
         if let DynCell::Error(err) = &self.dyn_cell {
-            return Group::Dyn(DynGroup::from(err.clone()));
+            return Group::Dyn {
+                dyn_group: DynGroup::from(err.clone()),
+                domain: self.domain.clone(),
+            };
         }
-        Group::Dyn(DynGroup::from(FieldGroup {
-            cell: Rc::new(self.clone()),
-            interpretation: self.domain().interpretation().to_string(),
-        }))
+        Group::Dyn {
+            dyn_group: DynGroup::from(FieldGroup {
+                cell: Rc::new(self.clone()),
+            }),
+            domain: self.domain.clone(),
+        }
     }
 
     pub fn be(&self, interpretation: &str) -> Cell {
@@ -351,6 +333,7 @@ impl Cell {
         let path = guard_ok!(crate::pathlang::Path::parse(path), err =>
             return Cell {
                 dyn_cell: DynCell::from(err),
+                domain: self.domain.clone(),
             }
         );
         PathSearch::new(self.clone(), path).first()
@@ -373,6 +356,7 @@ impl Cell {
                 Ok((c, r)) => Ok((
                     Cell {
                         dyn_cell: DynCell::from(c),
+                        domain: self.domain.clone(),
                     },
                     r,
                 )),
@@ -489,39 +473,34 @@ impl Cell {
     /// The path is returned as a string of labels separated by slashes.
     pub fn path(&self) -> Res<String> {
         let mut v: Vec<String> = Vec::new();
-        let mut some_cell = Some(self.clone());
+        let mut some_orig = Some(self.clone());
         let mut iteration = 0;
-        while let Some(cell) = some_cell {
+        while let Some(ref cell) = some_orig {
             iteration += 1;
             if iteration > MAX_PATH_ITEMS {
                 return fault("path iteration limit reached");
             }
-            let domain = cell.domain();
+
             v.push(cell.domain_path()?);
-            if let Err(e) = domain.origin().err() {
-                if e.kind == HErrKind::None {
-                    let rr = domain.root().read();
-                    if domain.interpretation() == "value" {
-                        let mut s = format!(
-                            "{}",
-                            rr.value().unwrap_or(Value::Str("<💥 root read error>"))
-                        )
-                        .replace('\n', "\\n");
-                        if s.len() > 16 {
-                            s.truncate(16);
-                            s += "...";
-                        }
-                        v.push(format!("`{}`", s));
-                    }
-                }
+
+            let base_str = if cell.domain.origin.is_some() {
+                format!("{}{}", Relation::Interpretation, cell.interpretation())
             } else {
-                v.push(format!(
-                    "{}{}",
-                    Relation::Interpretation,
-                    domain.interpretation()
-                ));
-            }
-            some_cell = domain.origin().err().ok();
+                let mut s = format!(
+                    "{}",
+                    cell.read()
+                        .value()
+                        .unwrap_or(Value::Str("<💥 cell read error>"))
+                )
+                .replace('\n', "\\n");
+                if s.len() > 16 {
+                    s.truncate(16);
+                    s += "...";
+                }
+                format!("`{}`", s)
+            };
+            v.push(base_str);
+            some_orig = cell.domain.origin.clone();
         }
         v.reverse();
         let s = v.join("");
@@ -529,7 +508,7 @@ impl Cell {
     }
 
     pub fn debug_string(&self) -> String {
-        let err_fn = |err| eprintln!("💥 str write error {}", err);
+        let err_fn = |err| warning!("💥 str write error {}", err);
         let mut s = String::new();
         match self.read().err() {
             Ok(reader) => {
@@ -561,12 +540,28 @@ impl Cell {
         }
         nores().with_path_res(self.path())
     }
+
+    pub fn save(&self, target: Cell) -> Res<()> {
+        if let DynCell::Error(err) = &self.dyn_cell {
+            return Err(err.clone());
+        }
+        if let DynCell::Error(err) = &target.dyn_cell {
+            return Err(err.clone());
+        }
+        dispatch_dyn_cell!(&self.dyn_cell, |x| {
+            match x.save(target) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e),
+            }
+        })
+    }
 }
 
 #[test]
 fn test_cell_domain_path() -> Res<()> {
     let tree = r#"{"a": {"x": "xa", "b": {"x": "xb", "c": {"x": "xc"}}}, "m": [1, 2, 3]}"#;
     let root = Cell::from(tree).be("yaml");
+
     assert_eq!(root.domain_path()?, r#""#);
     let leaf = root.to("/a/b/c/x");
     assert_eq!(leaf.domain_path()?, r#"/a/b/c/x"#);
@@ -581,19 +576,23 @@ fn test_cell_domain_path() -> Res<()> {
 impl Group {
     pub fn label_type(&self) -> LabelType {
         match self {
-            Group::Dyn(dyn_group) => {
+            Group::Dyn { dyn_group, .. } => {
                 dispatch_dyn_group!(dyn_group, |x| { x.label_type() })
             }
-            Group::Elevation(elevation_group) => elevation_group.label_type(),
+            Group::Elevation {
+                elevation_group, ..
+            } => elevation_group.label_type(),
         }
     }
 
     pub fn len(&self) -> Res<usize> {
         match self {
-            Group::Dyn(dyn_group) => {
+            Group::Dyn { dyn_group, .. } => {
                 dispatch_dyn_group!(dyn_group, |x| { x.len() })
             }
-            Group::Elevation(elevation_group) => elevation_group.len(),
+            Group::Elevation {
+                elevation_group, ..
+            } => elevation_group.len(),
         }
     }
 
@@ -603,20 +602,25 @@ impl Group {
 
     pub fn at(&self, index: usize) -> Cell {
         match self {
-            Group::Dyn(dyn_group) => {
+            Group::Dyn { dyn_group, domain } => {
                 dispatch_dyn_group!(dyn_group, |x| {
                     Cell {
                         dyn_cell: match x.at(index) {
                             Ok(c) => DynCell::from(c),
                             Err(e) => DynCell::from(e),
                         },
+                        domain: domain.clone(),
                     }
                 })
             }
-            Group::Elevation(elevation_group) => match elevation_group.at(index) {
+            Group::Elevation {
+                elevation_group,
+                domain,
+            } => match elevation_group.at(index) {
                 Ok(c) => c,
                 Err(e) => Cell {
                     dyn_cell: DynCell::from(e),
+                    domain: domain.clone(),
                 },
             },
         }
@@ -625,20 +629,25 @@ impl Group {
     pub fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Cell {
         let key = key.into();
         match self {
-            Group::Dyn(dyn_group) => {
+            Group::Dyn { dyn_group, domain } => {
                 dispatch_dyn_group!(dyn_group, |x| {
                     Cell {
                         dyn_cell: match x.get(key) {
                             Ok(c) => DynCell::from(c),
                             Err(e) => DynCell::from(e),
                         },
+                        domain: domain.clone(),
                     }
                 })
             }
-            Group::Elevation(elevation_group) => match elevation_group.get(key) {
+            Group::Elevation {
+                elevation_group,
+                domain,
+            } => match elevation_group.get(key) {
                 Ok(c) => c,
                 Err(e) => Cell {
                     dyn_cell: DynCell::from(e),
+                    domain: domain.clone(),
                 },
             },
         }
@@ -646,9 +655,9 @@ impl Group {
 
     pub fn err(self) -> Res<Group> {
         match self {
-            Group::Dyn(dyn_group) => match dyn_group {
+            Group::Dyn { dyn_group, domain } => match dyn_group {
                 DynGroup::Error(error) => Err(error),
-                _ => Ok(Group::Dyn(dyn_group)),
+                _ => Ok(Group::Dyn { dyn_group, domain }),
             },
             _ => Ok(self),
         }
@@ -695,13 +704,15 @@ impl<'a> PathSearch<'a> {
             Some(Ok(c)) => c,
             Some(Err(e)) => Cell {
                 dyn_cell: DynCell::from(e),
+                domain: self.start.domain.clone(),
             },
             None => {
                 let mut path = self.start.path().unwrap_or_default();
                 path += self.eval_iter.unmatched_path().as_str();
-                println!("💥 path search failed: {}", path);
+                warning!("💥 path search failed: {}", path);
                 Cell {
                     dyn_cell: DynCell::from(noerr().with_path(path)),
+                    domain: self.start.domain.clone(),
                 }
             }
         }

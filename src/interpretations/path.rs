@@ -15,44 +15,21 @@ static VALUE_TO_PATH: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Domain(Rc<(PathBuf, String, Option<XCell>)>);
-
-impl DomainTrait for Domain {
-    type Cell = Cell;
-
-    fn interpretation(&self) -> &str {
-        "path"
-    }
-
-    fn root(&self) -> Res<Self::Cell> {
-        Ok(Cell(self.clone()))
-    }
-
-    fn origin(&self) -> Res<XCell> {
-        match self.0 .2.as_ref() {
-            Some(cell) => Ok(cell.clone()),
-            None => nores(),
-        }
-    }
-}
-
-impl SaveTrait for Domain {
-    // TODO: add implementation
-}
+pub struct Data(PathBuf, String);
 
 #[derive(Clone, Debug)]
-pub struct Cell(Domain);
+pub struct Cell(Rc<Data>);
 
 #[derive(Debug)]
-pub struct CellReader(Domain);
+pub struct CellReader(Rc<Data>);
 
 #[derive(Debug)]
-pub struct CellWriter {}
+pub struct CellWriter(Rc<Data>);
 impl CellWriterTrait for CellWriter {}
 
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
-        match cell.domain().interpretation() {
+        match cell.interpretation() {
             "value" => {
                 let r = cell.read();
                 let v = r.value()?;
@@ -72,32 +49,19 @@ impl Cell {
         }
     }
 
-    pub fn from_string(url: impl Into<String>) -> Res<XCell> {
-        let url = url.into();
-        let path = PathBuf::from(&url);
-        Self::make_cell(path, url, None)
-    }
-
-    pub fn from_path(path: impl Into<PathBuf>) -> Res<XCell> {
-        let path = path.into();
-        Self::make_cell(path.clone(), path.to_string_lossy().into_owned(), None)
-    }
-
     fn make_cell(path: PathBuf, string: String, origin: Option<XCell>) -> Res<XCell> {
-        let domain = Domain(Rc::new((path, string, origin)));
-        Ok(XCell {
-            dyn_cell: DynCell::from(domain.root()?),
-        })
+        let path_cell = Cell(Rc::new(Data(path, string)));
+        Ok(new_cell(DynCell::from(path_cell), origin))
     }
 
     pub fn as_path(&self) -> Res<&Path> {
-        Ok(self.0 .0 .0.as_path())
+        Ok(self.0 .0.as_path())
     }
 }
 
 impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
-        Ok(Value::Str(&self.0 .0 .1))
+        Ok(Value::Str(&self.0 .1))
     }
 
     fn label(&self) -> Res<Value> {
@@ -110,13 +74,12 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellTrait for Cell {
-    type Domain = Domain;
     type Group = VoidGroup<Self>;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
 
-    fn domain(&self) -> Domain {
-        self.0.clone()
+    fn interpretation(&self) -> &str {
+        "path"
     }
 
     fn ty(&self) -> Res<&str> {
@@ -128,7 +91,7 @@ impl CellTrait for Cell {
     }
 
     fn write(&self) -> Res<Self::CellWriter> {
-        Ok(CellWriter {})
+        Ok(CellWriter(self.0.clone()))
     }
 
     fn head(&self) -> Res<(Self, Relation)> {

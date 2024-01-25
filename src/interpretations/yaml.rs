@@ -1,5 +1,5 @@
 use std::io::Read;
-use std::{fs::File, path::Path, rc::Rc};
+use std::{fs::File, rc::Rc};
 
 use indexmap::IndexMap;
 use linkme::distributed_slice;
@@ -15,45 +15,6 @@ static VALUE_TO_YAML: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Domain(Rc<DomainData>);
-
-#[derive(Clone, Debug)]
-pub struct DomainData {
-    nodes: NodeGroup,
-    origin: Option<XCell>,
-}
-
-impl DomainTrait for Domain {
-    type Cell = Cell;
-
-    fn interpretation(&self) -> &str {
-        "yaml"
-    }
-
-    fn root(&self) -> Res<Cell> {
-        Ok(Cell {
-            group: Group {
-                domain: self.clone(),
-                nodes: self.0.nodes.clone(),
-                head: None,
-            },
-            pos: 0,
-        })
-    }
-
-    fn origin(&self) -> Res<XCell> {
-        match &self.0.origin {
-            Some(c) => Ok(c.clone()),
-            None => nores(),
-        }
-    }
-}
-
-impl SaveTrait for Domain {
-    // TODO: add implementation
-}
-
-#[derive(Clone, Debug)]
 pub struct Cell {
     group: Group,
     pos: usize,
@@ -67,13 +28,11 @@ pub struct CellReader {
 
 #[derive(Debug)]
 pub struct CellWriter {}
-impl CellWriterTrait for CellWriter {}
 
 #[derive(Clone, Debug)]
 pub struct Group {
-    domain: Domain,
     nodes: NodeGroup,
-    head: Option<Box<(Cell, Relation)>>,
+    head: Option<Rc<(Cell, Relation)>>,
 }
 
 #[derive(Clone, Debug)]
@@ -107,7 +66,7 @@ impl From<ScanError> for HErr {
 
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
-        match cell.domain().interpretation() {
+        match cell.interpretation() {
             "value" => {
                 let r = cell.read();
                 let v = r.value()?;
@@ -152,42 +111,17 @@ impl Cell {
         }
     }
 
-    pub fn from_path(path: impl AsRef<Path>) -> Res<XCell> {
-        let mut source = String::new();
-        let path = path.as_ref();
-        File::open(path)
-            .map_err(|e| {
-                caused(
-                    HErrKind::IO,
-                    format!("cannot open file: {}", path.to_string_lossy()),
-                    e,
-                )
-            })?
-            .read_to_string(&mut source)
-            .map_err(|e| {
-                caused(
-                    HErrKind::IO,
-                    format!("cannot read file: {}", path.to_string_lossy()),
-                    e,
-                )
-            })?;
-        Cell::make_cell(source, None)
-    }
-
-    pub fn from_str(source: impl AsRef<str>) -> Res<XCell> {
-        Cell::make_cell(source, None)
-    }
-
     fn make_cell(s: impl AsRef<str>, origin: Option<XCell>) -> Res<XCell> {
         let yaml_docs = YamlLoader::load_from_str(s.as_ref())?;
         let root_group_res: Res<Vec<Node>> = yaml_docs.iter().map(node_from_yaml).collect();
-        let domain = Domain(Rc::new(DomainData {
-            origin,
-            nodes: NodeGroup::Array(Rc::new(root_group_res?)),
-        }));
-        Ok(XCell {
-            dyn_cell: DynCell::from(domain.root()?),
-        })
+        let yaml_cell = Cell {
+            group: Group {
+                nodes: NodeGroup::Array(Rc::new(root_group_res?)),
+                head: None,
+            },
+            pos: 0,
+        };
+        Ok(new_cell(DynCell::from(yaml_cell), origin))
     }
 }
 
@@ -220,14 +154,15 @@ impl CellReaderTrait for CellReader {
     }
 }
 
+impl CellWriterTrait for CellWriter {}
+
 impl CellTrait for Cell {
-    type Domain = Domain;
     type Group = Group;
     type CellReader = CellReader;
     type CellWriter = CellWriter;
 
-    fn domain(&self) -> Domain {
-        self.group.domain.clone()
+    fn interpretation(&self) -> &str {
+        "yaml"
     }
 
     fn ty(&self) -> Res<&str> {
@@ -258,27 +193,23 @@ impl CellTrait for Cell {
         match self.group.nodes {
             NodeGroup::Array(ref array) => match &array.get(self.pos) {
                 Some(Node::Array(a)) => Ok(Group {
-                    domain: self.group.domain.clone(),
                     nodes: NodeGroup::Array(a.clone()),
-                    head: Some(Box::new((self.clone(), Relation::Sub))),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                 }),
                 Some(Node::Object(o)) => Ok(Group {
-                    domain: self.group.domain.clone(),
                     nodes: NodeGroup::Object(o.clone()),
-                    head: Some(Box::new((self.clone(), Relation::Sub))),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                 }),
                 _ => nores(),
             },
             NodeGroup::Object(ref object) => match object.get_index(self.pos) {
                 Some((_, Node::Array(a))) => Ok(Group {
-                    domain: self.group.domain.clone(),
                     nodes: NodeGroup::Array(a.clone()),
-                    head: Some(Box::new((self.clone(), Relation::Sub))),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                 }),
                 Some((_, Node::Object(o))) => Ok(Group {
-                    domain: self.group.domain.clone(),
                     nodes: NodeGroup::Object(o.clone()),
-                    head: Some(Box::new((self.clone(), Relation::Sub))),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                 }),
                 _ => nores(),
             },
@@ -312,7 +243,8 @@ fn scalar_to_value(s: &Scalar) -> Value {
         Scalar::Bool(b) => Value::Bool(*b),
         Scalar::Int(i) => Value::Int(Int::I64(*i)),
         Scalar::Float(f) => Value::Float(*f),
-        Scalar::Alias(n) => Value::Str("alias"), // todo: fix this
+        // TODO: proper support for yaml aliases
+        Scalar::Alias(n) => Value::Str("alias"),
         Scalar::String(ref s) => Value::Str(s.as_str()),
     }
 }

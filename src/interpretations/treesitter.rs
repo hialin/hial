@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{cell::OnceCell, fmt::Debug, path::Path, rc::Rc};
+use std::{cell::OnceCell, fmt::Debug, rc::Rc};
 
 use linkme::distributed_slice;
 use tree_sitter::{Parser, Tree, TreeCursor};
@@ -16,55 +16,20 @@ static VALUE_TO_RUST: ElevationConstructor = ElevationConstructor {
     constructor: Cell::from_cell,
 };
 
-// TODO: rewrite treesitter interpretation as a thin wrapper around a treesitter cursor
-// will have to solve the lifetime problem (cursor has a lifetime tied to the tree)
-// which is not allowed by the current interpretation traits
-
 #[derive(Clone, Debug)]
-pub struct Domain(Rc<DomainData>);
-
-#[derive(Clone, Debug)]
-pub struct DomainData {
+pub struct Domain {
     language: String,
     source: String,
     tree: Tree,
-    origin: Option<XCell>,
 }
 
 pub unsafe fn change_lifetime<'old, 'new: 'old, T: 'new>(data: &'old T) -> &'new T {
     &*(data as *const _)
 }
 
-impl DomainTrait for Domain {
-    type Cell = Cell;
-
-    fn interpretation(&self) -> &str {
-        self.0.language.as_str()
-    }
-
-    fn root(&self) -> Res<Self::Cell> {
-        let cursor = self.0.tree.walk();
-        Ok(Cell {
-            domain: self.clone(),
-            // TODO: unsafe change of lifetime to 'static
-            // should be safe as long as the tree is in Rc and not modified
-            cursor: unsafe { std::mem::transmute(cursor) },
-            value: OnceCell::new(),
-        })
-    }
-
-    fn origin(&self) -> Res<XCell> {
-        self.0.origin.clone().ok_or(noerr())
-    }
-}
-
-impl SaveTrait for Domain {
-    // TODO: add implementation
-}
-
 #[derive(Clone)]
 pub struct Cell {
-    domain: Domain,
+    domain: Rc<Domain>,
     // since the tree is in a Rc, the treecursor is valid as long as the cell is valid
     cursor: TreeCursor<'static>,
     value: OnceCell<Option<String>>,
@@ -75,7 +40,7 @@ impl fmt::Debug for Cell {
         write!(
             f,
             "Cell({:?}, {:?})",
-            self.domain.interpretation(),
+            self.interpretation(),
             self.cursor.node().kind()
         )
     }
@@ -83,7 +48,7 @@ impl fmt::Debug for Cell {
 
 impl Cell {
     pub fn from_cell(cell: XCell, lang: &'static str) -> Res<XCell> {
-        match cell.domain().interpretation() {
+        match cell.interpretation() {
             "value" => {
                 let source = cell.read().value()?.as_cow_str().into_owned();
                 Self::make_cell(source, lang.to_owned(), Some(cell))
@@ -98,25 +63,13 @@ impl Cell {
         }
     }
 
-    pub fn from_path(path: &Path, language: String) -> Res<XCell> {
-        let source = std::fs::read_to_string(path)
-            .map_err(|e| caused(HErrKind::IO, "cannot read file", e))?;
-        Self::make_cell(source, language, None)
-    }
-
-    pub fn from_string(source: String, language: String) -> Res<XCell> {
-        Self::make_cell(source, language, None)
-    }
-
     fn make_cell(source: String, language: String, origin: Option<XCell>) -> Res<XCell> {
-        let domain = sitter_from_source(source, language, origin)?;
-        Ok(XCell {
-            dyn_cell: DynCell::from(domain.root()?),
-        })
+        let ts_cell = sitter_from_source(source, language)?;
+        Ok(new_cell(DynCell::from(ts_cell), origin))
     }
 }
 
-fn sitter_from_source(source: String, language: String, origin: Option<XCell>) -> Res<Domain> {
+fn sitter_from_source(source: String, language: String) -> Res<Cell> {
     let sitter_language = match language.as_str() {
         "rust" => unsafe { tree_sitter_rust() },
         "javascript" => unsafe { tree_sitter_javascript() },
@@ -150,17 +103,29 @@ fn sitter_from_source(source: String, language: String, origin: Option<XCell>) -
     let tree = guard_some!(parser.parse(&source, None), {
         return fault("cannot get parse tree");
     });
-    Ok(Domain(Rc::new(DomainData {
+    let domain = Rc::new(Domain {
         language,
         source,
         tree,
-        origin,
-    })))
+    });
+    Ok(Cell {
+        domain: domain.clone(),
+        // TODO: find alternative for this unsafe change of lifetime to 'static
+        // this should be safe as long as the tree is in Rc and not modified
+        cursor: unsafe { std::mem::transmute(domain.tree.walk()) },
+        value: OnceCell::new(),
+    })
 }
 
 impl CellReaderTrait for Cell {
     fn index(&self) -> Res<usize> {
-        self.cursor.field_id().map(|i| i as usize).ok_or_else(noerr)
+        let mut n = self.cursor.node();
+        let mut i = 0;
+        while let Some(p) = n.prev_sibling() {
+            n = p;
+            i += 1;
+        }
+        Ok(i)
     }
 
     fn label(&self) -> Res<Value> {
@@ -172,14 +137,14 @@ impl CellReaderTrait for Cell {
             let mut opt_value = None;
             let node = self.cursor.node();
             if !node.is_named() || node.child_count() == 0 || node.kind() == "string_literal" {
-                opt_value = Some(self.domain().0.source[node.byte_range()].to_string());
+                opt_value = Some(self.domain.source[node.byte_range()].to_string());
             }
             self.value
                 .set(opt_value)
                 .map_err(|e| faulterr("cannot set value"))?;
         }
         // println!("value: {:?}", self.value.get());
-        if let Some(value) = self.value.get().unwrap() {
+        if let Some(value) = self.value.get().unwrap().as_ref() {
             Ok(Value::Str(value))
         } else {
             nores()
@@ -190,20 +155,19 @@ impl CellReaderTrait for Cell {
 impl CellWriterTrait for Cell {}
 
 impl CellTrait for Cell {
-    type Domain = Domain;
     type Group = Cell;
     type CellReader = Cell;
     type CellWriter = Cell;
 
-    fn domain(&self) -> Domain {
-        self.domain.clone()
+    fn interpretation(&self) -> &str {
+        self.domain.language.as_str()
     }
 
     fn ty(&self) -> Res<&str> {
         let node = self.cursor.node();
         let typ = self.cursor.field_name().unwrap_or_else(|| {
-            if node.kind() == &self.domain().0.source[node.byte_range()] {
-                "literal"
+            if node.kind() == &self.domain.source[node.byte_range()] {
+                "symbol"
             } else {
                 node.kind()
             }

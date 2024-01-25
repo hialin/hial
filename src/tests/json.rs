@@ -1,5 +1,6 @@
 use crate::base::*;
 use crate::pprint::pprint;
+use crate::utils::log::set_verbose;
 
 #[test]
 fn test_json() -> Res<()> {
@@ -116,8 +117,7 @@ fn json_save() -> Res<()> {
     assert_eq!(json.to(path1).read().value()?, newvalue);
     assert_eq!(json.to(path2).read().value()?, Value::None);
 
-    // TODO: uncomment and fix this write_back() here
-    json.domain().save(SaveTarget::Origin)?;
+    json.save(flattree.clone())?;
 
     assert_eq!(
         flattree.read().value()?.to_string(),
@@ -129,6 +129,7 @@ fn json_save() -> Res<()> {
 
 #[test]
 fn json_path() -> Res<()> {
+    set_verbose(true);
     let treestring = r#"{
         "hosts": [
             {
@@ -147,8 +148,9 @@ fn json_path() -> Res<()> {
     .replace([' ', '\t', '\n'], "");
     let json = Cell::from(treestring).be("json");
     let path = "/hosts/[1]/labels/power";
+    let target = json.to(path).err()?;
     assert_eq!(
-        json.to(path).err()?.path()?,
+        target.path()?,
         r#"`{"hosts":[{"host...`^json"#.to_string() + path,
     );
     Ok(())
