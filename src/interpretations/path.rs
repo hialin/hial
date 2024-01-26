@@ -70,6 +70,10 @@ impl CellReaderTrait for CellReader {
     fn index(&self) -> Res<usize> {
         nores()
     }
+
+    fn serial(&self) -> Res<String> {
+        nores()
+    }
 }
 
 impl CellWriterTrait for CellWriter {

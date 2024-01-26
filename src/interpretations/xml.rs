@@ -312,6 +312,10 @@ impl CellReaderTrait for CellReader {
             },
         }
     }
+
+    fn serial(&self) -> Res<String> {
+        todo!()
+    }
 }
 
 impl CellWriterTrait for CellWriter {

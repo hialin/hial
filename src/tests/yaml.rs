@@ -25,12 +25,6 @@ fn test_yaml() -> Res<()> {
     assert_eq!(power1.read().value()?, Value::Str("weak"));
     assert_eq!(power2.read().value()?, Value::Str("strong"));
     assert_eq!(group2.read().value()?, Value::Bool(true));
-
-    yaml.to("/hosts/[0]/labels/power")
-        .write()
-        .set_value("putty".into())?;
-    assert_eq!(yaml.to("/hosts/[0]/labels/power").read().value()?, "putty");
-
     Ok(())
 }
 
@@ -56,13 +50,22 @@ hosts:
 }
 
 #[test]
-fn yaml_write() -> Res<()> {
-    assert_eq!(1, 0);
-    Ok(())
-}
-
-#[test]
-fn yaml_save() -> Res<()> {
-    assert_eq!(1, 0);
+fn yaml_write_and_save() -> Res<()> {
+    let yaml = r#"
+  hosts:
+    - host_id: 1h48
+      labels:
+        power: "weak"
+        gateway: "true"
+    - host_id: "1h51"
+      labels:
+        "group2": true
+        "power": "strong"
+"#;
+    let yaml = Cell::from(yaml).be("yaml");
+    yaml.to("/hosts/[0]/labels/power")
+        .write()
+        .set_value("putty".into())?;
+    assert_eq!(yaml.to("/hosts/[0]/labels/power").read().value()?, "putty");
     Ok(())
 }

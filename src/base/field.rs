@@ -1,7 +1,7 @@
 /// A Field domain is not really a separate domain, but a view on a cell.
 /// Most domain and cell operations are forwarded to the underlying cell.
 ///
-use std::rc::Rc;
+use std::{cell::OnceCell, rc::Rc};
 
 use crate::base::*;
 
@@ -12,6 +12,7 @@ pub enum FieldType {
     Label,
     Type,
     Index,
+    Serial,
 }
 
 #[derive(Clone, Debug)]
@@ -30,6 +31,7 @@ pub struct FieldReader {
     pub(crate) cell: Rc<Cell>,
     pub(crate) ty: FieldType,
     pub(crate) reader: Box<CellReader>,
+    pub(crate) serial: OnceCell<Res<String>>,
 }
 
 #[derive(Debug)]
@@ -121,6 +123,7 @@ impl CellTrait for FieldCell {
             cell: self.cell.clone(),
             ty: self.ty,
             reader: Box::new(self.cell.read().err()?),
+            serial: OnceCell::new(),
         })
     }
 
@@ -138,12 +141,6 @@ impl CellTrait for FieldCell {
         // returns the correct head.
         unimplemented!()
     }
-
-    fn save(&self, target: extra::Cell) -> Res<()> {
-        todo!()
-        // not sure if this is the right way to do it:
-        // self.cell.save(target)
-    }
 }
 
 impl CellReaderTrait for FieldReader {
@@ -153,6 +150,12 @@ impl CellReaderTrait for FieldReader {
             FieldType::Label => self.reader.label(),
             FieldType::Type => Ok(Value::Str(self.cell.ty()?)),
             FieldType::Index => Ok(Value::from(self.reader.index()? as u64)),
+            FieldType::Serial => self
+                .serial
+                .get_or_init(|| self.reader.serial())
+                .as_deref()
+                .map_err(|e| e.clone())
+                .map(Value::Str),
         }
     }
 
@@ -168,6 +171,10 @@ impl CellReaderTrait for FieldReader {
         //     FieldType::Type => Ok(Value::Str("type")),
         //     FieldType::Index => Ok(Value::Str("index")),
         // }
+    }
+
+    fn serial(&self) -> Res<String> {
+        nores()
     }
 }
 

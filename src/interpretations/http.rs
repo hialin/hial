@@ -237,6 +237,10 @@ impl CellReaderTrait for CellReader {
             _ => fault(format!("bad kind/pos: {:?}/{}", self.kind, self.pos)),
         }
     }
+
+    fn serial(&self) -> Res<String> {
+        nores()
+    }
 }
 
 impl CellWriterTrait for CellWriter {

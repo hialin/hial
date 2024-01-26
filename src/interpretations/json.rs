@@ -99,29 +99,6 @@ impl Cell {
         };
         Ok(new_cell(DynCell::from(json_cell), origin))
     }
-
-    pub fn serialize(&self) -> Res<String> {
-        let serde_value = match self.group.nodes {
-            NodeGroup::Array(ref a) => match a
-                .read()
-                .ok_or_else(|| lockerr("cannot read nodes"))?
-                .get(self.pos)
-            {
-                Some(node) => node_to_serde(node)?,
-                None => return fault(format!("bad index {}", self.pos)),
-            },
-            NodeGroup::Object(ref o) => match o
-                .read()
-                .ok_or_else(|| lockerr("cannot read nodes"))?
-                .get_index(self.pos)
-            {
-                Some(x) => node_to_serde(x.1)?,
-                None => return fault(format!("bad index {}", self.pos)),
-            },
-        };
-        // Ok(serde_json::to_string_pretty(&serde_value)?)
-        Ok(serde_json::to_string(&serde_value)?)
-    }
 }
 
 impl CellTrait for Cell {
@@ -190,12 +167,12 @@ impl CellTrait for Cell {
                 .get(self.pos)
             {
                 Some(Node::Array(a)) => Ok(Group {
-                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                     nodes: NodeGroup::Array(a.clone()),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                 }),
                 Some(Node::Object(o)) => Ok(Group {
-                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                     nodes: NodeGroup::Object(o.clone()),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                 }),
                 _ => nores(),
             },
@@ -205,12 +182,12 @@ impl CellTrait for Cell {
                 .get_index(self.pos)
             {
                 Some((_, Node::Array(a))) => Ok(Group {
-                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                     nodes: NodeGroup::Array(a.clone()),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                 }),
                 Some((_, Node::Object(o))) => Ok(Group {
-                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                     nodes: NodeGroup::Object(o.clone()),
+                    head: Some(Rc::new((self.clone(), Relation::Sub))),
                 }),
                 _ => nores(),
             },
@@ -222,11 +199,6 @@ impl CellTrait for Cell {
             Some(ref head) => Ok((head.0.clone(), head.1)),
             None => nores(),
         }
-    }
-
-    fn save(&self, target: XCell) -> Res<()> {
-        let s = self.serialize()?;
-        target.write().set_value(OwnValue::String(s))
     }
 }
 
@@ -270,6 +242,21 @@ impl CellReaderTrait for CellReader {
                 None => fault(""),
             },
         }
+    }
+
+    fn serial(&self) -> Res<String> {
+        let serde_value = match self.nodes {
+            ReadNodeGroup::Array(ref a) => match a.get(self.pos) {
+                Some(node) => node_to_serde(node)?,
+                None => return fault(format!("bad index {}", self.pos)),
+            },
+            ReadNodeGroup::Object(ref o) => match o.get_index(self.pos) {
+                Some(x) => node_to_serde(x.1)?,
+                None => return fault(format!("bad index {}", self.pos)),
+            },
+        };
+        // Ok(serde_json::to_string_pretty(&serde_value)?)
+        Ok(serde_json::to_string(&serde_value)?)
     }
 }
 

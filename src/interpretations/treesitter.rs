@@ -184,6 +184,12 @@ impl CellReaderTrait for CellReader {
             nores()
         }
     }
+
+    fn serial(&self) -> Res<String> {
+        let node = self.cell.cursor.node();
+        let src = &self.cell.domain.source[node.byte_range()];
+        Ok(src.to_string())
+    }
 }
 
 impl CellWriterTrait for Cell {

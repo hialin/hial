@@ -185,6 +185,9 @@ impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
         dispatch_dyn_cell_reader!(&self.0, |x| { Ok(x.value()?) })
     }
+    fn serial(&self) -> Res<String> {
+        dispatch_dyn_cell_reader!(&self.0, |x| { Ok(x.serial()?) })
+    }
 }
 impl CellReader {
     pub fn err(self) -> Res<CellReader> {
@@ -548,12 +551,8 @@ impl Cell {
         if let DynCell::Error(err) = &target.dyn_cell {
             return Err(err.clone());
         }
-        dispatch_dyn_cell!(&self.dyn_cell, |x| {
-            match x.save(target) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(e),
-            }
-        })
+        let s = self.read().serial()?;
+        target.write().set_value(OwnValue::String(s))
     }
 }
 

@@ -6,6 +6,7 @@ use linkme::distributed_slice;
 use yaml_rust::{ScanError, Yaml, YamlLoader};
 
 use crate::base::{Cell as XCell, *};
+use crate::utils::ownrc::{OwnRc, ReadRc, WriteRc};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_YAML: ElevationConstructor = ElevationConstructor {
@@ -22,12 +23,15 @@ pub struct Cell {
 
 #[derive(Debug)]
 pub struct CellReader {
-    group: Group,
+    nodes: ReadNodeGroup,
     pos: usize,
 }
 
 #[derive(Debug)]
-pub struct CellWriter {}
+pub struct CellWriter {
+    nodes: WriteNodeGroup,
+    pos: usize,
+}
 
 #[derive(Clone, Debug)]
 pub struct Group {
@@ -37,25 +41,27 @@ pub struct Group {
 
 #[derive(Clone, Debug)]
 pub enum NodeGroup {
-    Array(Rc<Vec<Node>>),
-    Object(Rc<IndexMap<String, Node>>),
+    Array(OwnRc<Vec<Node>>),
+    Object(OwnRc<IndexMap<Yaml, Node>>),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Scalar {
-    Null,
-    Bool(bool),
-    Int(i64),
-    Float(StrFloat),
-    Alias(usize),
-    String(String),
+#[derive(Debug)]
+pub enum ReadNodeGroup {
+    Array(ReadRc<Vec<Node>>),
+    Object(ReadRc<IndexMap<Yaml, Node>>),
+}
+
+#[derive(Debug)]
+pub enum WriteNodeGroup {
+    Array(WriteRc<Vec<Node>>),
+    Object(WriteRc<IndexMap<Yaml, Node>>),
 }
 
 #[derive(Clone, Debug)]
 pub enum Node {
-    Scalar(Scalar),
-    Array(Rc<Vec<Node>>),
-    Object(Rc<IndexMap<String, Node>>),
+    Scalar(Yaml),
+    Array(OwnRc<Vec<Node>>),
+    Object(OwnRc<IndexMap<Yaml, Node>>),
 }
 
 impl From<ScanError> for HErr {
@@ -116,7 +122,7 @@ impl Cell {
         let root_group_res: Res<Vec<Node>> = yaml_docs.iter().map(node_from_yaml).collect();
         let yaml_cell = Cell {
             group: Group {
-                nodes: NodeGroup::Array(Rc::new(root_group_res?)),
+                nodes: NodeGroup::Array(OwnRc::new(root_group_res?)),
                 head: None,
             },
             pos: 0,
@@ -131,26 +137,44 @@ impl CellReaderTrait for CellReader {
     }
 
     fn label(&self) -> Res<Value> {
-        match self.group.nodes {
-            NodeGroup::Array(ref a) => nores(),
-            NodeGroup::Object(ref o) => match o.get_index(self.pos) {
-                Some(x) => Ok(Value::Str(x.0)),
+        match self.nodes {
+            ReadNodeGroup::Array(ref a) => nores(),
+            ReadNodeGroup::Object(ref o) => match o.get_index(self.pos) {
+                Some(x) => yaml_to_value(x.0),
                 None => fault(""),
             },
         }
     }
 
     fn value(&self) -> Res<Value> {
-        match self.group.nodes {
-            NodeGroup::Array(ref a) => match a.get(self.pos) {
-                Some(x) => get_value(x),
+        match self.nodes {
+            ReadNodeGroup::Array(ref a) => match a.get(self.pos) {
+                Some(x) => to_value(x),
                 None => fault(""),
             },
-            NodeGroup::Object(ref o) => match o.get_index(self.pos) {
-                Some(x) => get_value(x.1),
+            ReadNodeGroup::Object(ref o) => match o.get_index(self.pos) {
+                Some(x) => to_value(x.1),
                 None => fault(""),
             },
         }
+    }
+
+    fn serial(&self) -> Res<String> {
+        let yaml = match self.nodes {
+            ReadNodeGroup::Array(ref a) => match a.get(self.pos) {
+                Some(x) => node_to_yaml(x)?,
+                None => fault("")?,
+            },
+            ReadNodeGroup::Object(ref o) => match o.get_index(self.pos) {
+                Some(x) => node_to_yaml(x.1)?,
+                None => fault("")?,
+            },
+        };
+        let mut s = String::new();
+        yaml_rust::emitter::YamlEmitter::new(&mut s)
+            .dump(&yaml)
+            .map_err(|e| caused(HErrKind::InvalidFormat, "cannot serialize yaml node", e))?;
+        Ok(s)
     }
 }
 
@@ -171,31 +195,58 @@ impl CellTrait for Cell {
 
     fn ty(&self) -> Res<&str> {
         match self.group.nodes {
-            NodeGroup::Array(ref a) => match a.get(self.pos) {
-                Some(n) => Ok(get_ty(n)),
-                None => fault(""),
-            },
-            NodeGroup::Object(ref o) => match o.get_index(self.pos) {
-                Some(x) => Ok(get_ty(x.1)),
-                None => fault(""),
-            },
+            NodeGroup::Array(ref a) => {
+                let a = a.read().ok_or_else(|| lockerr("cannot read group"))?;
+                match a.get(self.pos) {
+                    Some(n) => Ok(get_ty(n)),
+                    None => fault(""),
+                }
+            }
+            NodeGroup::Object(ref o) => {
+                let o = o.read().ok_or_else(|| lockerr("cannot read group"))?;
+                match o.get_index(self.pos) {
+                    Some(x) => Ok(get_ty(x.1)),
+                    None => fault(""),
+                }
+            }
         }
     }
 
     fn read(&self) -> Res<Self::CellReader> {
         Ok(CellReader {
-            group: self.group.clone(),
+            nodes: match self.group.nodes {
+                NodeGroup::Array(ref a) => {
+                    ReadNodeGroup::Array(a.read().ok_or_else(|| lockerr("cannot read group"))?)
+                }
+                NodeGroup::Object(ref o) => {
+                    ReadNodeGroup::Object(o.read().ok_or_else(|| lockerr("cannot read group"))?)
+                }
+            },
             pos: self.pos,
         })
     }
 
     fn write(&self) -> Res<Self::CellWriter> {
-        Ok(CellWriter {})
+        Ok(CellWriter {
+            nodes: match self.group.nodes {
+                NodeGroup::Array(ref a) => {
+                    WriteNodeGroup::Array(a.write().ok_or_else(|| lockerr("cannot write group"))?)
+                }
+                NodeGroup::Object(ref o) => {
+                    WriteNodeGroup::Object(o.write().ok_or_else(|| lockerr("cannot write group"))?)
+                }
+            },
+            pos: self.pos,
+        })
     }
 
     fn sub(&self) -> Res<Group> {
         match self.group.nodes {
-            NodeGroup::Array(ref array) => match &array.get(self.pos) {
+            NodeGroup::Array(ref array) => match &array
+                .read()
+                .ok_or_else(|| lockerr("cannot read cell"))?
+                .get(self.pos)
+            {
                 Some(Node::Array(a)) => Ok(Group {
                     nodes: NodeGroup::Array(a.clone()),
                     head: Some(Rc::new((self.clone(), Relation::Sub))),
@@ -206,7 +257,11 @@ impl CellTrait for Cell {
                 }),
                 _ => nores(),
             },
-            NodeGroup::Object(ref object) => match object.get_index(self.pos) {
+            NodeGroup::Object(ref object) => match object
+                .read()
+                .ok_or_else(|| lockerr("cannot read cell"))?
+                .get_index(self.pos)
+            {
                 Some((_, Node::Array(a))) => Ok(Group {
                     nodes: NodeGroup::Array(a.clone()),
                     head: Some(Rc::new((self.clone(), Relation::Sub))),
@@ -228,34 +283,41 @@ impl CellTrait for Cell {
     }
 }
 
-fn get_ty(node: &Node) -> &str {
+fn get_ty(node: &Node) -> &'static str {
     match node {
-        Node::Scalar(Scalar::Null) => "null",
-        Node::Scalar(Scalar::Bool(_)) => "bool",
-        Node::Scalar(Scalar::Int(_)) => "int",
-        Node::Scalar(Scalar::Float(_)) => "float",
-        Node::Scalar(Scalar::Alias(_)) => "alias",
-        Node::Scalar(Scalar::String(_)) => "string",
+        Node::Scalar(Yaml::Null) => "null",
+        Node::Scalar(Yaml::Alias(_)) => "alias",
+        Node::Scalar(Yaml::BadValue) => "badvalue",
+        Node::Scalar(Yaml::Boolean(_)) => "bool",
+        Node::Scalar(Yaml::Integer(_)) => "int",
+        Node::Scalar(Yaml::Real(_)) => "float",
+        Node::Scalar(Yaml::String(_)) => "string",
         Node::Array(_) => "array",
         Node::Object(_) => "object",
+        _ => "",
     }
 }
 
-fn scalar_to_value(s: &Scalar) -> Value {
-    match s {
-        Scalar::Null => Value::None,
-        Scalar::Bool(b) => Value::Bool(*b),
-        Scalar::Int(i) => Value::Int(Int::I64(*i)),
-        Scalar::Float(f) => Value::Float(*f),
-        // TODO: proper support for yaml aliases
-        Scalar::Alias(n) => Value::Str("alias"),
-        Scalar::String(ref s) => Value::Str(s.as_str()),
-    }
+fn yaml_to_value(s: &Yaml) -> Res<Value> {
+    Ok(match s {
+        Yaml::Boolean(b) => Value::Bool(*b),
+        Yaml::Integer(i) => Value::Int(Int::I64(*i)),
+        Yaml::Real(r) => {
+            let f = r
+                .parse()
+                .map_err(|e| caused(HErrKind::InvalidFormat, "", e))?;
+            Value::Float(StrFloat(f))
+        }
+        Yaml::Alias(n) => Value::Str("alias"),
+        Yaml::String(ref s) => Value::Str(s.as_str()),
+        Yaml::BadValue => Value::Str("badvalue"),
+        _ => Value::None,
+    })
 }
 
-fn get_value(node: &Node) -> Res<Value> {
+fn to_value(node: &Node) -> Res<Value> {
     match node {
-        Node::Scalar(s) => Ok(scalar_to_value(s)),
+        Node::Scalar(y) => yaml_to_value(y),
         _ => nores(),
     }
 }
@@ -275,31 +337,35 @@ impl GroupTrait for Group {
             NodeGroup::Array(a) => nores(),
             NodeGroup::Object(o) => match key.into() {
                 Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
-                Selector::Str(k) => match o.get_index_of(k) {
-                    Some(pos) => Ok(Cell {
-                        group: self.clone(),
-                        pos,
-                    }),
-                    _ => nores(),
-                },
+                Selector::Str(k) => {
+                    let o = o.read().ok_or_else(|| lockerr("cannot read group"))?;
+                    match o.get_index_of(&Yaml::String(k.to_string())) {
+                        Some(pos) => Ok(Cell {
+                            group: self.clone(),
+                            pos,
+                        }),
+                        _ => nores(),
+                    }
+                }
             },
         }
     }
 
     fn len(&self) -> Res<usize> {
         Ok(match &self.nodes {
-            NodeGroup::Array(array) => array.len(),
-            NodeGroup::Object(o) => o.len(),
+            NodeGroup::Array(a) => a.read().ok_or_else(|| lockerr("cannot read group"))?.len(),
+            NodeGroup::Object(o) => o.read().ok_or_else(|| lockerr("cannot read group"))?.len(),
         })
     }
 
     fn at(&self, index: usize) -> Res<Cell> {
+        let len = self.len()?;
         match &self.nodes {
-            NodeGroup::Array(array) if index < array.len() => Ok(Cell {
+            NodeGroup::Array(array) if index < len => Ok(Cell {
                 group: self.clone(),
                 pos: index,
             }),
-            NodeGroup::Object(o) if index < o.len() => Ok(Cell {
+            NodeGroup::Object(o) if index < len => Ok(Cell {
                 group: self.clone(),
                 pos: index,
             }),
@@ -310,42 +376,41 @@ impl GroupTrait for Group {
 
 fn node_from_yaml(y: &Yaml) -> Res<Node> {
     let value = match y {
-        Yaml::Null => Node::Scalar(Scalar::Null),
-        Yaml::Boolean(b) => Node::Scalar(Scalar::Bool(*b)),
-        Yaml::Integer(n) => Node::Scalar(Scalar::Int(*n)),
-        Yaml::Real(r) => {
-            if let Some(x) = y.as_f64() {
-                Node::Scalar(Scalar::Float(StrFloat(x)))
-            } else {
-                return fault("failed assertion, assumed all yaml reals can output f64");
-            }
-        }
-        Yaml::String(s) => Node::Scalar(Scalar::String(s.clone())),
-        Yaml::Alias(n) => Node::Scalar(Scalar::Alias(*n)),
         Yaml::Array(a) => {
             let mut na = vec![];
             for v in a {
                 na.push(node_from_yaml(v)?);
             }
-            Node::Array(Rc::new(na))
+            Node::Array(OwnRc::new(na))
         }
         Yaml::Hash(o) => {
             let mut no = IndexMap::new();
             for (yk, yv) in o {
-                let knode = node_from_yaml(yk)?;
-                if let Node::Scalar(Scalar::String(sk)) = knode {
-                    let v = node_from_yaml(yv)?;
-                    no.insert(sk, v);
-                } else {
-                    return fault(format!(
-                        "unsupported yaml label (expected string): {:?}",
-                        knode
-                    ));
-                }
+                no.insert(yk.clone(), node_from_yaml(yv)?);
             }
-            Node::Object(Rc::new(no))
+            Node::Object(OwnRc::new(no))
         }
-        Yaml::BadValue => Node::Scalar(Scalar::String("«BadValue»".into())),
+        _ => Node::Scalar(y.clone()),
     };
     Ok(value)
+}
+
+fn node_to_yaml(node: &Node) -> Res<Yaml> {
+    Ok(match node {
+        Node::Scalar(y) => y.clone(),
+        Node::Array(a) => {
+            let mut na = yaml_rust::yaml::Array::new();
+            for v in a.read().ok_or_else(|| lockerr("cannot read group"))?.iter() {
+                na.push(node_to_yaml(v)?);
+            }
+            Yaml::Array(na)
+        }
+        Node::Object(o) => {
+            let mut no = yaml_rust::yaml::Hash::new();
+            for (yk, yv) in o.read().ok_or_else(|| lockerr("cannot read group"))?.iter() {
+                no.insert(yk.clone(), node_to_yaml(yv)?);
+            }
+            Yaml::Hash(no)
+        }
+    })
 }

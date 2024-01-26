@@ -221,6 +221,10 @@ impl CellReaderTrait for HErr {
     fn index(&self) -> Res<usize> {
         Err(self.clone())
     }
+
+    fn serial(&self) -> Res<String> {
+        Err(self.clone())
+    }
 }
 
 impl CellWriterTrait for HErr {

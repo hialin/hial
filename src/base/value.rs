@@ -258,6 +258,17 @@ impl From<String> for OwnValue {
     }
 }
 
+impl From<f64> for OwnValue {
+    fn from(f: f64) -> Self {
+        OwnValue::Float(StrFloat(f))
+    }
+}
+impl From<f32> for OwnValue {
+    fn from(f: f32) -> Self {
+        OwnValue::Float(StrFloat(f as f64))
+    }
+}
+
 impl<'a> From<&'a OwnValue> for Value<'a> {
     fn from(ov: &'a OwnValue) -> Self {
         match ov {
@@ -358,6 +369,11 @@ impl From<StrFloat> for Value<'_> {
 impl From<f64> for Value<'_> {
     fn from(f: f64) -> Self {
         Value::Float(StrFloat(f))
+    }
+}
+impl From<f32> for Value<'_> {
+    fn from(f: f32) -> Self {
+        Value::Float(StrFloat(f as f64))
     }
 }
 impl<'a> From<&'a str> for Value<'a> {

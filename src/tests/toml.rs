@@ -11,7 +11,7 @@ name = "xxx"
 [database]
 enabled = true
 ports = [ 8000, 8001, 8002 ]
-data = [ ["delta", "phi"], [3.14] ]
+data = [ ["delta", "phi"], [23.1415] ]
 temp_targets = { cpu = 79.5, case = 72.0 }
 
 [servers]
@@ -45,13 +45,20 @@ fn toml_path() -> Res<()> {
 }
 
 #[test]
-fn toml_write() -> Res<()> {
-    assert_eq!(1, 0);
-    Ok(())
-}
+fn toml_write_and_save() -> Res<()> {
+    let data = Cell::from("[number]\nx = 23.1415");
+    let toml = data.be("toml");
 
-#[test]
-fn toml_save() -> Res<()> {
-    assert_eq!(1, 0);
+    let v = toml.to("/number/x");
+    assert_eq!(v.read().value()?, Value::from(23.1415));
+
+    v.write().set_value(1.1415.into())?;
+    let v = toml.to("/number/x");
+    assert_eq!(v.read().value()?, Value::from(1.1415));
+
+    v.save(data.clone())?;
+    let v = data.be("toml").to("/number/x");
+    assert_eq!(v.read().value()?, Value::from(1.1415));
+
     Ok(())
 }

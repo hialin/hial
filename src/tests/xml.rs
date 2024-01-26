@@ -58,9 +58,6 @@ fn test_xml() -> Res<()> {
     assert_eq!(xml.to("/doc/q/qq").read().value()?, Value::Str("4"));
     assert_eq!(xml.to("/doc/q/qq").sub().len()?, 0);
 
-    xml.to("/doc/q/qq").write().set_value("4".into())?;
-    assert_eq!(xml.to("/doc/q/qq").read().value()?, "4");
-
     Ok(())
 }
 
@@ -84,13 +81,24 @@ fn xml_path() -> Res<()> {
 }
 
 #[test]
-fn xml_write() -> Res<()> {
-    assert_eq!(1, 0);
-    Ok(())
-}
+fn xml_write_and_save() -> Res<()> {
+    let xml = r#"
+            <?xml version="1.0"?>
+            <!DOCTYPE entity PUBLIC "-//no idea//EN" "http://example.com/dtd">
+            <doc>
+                <first>1</first>
+                <double>2</double>
+                <double>2+</double>
+                <triple/>
+                <q>
+                    <qq>4</qq>
+                </q>
+            </doc>
+        "#;
+    let xml = Cell::from(xml.to_string()).be("xml");
+    pprint::pprint(&xml, 0, 0);
+    xml.to("/doc/q/qq").write().set_value("4".into())?;
+    assert_eq!(xml.to("/doc/q/qq").read().value()?, "4");
 
-#[test]
-fn xml_save() -> Res<()> {
-    assert_eq!(1, 0);
     Ok(())
 }

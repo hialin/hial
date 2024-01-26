@@ -111,7 +111,7 @@ fn json_write() -> Res<()> {
 }
 
 #[test]
-fn json_save() -> Res<()> {
+fn json_write_and_save() -> Res<()> {
     let treestring = r#"{
         "hosts": [
             {

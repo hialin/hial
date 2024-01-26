@@ -15,8 +15,7 @@ fn test_rust() -> Res<()> {
         vec![
             "name:test_rust",
             "name:rust_path",
-            "name:rust_write",
-            "name:rust_save",
+            "name:rust_write_and_save",
             "name:editable_rust_fn"
         ]
     );
@@ -37,28 +36,29 @@ fn rust_path() -> Res<()> {
 }
 
 #[test]
-fn rust_write() -> Res<()> {
+fn rust_write_and_save() -> Res<()> {
     set_verbose(true);
-    let root = Cell::from(".").to("^path^fs/src/tests/rust.rs^rust");
+    let file = Cell::from(".").to("^path^fs/src/tests/rust.rs");
+    let root = file.be("rust");
 
-    assert_eq!(root.to("/[9]/[1]").read().value()?, "editable_rust_fn");
+    assert_eq!(root.to("/[7]/[1]").read().value()?, "editable_rust_fn");
 
-    root.to("/[9]/[1]")
+    root.to("/[7]/[1]")
         .write()
         .set_value("modified_rust_fn".into())?;
-    assert_eq!(root.to("/[9]/[1]").read().value()?, "modified_rust_fn");
+    assert_eq!(root.to("/[7]/[1]").read().value()?, "modified_rust_fn");
 
-    root.to("/[9]/[1]")
+    root.save(file.clone())?;
+    assert_eq!(file.to("^rust/[7]/[1]").read().value()?, "modified_rust_fn",);
+
+    root.to("/[7]/[1]")
         .write()
         .set_value("editable_rust_fn".into())?;
-    assert_eq!(root.to("/[9]/[1]").read().value()?, "editable_rust_fn");
+    assert_eq!(root.to("/[7]/[1]").read().value()?, "editable_rust_fn");
 
-    Ok(())
-}
+    root.save(file.clone())?;
+    assert_eq!(file.to("^rust/[7]/[1]").read().value()?, "editable_rust_fn",);
 
-#[test]
-fn rust_save() -> Res<()> {
-    assert_eq!(1, 0);
     Ok(())
 }
 

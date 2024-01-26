@@ -123,6 +123,10 @@ impl CellReaderTrait for CellReader {
             }
         }
     }
+
+    fn serial(&self) -> Res<String> {
+        nores()
+    }
 }
 
 impl CellWriterTrait for CellWriter {

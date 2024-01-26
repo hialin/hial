@@ -22,10 +22,6 @@ pub trait CellTrait: Clone + Debug {
     }
 
     fn head(&self) -> Res<(Self, Relation)>;
-
-    fn save(&self, target: extra::Cell) -> Res<()> {
-        todo!() // remove this default implementation
-    }
 }
 
 pub trait CellReaderTrait: Debug {
@@ -35,18 +31,18 @@ pub trait CellReaderTrait: Debug {
 
     fn value(&self) -> Res<Value>;
 
-    // TODO: add fn to get the subtree as serialized data
+    fn serial(&self) -> Res<String>;
 }
 
 pub trait CellWriterTrait: Debug {
     fn set_value(&mut self, value: OwnValue) -> Res<()>;
 
     fn set_label(&mut self, value: OwnValue) -> Res<()> {
-        todo!() // remove this default implementation
+        todo!() // TODO: remove this default implementation
     }
 
     fn delete(&mut self) -> Res<()> {
-        todo!() // remove this default implementation
+        todo!() // TODO: remove this default implementation
     }
 }
 
