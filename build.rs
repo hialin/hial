@@ -8,8 +8,10 @@ fn main() {
 
 fn compile_tree_sitter_languages() {
     for (language, files) in &[
-        ("rust", &["parser.c", "scanner.c"]),
+        // ("go", &["parser.c", "scanner.c"]),
         ("javascript", &["parser.c", "scanner.c"]),
+        // ("python", &["parser.c", "scanner.c"]),
+        ("rust", &["parser.c", "scanner.c"]),
     ] {
         let package = format!("tree-sitter-{}", language);
         let srcdir = format!("{}/src", package);

@@ -6,18 +6,11 @@
     - interpretations: path+fs, json+yaml+toml+xml, rust+js, url?+net
     - explicit and implicit write support (policy, include readonly)
     - fix tests, todo!() and TODO: in code
-    - later: python, git, database, ical, zip, markdown
-    - later: separate api module, used by ffi and dependent crates
 
-- eliminate intra::domain, move interp to cell, eliminate root(), keep origin in xcell
 - explicit domain save/write: to origin, to another cell
-- automatic domain save on drop, if
+- save by policy: automatic domain save on domain drop (implemented in extra)
 - fix double kleene error (see test)
-- **for each interpretation**:
-    - test read and search
-    - test path, implement cell head
-    - test manual save and automatic save on drop
-- add #flat as Field option (tree serialization)
+- add #serial, #raw as Field option (tree serialization)
 
 - operations:
     - assign to variables;
@@ -33,6 +26,8 @@
 - ?search should return all matches embedded in a delegation cell, which has all results
     as subs and delegates write operations to all the subs
 - ?rename XCell -> Nex, Cell -> Inex, CellTrait -> InexTrait
+- later: python, git, database, ical, zip, markdown
+- later: separate api module, used by ffi and dependent crates
 
 
 ### Feature implementation status

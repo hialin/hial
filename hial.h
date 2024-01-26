@@ -5,8 +5,12 @@
 
 #include <stdint.h>
 
-extern Language tree_sitter_rust(void);
+extern Language tree_sitter_go(void);
 
 extern Language tree_sitter_javascript(void);
+
+extern Language tree_sitter_python(void);
+
+extern Language tree_sitter_rust(void);
 
 #endif /* __hial_h */

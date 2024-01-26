@@ -62,7 +62,7 @@ enumerated_dynamic_type! {
         Url(url::CellReader),
         Path(path::CellReader),
         Http(http::CellReader),
-        TreeSitter(treesitter::Cell),
+        TreeSitter(treesitter::CellReader),
     }
 }
 

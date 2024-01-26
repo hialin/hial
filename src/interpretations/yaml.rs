@@ -154,7 +154,11 @@ impl CellReaderTrait for CellReader {
     }
 }
 
-impl CellWriterTrait for CellWriter {}
+impl CellWriterTrait for CellWriter {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+        todo!()
+    }
+}
 
 impl CellTrait for Cell {
     type Group = Group;

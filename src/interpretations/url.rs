@@ -26,7 +26,6 @@ pub struct CellReader(Rc<Data>);
 
 #[derive(Debug)]
 pub struct CellWriter {}
-impl CellWriterTrait for CellWriter {}
 
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
@@ -64,6 +63,12 @@ impl CellReaderTrait for CellReader {
 
     fn index(&self) -> Res<usize> {
         nores()
+    }
+}
+
+impl CellWriterTrait for CellWriter {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+        todo!()
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{base::*, pprint::pprint, utils::log::set_verbose};
+use crate::{base::*, utils::log::set_verbose};
 
 #[test]
 fn test_rust() -> Res<()> {
@@ -7,17 +7,17 @@ fn test_rust() -> Res<()> {
     let folder = Cell::from(".").be("path").be("fs").err().unwrap();
     let root = folder.to("/src/tests/rust.rs^rust");
     assert_eq!(
-        root.search("/*[#type=='function_item']/*[#type=='name']")?
+        root.search("/*[#type=='function_item']/name")?
             .all()?
             .into_iter()
-            .map(|c| -> Res<String> { Ok(c.err()?.debug_string()) })
-            .collect::<Res<Vec<_>>>()?,
+            .map(|c| c.debug_string())
+            .collect::<Vec<_>>(),
         vec![
-            ":test_rust",
-            ":rust_path",
-            ":rust_write",
-            ":rust_save",
-            ":editable_rust_fn_name"
+            "name:test_rust",
+            "name:rust_path",
+            "name:rust_write",
+            "name:rust_save",
+            "name:editable_rust_fn"
         ]
     );
 
@@ -27,19 +27,32 @@ fn test_rust() -> Res<()> {
 #[test]
 fn rust_path() -> Res<()> {
     set_verbose(true);
-
     let folder = Cell::from(".").be("path").be("fs").err().unwrap();
     let root = folder.to("/src/tests/rust.rs^rust");
-    pprint(&root, 0, 0);
-    let func = root.to("/*[#type=='function_item']/*[#type=='name']");
-    assert_eq!(func.path()?, "`.`^path^fs/src/tests/rust.rs^rust/[2]/[1]",);
+    // pprint(&root, 0, 0);
+    let func = root.to("/*[#type=='function_item']/name");
+    assert_eq!(func.path()?, "`.`^path^fs/src/tests/rust.rs^rust/[2]/name",);
 
     Ok(())
 }
 
 #[test]
 fn rust_write() -> Res<()> {
-    assert_eq!(1, 0);
+    set_verbose(true);
+    let root = Cell::from(".").to("^path^fs/src/tests/rust.rs^rust");
+
+    assert_eq!(root.to("/[9]/[1]").read().value()?, "editable_rust_fn");
+
+    root.to("/[9]/[1]")
+        .write()
+        .set_value("modified_rust_fn".into())?;
+    assert_eq!(root.to("/[9]/[1]").read().value()?, "modified_rust_fn");
+
+    root.to("/[9]/[1]")
+        .write()
+        .set_value("editable_rust_fn".into())?;
+    assert_eq!(root.to("/[9]/[1]").read().value()?, "editable_rust_fn");
+
     Ok(())
 }
 
@@ -49,4 +62,4 @@ fn rust_save() -> Res<()> {
     Ok(())
 }
 
-fn editable_rust_fn_name() {}
+fn editable_rust_fn() {}

@@ -38,7 +38,36 @@ fn test_json() -> Res<()> {
 }
 
 #[test]
-fn mutate_json() -> Res<()> {
+fn json_path() -> Res<()> {
+    set_verbose(true);
+    let treestring = r#"{
+        "hosts": [
+            {
+                "host_id": "1h48",
+                "dummy": true
+            },
+                {
+                        "host_id": "1h51",
+                        "labels": {
+                                "group2": true,
+                                "power": "strong"
+                        }
+                }
+        ]
+}"#
+    .replace([' ', '\t', '\n'], "");
+    let json = Cell::from(treestring).be("json");
+    let path = "/hosts/[1]/labels/power";
+    let target = json.to(path).err()?;
+    assert_eq!(
+        target.path()?,
+        r#"`{"hosts":[{"host...`^json"#.to_string() + path,
+    );
+    Ok(())
+}
+
+#[test]
+fn json_write() -> Res<()> {
     let treestring = r#"{
         "hosts": [
             {},
@@ -124,34 +153,5 @@ fn json_save() -> Res<()> {
         r#"{"hosts":[{"host_id":null,"dummy":true},{"host_id":"1h51","labels":{"group2":true,"power":"weak as putty"}}]}"#
     );
 
-    Ok(())
-}
-
-#[test]
-fn json_path() -> Res<()> {
-    set_verbose(true);
-    let treestring = r#"{
-        "hosts": [
-            {
-                "host_id": "1h48",
-                "dummy": true
-            },
-                {
-                        "host_id": "1h51",
-                        "labels": {
-                                "group2": true,
-                                "power": "strong"
-                        }
-                }
-        ]
-}"#
-    .replace([' ', '\t', '\n'], "");
-    let json = Cell::from(treestring).be("json");
-    let path = "/hosts/[1]/labels/power";
-    let target = json.to(path).err()?;
-    assert_eq!(
-        target.path()?,
-        r#"`{"hosts":[{"host...`^json"#.to_string() + path,
-    );
     Ok(())
 }

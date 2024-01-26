@@ -57,7 +57,6 @@ pub struct Group {
 
 #[derive(Debug)]
 pub struct CellWriter {}
-impl CellWriterTrait for CellWriter {}
 
 impl Cell {
     pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
@@ -237,6 +236,12 @@ impl CellReaderTrait for CellReader {
             }
             _ => fault(format!("bad kind/pos: {:?}/{}", self.kind, self.pos)),
         }
+    }
+}
+
+impl CellWriterTrait for CellWriter {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+        todo!() // remove this default implementation
     }
 }
 

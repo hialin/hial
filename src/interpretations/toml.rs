@@ -27,7 +27,6 @@ pub struct CellReader {
 
 #[derive(Debug)]
 pub struct CellWriter {}
-impl CellWriterTrait for CellWriter {}
 
 #[derive(Clone, Debug)]
 pub struct Group {
@@ -120,6 +119,12 @@ impl CellReaderTrait for CellReader {
                 None => fault(""),
             },
         }
+    }
+}
+
+impl CellWriterTrait for CellWriter {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+        todo!()
     }
 }
 

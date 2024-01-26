@@ -4,15 +4,12 @@ use std::{cell::OnceCell, fmt::Debug, rc::Rc};
 use linkme::distributed_slice;
 use tree_sitter::{Parser, Tree, TreeCursor};
 
-use crate::{
-    base::Cell as XCell, base::*, debug, guard_ok, guard_some, tree_sitter_javascript,
-    tree_sitter_rust,
-};
+use crate::{base::Cell as XCell, base::*, *};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_RUST: ElevationConstructor = ElevationConstructor {
     source_interpretations: &["value", "fs"],
-    target_interpretations: &["rust", "javascript"],
+    target_interpretations: &["rust", "javascript", "python", "go"],
     constructor: Cell::from_cell,
 };
 
@@ -23,15 +20,16 @@ pub struct Domain {
     tree: Tree,
 }
 
-pub unsafe fn change_lifetime<'old, 'new: 'old, T: 'new>(data: &'old T) -> &'new T {
-    &*(data as *const _)
-}
-
 #[derive(Clone)]
 pub struct Cell {
     domain: Rc<Domain>,
     // since the tree is in a Rc, the treecursor is valid as long as the cell is valid
     cursor: TreeCursor<'static>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CellReader {
+    cell: Cell,
     value: OnceCell<Option<String>>,
 }
 
@@ -67,12 +65,39 @@ impl Cell {
         let ts_cell = sitter_from_source(source, language)?;
         Ok(new_cell(DynCell::from(ts_cell), origin))
     }
+
+    fn is_leaf(&self) -> bool {
+        // a node is leaf if its subtee has no field names in tree-sitter
+        let mut c = self.cursor.clone();
+        if !c.goto_first_child() {
+            return true;
+        };
+        let mut cursor_stack = vec![c];
+        while let Some(mut c) = cursor_stack.pop() {
+            loop {
+                if c.field_name().is_some() {
+                    return false;
+                }
+                let mut c2 = c.clone();
+                if c2.goto_first_child() {
+                    cursor_stack.push(c2);
+                };
+
+                if !c.goto_next_sibling() {
+                    break;
+                }
+            }
+        }
+        true
+    }
 }
 
 fn sitter_from_source(source: String, language: String) -> Res<Cell> {
     let sitter_language = match language.as_str() {
-        "rust" => unsafe { tree_sitter_rust() },
+        // "go" => unsafe { tree_sitter_go() },
         "javascript" => unsafe { tree_sitter_javascript() },
+        // "python" => unsafe { tree_sitter_python() },
+        "rust" => unsafe { tree_sitter_rust() },
         _ => return userr(format!("unsupported language: {}", language)),
     };
 
@@ -113,13 +138,13 @@ fn sitter_from_source(source: String, language: String) -> Res<Cell> {
         // TODO: find alternative for this unsafe change of lifetime to 'static
         // this should be safe as long as the tree is in Rc and not modified
         cursor: unsafe { std::mem::transmute(domain.tree.walk()) },
-        value: OnceCell::new(),
     })
 }
 
-impl CellReaderTrait for Cell {
+impl CellReaderTrait for CellReader {
     fn index(&self) -> Res<usize> {
-        let mut n = self.cursor.node();
+        // TODO: this is a slow O(n) implementation
+        let mut n = self.cell.cursor.node();
         let mut i = 0;
         while let Some(p) = n.prev_sibling() {
             n = p;
@@ -129,15 +154,24 @@ impl CellReaderTrait for Cell {
     }
 
     fn label(&self) -> Res<Value> {
-        nores()
+        self.cell
+            .cursor
+            .field_name()
+            .ok_or_else(noerr)
+            .map(Value::Str)
     }
 
     fn value(&self) -> Res<Value> {
         if self.value.get().is_none() {
             let mut opt_value = None;
-            let node = self.cursor.node();
-            if !node.is_named() || node.child_count() == 0 || node.kind() == "string_literal" {
-                opt_value = Some(self.domain.source[node.byte_range()].to_string());
+            let node = self.cell.cursor.node();
+            let src = &self.cell.domain.source[node.byte_range()];
+            if !node.is_named()
+                || node.child_count() == 0
+                || node.kind() == "string_literal"
+                || self.cell.is_leaf()
+            {
+                opt_value = Some(src.to_string());
             }
             self.value
                 .set(opt_value)
@@ -152,11 +186,17 @@ impl CellReaderTrait for Cell {
     }
 }
 
-impl CellWriterTrait for Cell {}
+impl CellWriterTrait for Cell {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+        // TODO: not clear how to edit the tree because afterwards
+        // some cursors/cells will be invalid
+        todo!()
+    }
+}
 
 impl CellTrait for Cell {
     type Group = Cell;
-    type CellReader = Cell;
+    type CellReader = CellReader;
     type CellWriter = Cell;
 
     fn interpretation(&self) -> &str {
@@ -165,25 +205,29 @@ impl CellTrait for Cell {
 
     fn ty(&self) -> Res<&str> {
         let node = self.cursor.node();
-        let typ = self.cursor.field_name().unwrap_or_else(|| {
-            if node.kind() == &self.domain.source[node.byte_range()] {
-                "symbol"
-            } else {
-                node.kind()
-            }
-        });
+        let typ = if node.kind() == &self.domain.source[node.byte_range()] {
+            "sym"
+        } else {
+            node.kind()
+        };
         Ok(typ)
     }
 
     fn read(&self) -> Res<Self::CellReader> {
-        Ok(self.clone())
+        Ok(CellReader {
+            cell: self.clone(),
+            value: OnceCell::new(),
+        })
     }
 
-    fn write(&self) -> Res<Self::CellWriter> {
+    fn write(&self) -> Res<Cell> {
         Ok(self.clone())
     }
 
     fn sub(&self) -> Res<Cell> {
+        if self.is_leaf() {
+            return nores();
+        }
         Ok(self.clone())
     }
 
@@ -196,7 +240,6 @@ impl CellTrait for Cell {
             Cell {
                 domain: self.domain.clone(),
                 cursor,
-                value: OnceCell::new(),
             },
             Relation::Sub,
         ))
@@ -222,6 +265,7 @@ impl GroupTrait for Cell {
         if !cursor.goto_first_child() {
             return nores();
         }
+        // TODO: this is a slow O(n) implementation
         for _ in 0..index {
             if !cursor.goto_next_sibling() {
                 return nores();
@@ -231,20 +275,27 @@ impl GroupTrait for Cell {
         Ok(Cell {
             domain: self.domain.clone(),
             cursor,
-            value: OnceCell::new(),
         })
     }
 
     fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
         let key = key.into();
-        if let Some(child_node) = self.cursor.node().child_by_field_name(key.to_string()) {
-            Ok(Cell {
-                domain: self.domain.clone(),
-                cursor: child_node.walk(),
-                value: OnceCell::new(),
-            })
-        } else {
-            nores()
+
+        let mut cursor = self.cursor.clone();
+        if !cursor.goto_first_child() {
+            return nores();
         }
+        for _ in 0..self.cursor.node().child_count() {
+            if key == cursor.field_name().unwrap_or_default() {
+                return Ok(Cell {
+                    domain: self.domain.clone(),
+                    cursor,
+                });
+            }
+            if !cursor.goto_next_sibling() {
+                return nores();
+            }
+        }
+        nores()
     }
 }

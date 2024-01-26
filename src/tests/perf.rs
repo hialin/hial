@@ -21,6 +21,6 @@ fn test_cell_sizes() -> Res<()> {
     println!("size of yaml cell: {}", std::mem::size_of::<yaml::Cell>());
     println!("size of cell: {}", std::mem::size_of::<Cell>());
 
-    assert!(std::mem::size_of::<Cell>() <= 10 * 8);
+    assert!(std::mem::size_of::<Cell>() <= 8 * 8);
     Ok(())
 }

@@ -20,6 +20,8 @@ pub mod utils;
 mod tests;
 
 extern "C" {
-    fn tree_sitter_rust() -> tree_sitter::Language;
+    // fn tree_sitter_go() -> tree_sitter::Language;
     fn tree_sitter_javascript() -> tree_sitter::Language;
+    // fn tree_sitter_python() -> tree_sitter::Language;
+    fn tree_sitter_rust() -> tree_sitter::Language;
 }

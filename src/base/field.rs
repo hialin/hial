@@ -171,4 +171,8 @@ impl CellReaderTrait for FieldReader {
     }
 }
 
-impl CellWriterTrait for FieldWriter {}
+impl CellWriterTrait for FieldWriter {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+        todo!() // remove this default implementation
+    }
+}
