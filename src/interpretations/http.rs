@@ -21,7 +21,7 @@ static URL_TO_HTTP: ElevationConstructor = ElevationConstructor {
 //       @headers/...
 
 #[derive(Debug)]
-pub struct Response {
+pub(crate) struct Response {
     status: i16,
     reason: String,
     headers: IndexMap<String, Vec<String>>,
@@ -29,20 +29,20 @@ pub struct Response {
 }
 
 #[derive(Clone, Debug)]
-pub struct Cell {
+pub(crate) struct Cell {
     group: Group,
     pos: usize,
 }
 
 #[derive(Debug)]
-pub struct CellReader {
+pub(crate) struct CellReader {
     kind: GroupKind,
     response: ReadRc<Response>,
     pos: usize,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum GroupKind {
+pub(crate) enum GroupKind {
     Root,
     Attr,
     Status,
@@ -50,16 +50,16 @@ pub enum GroupKind {
 }
 
 #[derive(Clone, Debug)]
-pub struct Group {
+pub(crate) struct Group {
     kind: GroupKind,
     response: OwnRc<Response>,
 }
 
 #[derive(Debug)]
-pub struct CellWriter {}
+pub(crate) struct CellWriter {}
 
 impl Cell {
-    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         let reader = cell.read().err()?;
         let value = reader.value()?;
         let value_cow = value.as_cow_str();

@@ -7,6 +7,7 @@ use quick_xml::{events::Event, Error as XmlError, Reader};
 use crate::{
     base::{Cell as XCell, *},
     debug, guard_variant,
+    utils::ownrc::{OwnRc, ReadRc, WriteRc},
 };
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
@@ -17,45 +18,54 @@ static VALUE_TO_XML: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Cell {
+pub(crate) struct Cell {
     group: Group,
     pos: usize,
 }
-
-#[derive(Debug)]
-pub struct CellReader {
-    group: Group,
-    pos: usize,
-}
-
-#[derive(Debug)]
-pub struct CellWriter {}
 
 #[derive(Clone, Debug)]
-pub struct Group {
+pub(crate) struct Group {
     nodes: NodeGroup,
     head: Option<Rc<(Cell, Relation)>>,
 }
 
 #[derive(Clone, Debug)]
-pub enum NodeGroup {
-    Node(NodeList),
-    Attr(AttrList),
+enum NodeGroup {
+    Node(OwnRc<Vec<Node>>),
+    Attr(OwnRc<Vec<Attribute>>),
 }
 
-#[derive(Clone, Debug)]
-pub struct NodeList(Rc<Vec<Node>>);
-
-#[derive(Clone, Debug)]
-pub struct AttrList(Rc<Vec<Attribute>>);
+#[derive(Debug)]
+pub(crate) enum CellReader {
+    Node {
+        nodes: ReadRc<Vec<Node>>,
+        pos: usize,
+    },
+    Attr {
+        nodes: ReadRc<Vec<Attribute>>,
+        pos: usize,
+    },
+}
 
 #[derive(Debug)]
-enum Node {
-    Document(Rc<Vec<Node>>),
-    Decl(Rc<Vec<Attribute>>), // version, encoding, standalone
+pub(crate) enum CellWriter {
+    Node {
+        nodes: WriteRc<Vec<Node>>,
+        pos: usize,
+    },
+    Attr {
+        nodes: WriteRc<Vec<Attribute>>,
+        pos: usize,
+    },
+}
+
+#[derive(Debug)]
+pub(crate) enum Node {
+    Document(OwnRc<Vec<Node>>),
+    Decl(OwnRc<Vec<Attribute>>), // version, encoding, standalone
     DocType(String),
     PI(String),
-    Element((String, Rc<Vec<Attribute>>, String, Rc<Vec<Node>>)),
+    Element((String, OwnRc<Vec<Attribute>>, String, OwnRc<Vec<Node>>)),
     Text(String),
     Comment(String),
     CData(Vec<u8>),
@@ -63,13 +73,13 @@ enum Node {
 }
 
 #[derive(Debug)]
-enum Attribute {
+pub(crate) enum Attribute {
     Attribute(String, String),
     Error(String),
 }
 
 impl Cell {
-    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         match cell.interpretation() {
             "value" => {
                 let r = cell.read();
@@ -105,7 +115,7 @@ impl Cell {
     fn from_root_node(root: Node, origin: Option<XCell>) -> Res<XCell> {
         let xml_cell = Cell {
             group: Group {
-                nodes: NodeGroup::Node(NodeList(Rc::new(vec![root]))),
+                nodes: NodeGroup::Node(OwnRc::new(vec![root])),
                 head: None,
             },
             pos: 0,
@@ -161,7 +171,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 stack
                     .last_mut()
                     .ok_or_else(|| faulterr("no element in stack"))?
-                    .push(Node::Decl(Rc::new(attrs)));
+                    .push(Node::Decl(OwnRc::new(attrs)));
             }
             Ok(Event::DocType(ref e)) => {
                 counts.count_doc_type += 1;
@@ -240,7 +250,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                         text = guard_variant!(v.remove(0), Node::Text).unwrap();
                     }
                 }
-                let element = Node::Element((name.into(), Rc::new(a), text, Rc::new(v)));
+                let element = Node::Element((name.into(), OwnRc::new(a), text, OwnRc::new(v)));
                 stack
                     .last_mut()
                     .ok_or_else(|| faulterr("no element in stack"))?
@@ -265,7 +275,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
         buf.clear();
     }
     let v = stack.pop().ok_or_else(|| faulterr("no element in stack"))?;
-    let document = Node::Document(Rc::new(v));
+    let document = Node::Document(OwnRc::new(v));
 
     debug!("xml stats: {:?}", counts);
     Ok(document)
@@ -273,18 +283,21 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
 
 impl CellReaderTrait for CellReader {
     fn index(&self) -> Res<usize> {
-        Ok(self.pos)
+        match *self {
+            CellReader::Node { pos, .. } => Ok(pos),
+            CellReader::Attr { pos, .. } => Ok(pos),
+        }
     }
 
     fn label(&self) -> Res<Value> {
-        match &self.group.nodes {
-            NodeGroup::Node(group) => match &group.0[self.pos] {
+        match self {
+            CellReader::Node { nodes, pos } => match &nodes[*pos] {
                 Node::Element((x, _, _, _)) => Ok(Value::Str(x.as_str())),
                 Node::Decl(_) => Ok(Value::Str("xml")),
                 Node::DocType(x) => Ok(Value::Str("DOCTYPE")),
                 x => nores(),
             },
-            NodeGroup::Attr(group) => match &group.0[self.pos] {
+            CellReader::Attr { nodes, pos } => match &nodes[*pos] {
                 Attribute::Attribute(k, _) => Ok(Value::Str(k.as_str())),
                 _ => nores(),
             },
@@ -292,8 +305,8 @@ impl CellReaderTrait for CellReader {
     }
 
     fn value(&self) -> Res<Value> {
-        match &self.group.nodes {
-            NodeGroup::Node(group) => match &group.0[self.pos] {
+        match self {
+            CellReader::Node { nodes, pos } => match &nodes[*pos] {
                 Node::Document(_) => nores(),
                 Node::Decl(_) => nores(),
                 Node::DocType(x) => Ok(Value::Str(x.trim())),
@@ -306,7 +319,7 @@ impl CellReaderTrait for CellReader {
                 Node::CData(x) => Ok(Value::Bytes(x.as_slice())),
                 Node::Error(x) => Ok(Value::Str(x)),
             },
-            NodeGroup::Attr(group) => match &group.0[self.pos] {
+            CellReader::Attr { nodes, pos } => match &nodes[*pos] {
                 Attribute::Attribute(_, x) => Ok(Value::Str(x)),
                 Attribute::Error(x) => Ok(Value::Str(x)),
             },
@@ -320,7 +333,31 @@ impl CellReaderTrait for CellReader {
 
 impl CellWriterTrait for CellWriter {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
-        todo!()
+        match self {
+            CellWriter::Node { nodes, pos } => match &mut nodes[*pos] {
+                Node::Document(_) => return userr("cannot set value of document"),
+                Node::Decl(x) => return userr("cannot set value of decl"),
+                Node::DocType(x) => *x = value.as_value().as_cow_str().to_string(),
+                Node::PI(x) => *x = value.as_value().as_cow_str().to_string(),
+                Node::Element((_, _, x, _)) => *x = value.as_value().as_cow_str().to_string(),
+
+                Node::Text(x) => *x = value.as_value().as_cow_str().to_string(),
+                Node::Comment(x) => *x = value.as_value().as_cow_str().to_string(),
+                Node::CData(x) => {
+                    if let OwnValue::Bytes(b) = value {
+                        *x = b;
+                    } else {
+                        *x = value.as_value().as_cow_str().to_string().into_bytes();
+                    }
+                }
+                Node::Error(x) => return userr("cannot set value of error node"),
+            },
+            CellWriter::Attr { nodes, pos } => match &mut nodes[*pos] {
+                Attribute::Attribute(_, x) => *x = value.as_value().as_cow_str().to_string(),
+                Attribute::Error(x) => return userr("cannot set value of error attribute"),
+            },
+        }
+        Ok(())
     }
 }
 
@@ -334,63 +371,93 @@ impl CellTrait for Cell {
     }
 
     fn ty(&self) -> Res<&str> {
-        match &self.group.nodes {
-            NodeGroup::Node(group) => match &group.0[self.pos] {
-                Node::Document(_) => Ok("document"),
-                Node::Decl(_) => Ok("decl"),
-                Node::DocType(_) => Ok("doctype"),
-                Node::PI(_) => Ok("PI"),
-                Node::Element(_) => Ok("element"),
-                Node::Text(_) => Ok("text"),
-                Node::Comment(_) => Ok("comment"),
-                Node::CData(_) => Ok("cdata"),
-                Node::Error(_) => Ok("error"),
-            },
-            NodeGroup::Attr(group) => Ok("attribute"),
-        }
+        Ok(match &self.group.nodes {
+            NodeGroup::Node(n) => {
+                let nodes = n.read().ok_or_else(|| lockerr("cannot read nodes"))?;
+                match &nodes[self.pos] {
+                    Node::Document(_) => "document",
+                    Node::Decl(_) => "decl",
+                    Node::DocType(_) => "doctype",
+                    Node::PI(_) => "PI",
+                    Node::Element(_) => "element",
+                    Node::Text(_) => "text",
+                    Node::Comment(_) => "comment",
+                    Node::CData(_) => "cdata",
+                    Node::Error(_) => "error",
+                }
+            }
+            NodeGroup::Attr(a) => {
+                let attrs = a.read().ok_or_else(|| lockerr("cannot read nodes"))?;
+                match &attrs[self.pos] {
+                    Attribute::Attribute(_, _) => "attribute",
+                    Attribute::Error(_) => "error",
+                }
+            }
+        })
     }
 
     fn read(&self) -> Res<Self::CellReader> {
-        Ok(CellReader {
-            group: self.group.clone(),
-            pos: self.pos,
+        Ok(match &self.group.nodes {
+            NodeGroup::Node(n) => CellReader::Node {
+                nodes: n.read().ok_or_else(|| lockerr("cannot read nodes"))?,
+                pos: self.pos,
+            },
+            NodeGroup::Attr(a) => CellReader::Attr {
+                nodes: a.read().ok_or_else(|| lockerr("cannot read nodes"))?,
+                pos: self.pos,
+            },
         })
     }
 
     fn write(&self) -> Res<Self::CellWriter> {
-        Ok(CellWriter {})
+        Ok(match &self.group.nodes {
+            NodeGroup::Node(n) => CellWriter::Node {
+                nodes: n.write().ok_or_else(|| lockerr("cannot write nodes"))?,
+                pos: self.pos,
+            },
+            NodeGroup::Attr(a) => CellWriter::Attr {
+                nodes: a.write().ok_or_else(|| lockerr("cannot write nodes"))?,
+                pos: self.pos,
+            },
+        })
     }
 
     fn sub(&self) -> Res<Group> {
         match &self.group.nodes {
-            NodeGroup::Node(group) => match &group.0[self.pos] {
-                Node::Document(x) => Ok(Group {
-                    nodes: NodeGroup::Node(NodeList(x.clone())),
-                    head: Some(Rc::new((self.clone(), Relation::Sub))),
-                }),
-                Node::Element((_, _, _, x)) => Ok(Group {
-                    nodes: NodeGroup::Node(NodeList(x.clone())),
-                    head: Some(Rc::new((self.clone(), Relation::Sub))),
-                }),
-                _ => nores(),
-            },
+            NodeGroup::Node(n) => {
+                let nodes = n.read().ok_or_else(|| lockerr("cannot read nodes"))?;
+                match &nodes[self.pos] {
+                    Node::Document(x) => Ok(Group {
+                        nodes: NodeGroup::Node(x.clone()),
+                        head: Some(Rc::new((self.clone(), Relation::Sub))),
+                    }),
+                    Node::Element((_, _, _, x)) => Ok(Group {
+                        nodes: NodeGroup::Node(x.clone()),
+                        head: Some(Rc::new((self.clone(), Relation::Sub))),
+                    }),
+                    _ => nores(),
+                }
+            }
             _ => nores(),
         }
     }
 
     fn attr(&self) -> Res<Group> {
         match &self.group.nodes {
-            NodeGroup::Node(group) => match &group.0[self.pos] {
-                Node::Decl(x) => Ok(Group {
-                    nodes: NodeGroup::Attr(AttrList(x.clone())),
-                    head: Some(Rc::new((self.clone(), Relation::Sub))),
-                }),
-                Node::Element((_, x, _, _)) => Ok(Group {
-                    nodes: NodeGroup::Attr(AttrList(x.clone())),
-                    head: Some(Rc::new((self.clone(), Relation::Sub))),
-                }),
-                _ => nores(),
-            },
+            NodeGroup::Node(n) => {
+                let nodes = n.read().ok_or_else(|| lockerr("cannot read nodes"))?;
+                match &nodes[self.pos] {
+                    Node::Decl(x) => Ok(Group {
+                        nodes: NodeGroup::Attr(x.clone()),
+                        head: Some(Rc::new((self.clone(), Relation::Sub))),
+                    }),
+                    Node::Element((_, x, _, _)) => Ok(Group {
+                        nodes: NodeGroup::Attr(x.clone()),
+                        head: Some(Rc::new((self.clone(), Relation::Sub))),
+                    }),
+                    _ => nores(),
+                }
+            }
             _ => nores(),
         }
     }
@@ -415,8 +482,14 @@ impl GroupTrait for Group {
 
     fn len(&self) -> Res<usize> {
         Ok(match &self.nodes {
-            NodeGroup::Node(group) => group.0.len(),
-            NodeGroup::Attr(group) => group.0.len(),
+            NodeGroup::Node(group) => group
+                .read()
+                .ok_or_else(|| lockerr("cannot read nodes"))?
+                .len(),
+            NodeGroup::Attr(group) => group
+                .read()
+                .ok_or_else(|| lockerr("cannot read nodes"))?
+                .len(),
         })
     }
 

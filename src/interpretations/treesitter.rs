@@ -14,21 +14,21 @@ static VALUE_TO_RUST: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Domain {
+pub(crate) struct Domain {
     language: String,
     source: String,
     tree: Tree,
 }
 
 #[derive(Clone)]
-pub struct Cell {
+pub(crate) struct Cell {
     domain: Rc<Domain>,
     // since the tree is in a Rc, the treecursor is valid as long as the cell is valid
     cursor: TreeCursor<'static>,
 }
 
 #[derive(Clone, Debug)]
-pub struct CellReader {
+pub(crate) struct CellReader {
     cell: Cell,
     value: OnceCell<Option<String>>,
 }
@@ -45,7 +45,7 @@ impl fmt::Debug for Cell {
 }
 
 impl Cell {
-    pub fn from_cell(cell: XCell, lang: &'static str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: XCell, lang: &'static str) -> Res<XCell> {
         match cell.interpretation() {
             "value" => {
                 let source = cell.read().value()?.as_cow_str().into_owned();

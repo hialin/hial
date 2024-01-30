@@ -18,50 +18,50 @@ static VALUE_TO_TOML: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Cell {
+pub(crate) struct Cell {
     group: Group,
     pos: usize,
 }
 
 #[derive(Debug)]
-pub struct CellReader {
+pub(crate) struct CellReader {
     nodes: ReadNodeGroup,
     pos: usize,
     value: OnceCell<String>,
 }
 
 #[derive(Debug)]
-pub struct CellWriter {
+pub(crate) struct CellWriter {
     nodes: WriteNodeGroup,
     pos: usize,
 }
 
 #[derive(Clone, Debug)]
-pub struct Group {
+pub(crate) struct Group {
     nodes: NodeGroup,
     head: Option<Rc<(Cell, Relation)>>,
 }
 
 #[derive(Clone, Debug)]
-pub enum NodeGroup {
+pub(crate) enum NodeGroup {
     Array(OwnRc<Vec<Node>>),
     Table(OwnRc<IndexMap<String, Node>>),
 }
 
 #[derive(Debug)]
-pub enum ReadNodeGroup {
+pub(crate) enum ReadNodeGroup {
     Array(ReadRc<Vec<Node>>),
     Table(ReadRc<IndexMap<String, Node>>),
 }
 
 #[derive(Debug)]
-pub enum WriteNodeGroup {
+pub(crate) enum WriteNodeGroup {
     Array(WriteRc<Vec<Node>>),
     Table(WriteRc<IndexMap<String, Node>>),
 }
 
 #[derive(Clone, Debug)]
-pub enum Node {
+pub(crate) enum Node {
     Scalar(TomlValue),
     Array(OwnRc<Vec<Node>>),
     Table(OwnRc<IndexMap<String, Node>>),
@@ -74,7 +74,7 @@ impl From<toml::de::Error> for HErr {
 }
 
 impl Cell {
-    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         match cell.interpretation() {
             "value" => {
                 let r = cell.read();
@@ -145,10 +145,16 @@ impl CellReaderTrait for CellReader {
                 None => fault(""),
             },
             ReadNodeGroup::Table(ref t) => match t.get_index(self.pos) {
-                Some(x) => node_to_toml(x.1),
+                Some(x) => {
+                    let mut table = toml::value::Table::new();
+                    table.insert(x.0.clone(), node_to_toml(x.1)?);
+                    Ok(TomlValue::Table(table))
+                }
                 None => fault(""),
             },
         }?;
+        println!("self: {:?}", self);
+        println!("tv: {:?}", tv);
         toml::to_string_pretty(&tv).map_err(|e| caused(HErrKind::InvalidFormat, "bad toml", e))
     }
 }
@@ -388,14 +394,14 @@ fn node_to_toml(node: &Node) -> Res<TomlValue> {
     Ok(match node {
         Node::Scalar(tv) => tv.clone(),
         Node::Array(a) => {
-            let mut na = vec![];
+            let mut na = toml::value::Array::new();
             for v in &*a.write().ok_or_else(|| lockerr("cannot write nodes"))? {
                 na.push(node_to_toml(v)?);
             }
             TomlValue::Array(na)
         }
         Node::Table(t) => {
-            let mut nt = toml::map::Map::new();
+            let mut nt = toml::value::Table::new();
             for (k, v) in t
                 .write()
                 .ok_or_else(|| lockerr("cannot write nodes"))?

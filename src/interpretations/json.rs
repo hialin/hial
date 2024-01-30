@@ -18,56 +18,56 @@ static VALUE_TO_JSON: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Cell {
+pub(crate) struct Cell {
     group: Group,
     pos: usize,
 }
 
 #[derive(Clone, Debug)]
-pub struct Group {
+pub(crate) struct Group {
     nodes: NodeGroup,
     head: Option<Rc<(Cell, Relation)>>,
 }
 
 #[derive(Clone, Debug)]
-pub enum NodeGroup {
+pub(crate) enum NodeGroup {
     Array(OwnRc<Vec<Node>>),
     Object(OwnRc<IndexMap<String, Node>>),
 }
 
 #[derive(Clone, Debug)]
-pub enum Node {
+pub(crate) enum Node {
     Scalar(SValue),
     Array(OwnRc<Vec<Node>>),
     Object(OwnRc<IndexMap<String, Node>>),
 }
 
 #[derive(Debug)]
-pub struct CellReader {
+pub(crate) struct CellReader {
     nodes: ReadNodeGroup,
     pos: usize,
 }
 
 #[derive(Debug)]
-pub struct CellWriter {
+pub(crate) struct CellWriter {
     nodes: WriteNodeGroup,
     pos: usize,
 }
 
 #[derive(Debug)]
-pub enum ReadNodeGroup {
+pub(crate) enum ReadNodeGroup {
     Array(ReadRc<Vec<Node>>),
     Object(ReadRc<IndexMap<String, Node>>),
 }
 
 #[derive(Debug)]
-pub enum WriteNodeGroup {
+pub(crate) enum WriteNodeGroup {
     Array(WriteRc<Vec<Node>>),
     Object(WriteRc<IndexMap<String, Node>>),
 }
 
 impl Cell {
-    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         let serde_value = match cell.interpretation() {
             "value" => {
                 let s = cell.read().value()?.to_string();

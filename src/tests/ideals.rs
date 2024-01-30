@@ -18,9 +18,9 @@ fn tree() -> Res<()> {
 
     // this should set the json value on the cell
     // and write back by doing a put request
-    let cell = Cell::from("http://api.github.com")
+    let cell = Cell::from("./examples/write.json")
         .policy(WritePolicy::WriteBackOnDrop)
-        .to("^http^json/hosts/[1]/labels/power");
+        .to("^path^fs^json/");
     pprint(&cell, 0, 0);
     assert!(cell.clone().err().is_ok());
     // assert!(cell.write().set_value("weak as putty".into()).is_ok());

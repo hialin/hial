@@ -23,32 +23,32 @@ static PATH_TO_FILE: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Cell {
+pub(crate) struct Cell {
     group: Group,
     pos: u32,
 }
 
 #[derive(Clone, Debug)]
-pub struct Group {
+pub(crate) struct Group {
     files: Rc<Vec<Res<FileEntry>>>,
     ty: GroupType,
 }
 
 #[derive(Clone, Debug)]
-pub enum GroupType {
+pub(crate) enum GroupType {
     Folder,
     FileAttributes(u32),
 }
 
 #[derive(Debug)]
-pub struct CellReader {
+pub(crate) struct CellReader {
     group: Group,
     pos: u32,
     cached_value: OnceCell<String>,
 }
 
 #[derive(Debug)]
-pub struct CellWriter {
+pub(crate) struct CellWriter {
     group: Group,
     pos: u32,
 }
@@ -195,7 +195,7 @@ impl CellWriterTrait for CellWriter {
 }
 
 impl Cell {
-    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         let path = cell.as_file_path()?;
         let file_cell = Cell {
             group: Group {
@@ -207,7 +207,7 @@ impl Cell {
         Ok(new_cell(DynCell::from(file_cell), Some(cell)))
     }
 
-    pub fn from_str_path(path: impl Borrow<str>) -> Res<XCell> {
+    pub(crate) fn from_str_path(path: impl Borrow<str>) -> Res<XCell> {
         let path = Path::new(path.borrow());
         let file_cell = Cell {
             group: Group {
@@ -219,7 +219,7 @@ impl Cell {
         Ok(new_cell(DynCell::from(file_cell), None))
     }
 
-    pub fn as_path(&self) -> Res<&Path> {
+    pub(crate) fn as_path(&self) -> Res<&Path> {
         let fileentry =
             guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
         Ok(fileentry.path.as_path())

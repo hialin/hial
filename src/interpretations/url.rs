@@ -14,21 +14,21 @@ static VALUE_TO_URL: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Data {
+pub(crate) struct Data {
     url: Url,
 }
 
 #[derive(Clone, Debug)]
-pub struct Cell(Rc<Data>);
+pub(crate) struct Cell(Rc<Data>);
 
 #[derive(Debug)]
-pub struct CellReader(Rc<Data>);
+pub(crate) struct CellReader(Rc<Data>);
 
 #[derive(Debug)]
-pub struct CellWriter {}
+pub(crate) struct CellWriter {}
 
 impl Cell {
-    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         match cell.interpretation() {
             "value" => {
                 let r = cell.read();
@@ -44,7 +44,7 @@ impl Cell {
         }
     }
 
-    pub fn from_str(s: &str) -> Res<XCell> {
+    pub(crate) fn from_str(s: &str) -> Res<XCell> {
         let url_cell = Cell(Rc::new(Data {
             url: Url::parse(s)?,
         }));

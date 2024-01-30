@@ -15,19 +15,19 @@ static VALUE_TO_PATH: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Data(PathBuf, String);
+pub(crate) struct Data(PathBuf, String);
 
 #[derive(Clone, Debug)]
-pub struct Cell(Rc<Data>);
+pub(crate) struct Cell(Rc<Data>);
 
 #[derive(Debug)]
-pub struct CellReader(Rc<Data>);
+pub(crate) struct CellReader(Rc<Data>);
 
 #[derive(Debug)]
-pub struct CellWriter(Rc<Data>);
+pub(crate) struct CellWriter(Rc<Data>);
 
 impl Cell {
-    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         match cell.interpretation() {
             "value" => {
                 let r = cell.read();
@@ -53,7 +53,7 @@ impl Cell {
         Ok(new_cell(DynCell::from(path_cell), origin))
     }
 
-    pub fn as_path(&self) -> Res<&Path> {
+    pub(crate) fn as_path(&self) -> Res<&Path> {
         Ok(self.0 .0.as_path())
     }
 }

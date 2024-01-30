@@ -16,49 +16,49 @@ static VALUE_TO_YAML: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub struct Cell {
+pub(crate) struct Cell {
     group: Group,
     pos: usize,
 }
 
 #[derive(Debug)]
-pub struct CellReader {
+pub(crate) struct CellReader {
     nodes: ReadNodeGroup,
     pos: usize,
 }
 
 #[derive(Debug)]
-pub struct CellWriter {
+pub(crate) struct CellWriter {
     nodes: WriteNodeGroup,
     pos: usize,
 }
 
 #[derive(Clone, Debug)]
-pub struct Group {
+pub(crate) struct Group {
     nodes: NodeGroup,
     head: Option<Rc<(Cell, Relation)>>,
 }
 
 #[derive(Clone, Debug)]
-pub enum NodeGroup {
+pub(crate) enum NodeGroup {
     Array(OwnRc<Vec<Node>>),
     Object(OwnRc<IndexMap<Yaml, Node>>),
 }
 
 #[derive(Debug)]
-pub enum ReadNodeGroup {
+pub(crate) enum ReadNodeGroup {
     Array(ReadRc<Vec<Node>>),
     Object(ReadRc<IndexMap<Yaml, Node>>),
 }
 
 #[derive(Debug)]
-pub enum WriteNodeGroup {
+pub(crate) enum WriteNodeGroup {
     Array(WriteRc<Vec<Node>>),
     Object(WriteRc<IndexMap<Yaml, Node>>),
 }
 
 #[derive(Clone, Debug)]
-pub enum Node {
+pub(crate) enum Node {
     Scalar(Yaml),
     Array(OwnRc<Vec<Node>>),
     Object(OwnRc<IndexMap<Yaml, Node>>),
@@ -71,7 +71,7 @@ impl From<ScanError> for HErr {
 }
 
 impl Cell {
-    pub fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         match cell.interpretation() {
             "value" => {
                 let r = cell.read();
@@ -180,7 +180,17 @@ impl CellReaderTrait for CellReader {
 
 impl CellWriterTrait for CellWriter {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
-        todo!()
+        match self.nodes {
+            WriteNodeGroup::Array(ref mut a) => match a.get_mut(self.pos) {
+                Some(x) => *x = Node::Scalar(ownvalue_to_yaml(value)?),
+                None => fault("")?,
+            },
+            WriteNodeGroup::Object(ref mut o) => match o.get_index_mut(self.pos) {
+                Some(x) => *x.1 = Node::Scalar(ownvalue_to_yaml(value)?),
+                None => fault("")?,
+            },
+        };
+        Ok(())
     }
 }
 
@@ -312,6 +322,22 @@ fn yaml_to_value(s: &Yaml) -> Res<Value> {
         Yaml::String(ref s) => Value::Str(s.as_str()),
         Yaml::BadValue => Value::Str("badvalue"),
         _ => Value::None,
+    })
+}
+
+fn ownvalue_to_yaml(v: OwnValue) -> Res<Yaml> {
+    Ok(match v {
+        OwnValue::Bool(b) => Yaml::Boolean(b),
+        OwnValue::Int(i) => match i {
+            Int::I64(i) => Yaml::Integer(i),
+            Int::U64(i) => Yaml::Integer(i as i64),
+            Int::I32(i) => Yaml::Integer(i as i64),
+            Int::U32(i) => Yaml::Integer(i as i64),
+        },
+        OwnValue::Float(StrFloat(f)) => Yaml::Real(f.to_string()),
+        OwnValue::String(s) => Yaml::String(s),
+        OwnValue::None => Yaml::Null,
+        OwnValue::Bytes(b) => Yaml::String(String::from_utf8_lossy(&b).to_string()),
     })
 }
 

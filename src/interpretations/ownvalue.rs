@@ -2,24 +2,24 @@ use crate::base::{Cell as XCell, *};
 use crate::utils::ownrc::{OwnRc, ReadRc, WriteRc};
 
 #[derive(Clone, Debug)]
-pub struct Cell(OwnRc<OwnValue>);
+pub(crate) struct Cell(OwnRc<OwnValue>);
 
 #[derive(Debug)]
-pub struct CellReader(ReadRc<OwnValue>);
+pub(crate) struct CellReader(ReadRc<OwnValue>);
 
 #[derive(Debug)]
-pub struct CellWriter(WriteRc<OwnValue>);
+pub(crate) struct CellWriter(WriteRc<OwnValue>);
 
 impl Cell {
-    pub fn from_str(s: &str) -> Res<XCell> {
+    pub(crate) fn from_str(s: &str) -> Res<XCell> {
         Cell::from_string(s.to_string())
     }
 
-    pub fn from_string(s: String) -> Res<XCell> {
+    pub(crate) fn from_string(s: String) -> Res<XCell> {
         Cell::from_value(OwnValue::String(s))
     }
 
-    pub fn from_value(ov: OwnValue) -> Res<XCell> {
+    pub(crate) fn from_value(ov: OwnValue) -> Res<XCell> {
         let cell = Cell(OwnRc::new(ov));
         Ok(new_cell(DynCell::from(cell), None))
     }
