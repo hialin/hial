@@ -48,7 +48,7 @@ fn rust_write_and_save() -> Res<()> {
         .set_value("modified_rust_fn".into())?;
     assert_eq!(root.to("/[7]/[1]").read().value()?, "modified_rust_fn");
 
-    root.save(file.clone())?;
+    root.save(root.origin())?;
     assert_eq!(file.to("^rust/[7]/[1]").read().value()?, "modified_rust_fn",);
 
     root.to("/[7]/[1]")

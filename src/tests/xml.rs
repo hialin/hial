@@ -104,7 +104,7 @@ fn xml_write_and_save() -> Res<()> {
     xml.to("/doc/q/qq").write().set_value("444".into())?;
     assert_eq!(xml.to("/doc/q/qq").read().value()?, "444");
 
-    xml.save(text.clone())?;
+    xml.save(xml.origin())?;
     let v = text.to("^xml/doc/q/qq");
     assert_eq!(v.read().value()?, "444");
 

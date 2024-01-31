@@ -19,8 +19,8 @@ fn test_nested() -> Res<()> {
 fn test_nested_mut() -> Res<()> {
     set_verbose(true);
 
-    let yxj = r#"{"one": ["<?xml?><root><a>mytext: yaml string</a></root>"]}"#;
-    let root = Cell::from(yxj);
+    let text = Cell::from(r#"{"one": ["<?xml?><root><a>mytext: yaml string</a></root>"]}"#);
+    let root = text.clone();
 
     assert_eq!(
         root.to("^json/one/[0]^xml/root/a^yaml/mytext")
@@ -33,6 +33,7 @@ fn test_nested_mut() -> Res<()> {
         let cell = root.to("^json/one/[0]^xml/root/a^yaml/mytext");
         assert_eq!(cell.read().value()?, "yaml string");
         cell.write().set_value("new yaml string".into())?;
+        root.save(root.origin())?;
     }
 
     assert_eq!(

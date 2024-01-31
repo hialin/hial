@@ -70,7 +70,7 @@ fn yaml_write_and_save() -> Res<()> {
         .set_value("putty".into())?;
     assert_eq!(yaml.to("/hosts/[0]/labels/power").read().value()?, "putty");
 
-    yaml.save(text.clone())?;
+    yaml.save(yaml.origin())?;
     let v = text.to("^yaml/hosts/[0]/labels/power");
     assert_eq!(v.read().value()?, "putty");
 
