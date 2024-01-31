@@ -82,9 +82,8 @@ fn xml_path() -> Res<()> {
 
 #[test]
 fn xml_write_and_save() -> Res<()> {
-    let xml = r#"
-            <?xml version="1.0"?>
-            <!DOCTYPE entity PUBLIC "-//no idea//EN" "http://example.com/dtd">
+    let text = Cell::from(
+        r#" <?xml version="1.0"?>
             <doc>
                 <first>1</first>
                 <double>2</double>
@@ -94,11 +93,20 @@ fn xml_write_and_save() -> Res<()> {
                     <qq>4</qq>
                 </q>
             </doc>
-        "#;
-    let xml = Cell::from(xml.to_string()).be("xml");
+        "#
+        .replace(['\n', '\t'], ""),
+    );
+    let xml = text.be("xml");
+
     pprint::pprint(&xml, 0, 0);
-    xml.to("/doc/q/qq").write().set_value("4".into())?;
     assert_eq!(xml.to("/doc/q/qq").read().value()?, "4");
+
+    xml.to("/doc/q/qq").write().set_value("444".into())?;
+    assert_eq!(xml.to("/doc/q/qq").read().value()?, "444");
+
+    xml.save(text.clone())?;
+    let v = text.to("^xml/doc/q/qq");
+    assert_eq!(v.read().value()?, "444");
 
     Ok(())
 }

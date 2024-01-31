@@ -51,7 +51,8 @@ hosts:
 
 #[test]
 fn yaml_write_and_save() -> Res<()> {
-    let yaml = r#"
+    let text = Cell::from(
+        r#"
   hosts:
     - host_id: 1h48
       labels:
@@ -61,11 +62,17 @@ fn yaml_write_and_save() -> Res<()> {
       labels:
         "group2": true
         "power": "strong"
-"#;
-    let yaml = Cell::from(yaml).be("yaml");
+"#,
+    );
+    let yaml = text.be("yaml");
     yaml.to("/hosts/[0]/labels/power")
         .write()
         .set_value("putty".into())?;
     assert_eq!(yaml.to("/hosts/[0]/labels/power").read().value()?, "putty");
+
+    yaml.save(text.clone())?;
+    let v = text.to("^yaml/hosts/[0]/labels/power");
+    assert_eq!(v.read().value()?, "putty");
+
     Ok(())
 }

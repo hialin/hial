@@ -56,7 +56,6 @@ fn toml_write_and_save() -> Res<()> {
     let v = toml.to("/number/x");
     assert_eq!(v.read().value()?, Value::from(1.1415));
 
-    println!("{:?}", data);
     toml.save(data.clone())?;
     let v = data.to("^toml/number/x");
     assert_eq!(v.read().value()?, Value::from(1.1415));
