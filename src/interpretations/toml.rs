@@ -153,8 +153,6 @@ impl CellReaderTrait for CellReader {
                 None => fault(""),
             },
         }?;
-        println!("self: {:?}", self);
-        println!("tv: {:?}", tv);
         toml::to_string_pretty(&tv).map_err(|e| caused(HErrKind::InvalidFormat, "bad toml", e))
     }
 }

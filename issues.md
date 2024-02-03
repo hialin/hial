@@ -3,22 +3,26 @@
 ## TODOs
 
 ! focus on releasing a first minimal version, then improve
-    - interpretations: path+fs, json+yaml+toml+xml, rust+js, url?+net
+    - interpretations: path+fs, json+yaml+toml+xml, rust+js, url?+http
     - explicit and implicit write support (policy, include readonly)
     - fix tests, todo!() and TODO: in code
 
 - explicit domain save/write: to origin, to another cell
 - save by policy: automatic domain save on domain drop (implemented in extra)
 - fix double kleene error (see test)
-- add #serial, #raw as Field option (tree serialization)
+- add assignment
+- add tree diff operation
 
 - operations:
     - assign to variables;
     - search with assignment of results
     - pretty print of variables/results
     - write values/trees to variables/results
+        - write to cell (value, label and serial)
+        - set index (write cell#index)
+        - new/append/insert_at/delete cell
+        - new/set/replace/delete group (only sub or attr group)
     - diff with assignment of results in variables
-- add tree diff operation
 
 - ?implement policy(): set on cells and propagated, not set by interpretations
 - ?treesitter representations are too detailed, unsure what to do

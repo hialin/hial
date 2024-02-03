@@ -41,6 +41,21 @@ pub struct FieldWriter {
     pub(crate) writer: Box<CellWriter>,
 }
 
+impl TryFrom<usize> for FieldType {
+    type Error = HErr;
+
+    fn try_from(v: usize) -> Result<Self, Self::Error> {
+        match v {
+            x if x == Self::Value as usize => Ok(Self::Value),
+            x if x == Self::Label as usize => Ok(Self::Label),
+            x if x == Self::Type as usize => Ok(Self::Type),
+            x if x == Self::Index as usize => Ok(Self::Index),
+            x if x == Self::Serial as usize => Ok(Self::Serial),
+            _ => nores(),
+        }
+    }
+}
+
 impl GroupTrait for FieldGroup {
     type Cell = FieldCell;
 
@@ -52,33 +67,27 @@ impl GroupTrait for FieldGroup {
     }
 
     fn len(&self) -> Res<usize> {
-        Ok(4)
+        Ok(5)
     }
 
     fn at(&self, index: usize) -> Res<Self::Cell> {
-        let ty = match index {
-            0 => FieldType::Value,
-            1 => FieldType::Label,
-            2 => FieldType::Type,
-            3 => FieldType::Index,
-            _ => return nores(),
-        };
+        let ty = FieldType::try_from(index)?;
         // only return the field cell if the field is not empty
-        if ty == FieldType::Label
-            && self
-                .cell
-                .read()
-                .label()
-                .err()
-                .map_or(false, |e| e.kind == HErrKind::None)
-        {
-            return nores();
-        }
         if ty == FieldType::Value
             && self
                 .cell
                 .read()
                 .value()
+                .err()
+                .map_or(false, |e| e.kind == HErrKind::None)
+        {
+            return nores();
+        }
+        if ty == FieldType::Label
+            && self
+                .cell
+                .read()
+                .label()
                 .err()
                 .map_or(false, |e| e.kind == HErrKind::None)
         {
@@ -94,10 +103,11 @@ impl GroupTrait for FieldGroup {
         let label = label.into();
         if let Selector::Str(l) = label {
             return match l {
-                "value" => self.at(0),
-                "label" => self.at(1),
-                "type" => self.at(2),
-                "index" => self.at(3),
+                "value" => self.at(FieldType::Value as usize),
+                "label" => self.at(FieldType::Label as usize),
+                "type" => self.at(FieldType::Type as usize),
+                "index" => self.at(FieldType::Index as usize),
+                "serial" => self.at(FieldType::Serial as usize),
                 _ => nores(),
             };
         }
@@ -165,12 +175,6 @@ impl CellReaderTrait for FieldReader {
 
     fn label(&self) -> Res<Value> {
         nores()
-        // match self.ty {
-        //     FieldType::Value => Ok(Value::Str("value")),
-        //     FieldType::Label => Ok(Value::Str("label")),
-        //     FieldType::Type => Ok(Value::Str("type")),
-        //     FieldType::Index => Ok(Value::Str("index")),
-        // }
     }
 
     fn serial(&self) -> Res<String> {
