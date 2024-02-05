@@ -526,7 +526,7 @@ impl<'s> EvalIter<'s> {
 
     fn eval_expr(op: &str, left: Value, right: Value) -> Res<bool> {
         if !["==", "!="].contains(&op) {
-            return userr(format!("bad operand: {}", op));
+            return userres(format!("bad operand: {}", op));
         }
         match op {
             "==" if left == right => Ok(true),

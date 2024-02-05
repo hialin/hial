@@ -46,7 +46,7 @@ fn toml_path() -> Res<()> {
 
 #[test]
 fn toml_write_and_save() -> Res<()> {
-    let data = Cell::from("[number]\nx = 23.1415");
+    let data = Cell::from("[number]\nx = 23.1415").policy(WritePolicy::NoAutoWrite);
     let toml = data.be("toml");
 
     let v = toml.to("/number/x");

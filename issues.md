@@ -7,11 +7,9 @@
     - explicit and implicit write support (policy, include readonly)
     - fix tests, todo!() and TODO: in code
 
-- explicit domain save/write: to origin, to another cell
-- save by policy: automatic domain save on domain drop (implemented in extra)
 - fix double kleene error (see test)
-- add assignment
-- add tree diff operation
+- support type selector: `hial './src/tests/rust.rs^rust/:function_item'`
+- support assignment (write): `hial './src/tests/rust.rs^rust/:function_item[-1]#label = "modified_fn_name"'`
 
 - operations:
     - assign to variables;
@@ -23,8 +21,6 @@
         - new/append/insert_at/delete cell
         - new/set/replace/delete group (only sub or attr group)
     - diff with assignment of results in variables
-
-- ?implement policy(): set on cells and propagated, not set by interpretations
 - ?treesitter representations are too detailed, unsure what to do
 - ?explore python implementation and usage
 - ?search should return all matches embedded in a delegation cell, which has all results

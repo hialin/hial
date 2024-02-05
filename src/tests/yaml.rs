@@ -63,7 +63,8 @@ fn yaml_write_and_save() -> Res<()> {
         "group2": true
         "power": "strong"
 "#,
-    );
+    )
+    .policy(WritePolicy::NoAutoWrite);
     let yaml = text.be("yaml");
     yaml.to("/hosts/[0]/labels/power")
         .write()

@@ -95,7 +95,8 @@ fn xml_write_and_save() -> Res<()> {
             </doc>
         "#
         .replace(['\n', '\t'], ""),
-    );
+    )
+    .policy(WritePolicy::NoAutoWrite);
     let xml = text.be("xml");
 
     pprint::pprint(&xml, 0, 0);

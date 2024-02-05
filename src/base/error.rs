@@ -111,8 +111,8 @@ pub fn nores<T>() -> Res<T> {
     Err(noerr())
 }
 
-pub fn userr<T>(reason: impl Into<String>) -> Res<T> {
-    Err(HErr {
+pub fn usererr(reason: impl Into<String>) -> HErr {
+    HErr {
         kind: HErrKind::User,
         data: Rc::new(HErrData {
             msg: reason.into(),
@@ -120,7 +120,11 @@ pub fn userr<T>(reason: impl Into<String>) -> Res<T> {
             cause: None,
             backtrace: Some(capture_stack_trace()),
         }),
-    })
+    }
+}
+
+pub fn userres<T>(reason: impl Into<String>) -> Res<T> {
+    Err(usererr(reason))
 }
 
 pub fn fault<T>(reason: impl Into<String>) -> Res<T> {
@@ -309,6 +313,8 @@ pub(crate) fn capture_stack_trace() -> Box<[String]> {
         .filter(|(func, point)| !func.contains(" core::"))
         .filter(|(func, point)| !func.contains(" std::"))
         .filter(|(func, point)| !func.contains(" test::"))
+        .filter(|(func, point)| !func.contains(" hiallib::base::error::"))
+        // .filter(|(func, point)| !func.contains(" hiallib::base::"))
         .filter(|(func, point)| !func.contains("_pthread_"))
         .map(|(func, point)| (func.to_string(), point.to_string()))
         .collect();

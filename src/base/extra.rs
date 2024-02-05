@@ -1,17 +1,18 @@
 use std::{
-    fmt::{Debug, Write},
+    cell::{self, OnceCell},
+    fmt::{self, Debug, Write},
     rc::Rc,
 };
 
 use crate::{
-    base::*, enumerated_dynamic_type, guard_ok, interpretations::*, pathlang::eval::EvalIter,
-    pathlang::Path, warning,
+    base::*, enumerated_dynamic_type, guard_ok, guard_some, interpretations::*,
+    pathlang::eval::EvalIter, pathlang::Path, warning,
 };
 
 const MAX_PATH_ITEMS: usize = 1000;
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Cell {
     dyn_cell: DynCell,
     // keep it in a rc to avoid other allocations
@@ -21,13 +22,24 @@ pub struct Cell {
 pub(crate) fn new_cell(dyn_cell: DynCell, origin: Option<Cell>) -> Cell {
     Cell {
         dyn_cell,
-        domain: Rc::new(Domain { origin }),
+        domain: Rc::new(Domain {
+            write_policy: cell::Cell::new(
+                origin
+                    .as_ref()
+                    .map_or(WritePolicy::ReadOnly, |c| c.domain.write_policy.get()),
+            ),
+            origin,
+            dyn_root: OnceCell::new(),
+            dirty: cell::Cell::new(false),
+        }),
     }
 }
 
-#[derive(Clone, Debug)]
 pub struct Domain {
+    write_policy: cell::Cell<WritePolicy>,
     origin: Option<Cell>,
+    dyn_root: OnceCell<DynCell>,
+    dirty: cell::Cell<bool>,
 }
 
 enumerated_dynamic_type! {
@@ -88,7 +100,11 @@ enumerated_dynamic_type! {
 }
 
 #[derive(Debug)]
-pub struct CellWriter(DynCellWriter);
+pub struct CellWriter {
+    dyn_cell_writer: DynCellWriter,
+    // keep it in a rc to avoid other allocations
+    domain: Rc<Domain>,
+}
 
 enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
@@ -111,26 +127,26 @@ enumerated_dynamic_type! {
 #[derive(Clone, Debug)]
 pub struct Group {
     group: GroupKind,
-    domain: Rc<Domain>,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) enum GroupKind {
-    Dyn(DynGroup),
+    Dyn {
+        dyn_group: DynGroup,
+        domain: Rc<Domain>,
+    },
     Elevation(ElevationGroup),
     // Mixed(Vec<Cell>),
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum WritePolicy {
     // no write access
     ReadOnly,
-    // write access, but no automatic save
-    ExplicitWrite,
+    // write access, but user must call save manually
+    NoAutoWrite,
     // write access, automatic save when all references are dropped
     WriteBackOnDrop,
-    // write access, automatic save on every change
-    WriteThrough,
 }
 
 impl From<OwnValue> for Cell {
@@ -170,8 +186,29 @@ impl From<HErr> for Cell {
     fn from(herr: HErr) -> Self {
         Cell {
             dyn_cell: DynCell::from(herr),
-            domain: Rc::new(Domain { origin: None }),
+            domain: Rc::new(Domain {
+                write_policy: cell::Cell::new(WritePolicy::ReadOnly),
+                origin: None,
+                dyn_root: OnceCell::new(),
+                dirty: cell::Cell::new(false),
+            }),
         }
+    }
+}
+
+impl fmt::Debug for Cell {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let orig = format!("{:?}", self.domain.origin).replace('\n', "\n\t");
+        let root = format!("{:?}", self.domain.dyn_root).replace('\n', "\n\t");
+        write!(
+            f,
+            "Cell{{\n\tdyn_cell={:?}, \n\tdomain={{ write_policy={:?}, is_dirty={}, root={}, origin={} }}",
+            self.dyn_cell,
+            self.domain.write_policy.get(),
+            self.domain.dirty.get(),
+            root,
+            orig,
+        )
     }
 }
 
@@ -200,16 +237,18 @@ impl CellReader {
 
 impl CellWriterTrait for CellWriter {
     fn set_label(&mut self, value: OwnValue) -> Res<()> {
-        dispatch_dyn_cell_writer!(&mut self.0, |x| { x.set_label(value) })
+        self.domain.dirty.set(true);
+        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.set_label(value) })
     }
 
     fn set_value(&mut self, ov: OwnValue) -> Res<()> {
-        dispatch_dyn_cell_writer!(&mut self.0, |x| { x.set_value(ov) })
+        self.domain.dirty.set(true);
+        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.set_value(ov) })
     }
 }
 impl CellWriter {
     pub fn err(self) -> Res<CellWriter> {
-        if let DynCellWriter::Error(error) = self.0 {
+        if let DynCellWriter::Error(error) = self.dyn_cell_writer {
             return Err(error);
         }
         Ok(self)
@@ -218,8 +257,8 @@ impl CellWriter {
 
 impl Cell {
     pub fn err(self) -> Res<Cell> {
-        if let DynCell::Error(error) = self.dyn_cell {
-            return Err(error);
+        if let DynCell::Error(ref error) = self.dyn_cell {
+            return Err(error.clone());
         }
         Ok(self)
     }
@@ -251,18 +290,28 @@ impl Cell {
     }
 
     pub fn policy(&self, policy: WritePolicy) -> Cell {
-        // TODO: implement extra::Cell::policy
+        self.domain.write_policy.set(policy);
         self.clone()
     }
 
     pub fn write(&self) -> CellWriter {
+        if self.domain.write_policy.get() == WritePolicy::ReadOnly {
+            return CellWriter {
+                dyn_cell_writer: DynCellWriter::from(usererr("cannot write, read-only domain")),
+                domain: Rc::clone(&self.domain),
+            };
+        }
+
         let writer: DynCellWriter = dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match x.write() {
                 Ok(r) => DynCellWriter::from(r),
                 Err(e) => DynCellWriter::from(e),
             }
         });
-        CellWriter(writer)
+        CellWriter {
+            dyn_cell_writer: writer,
+            domain: Rc::clone(&self.domain),
+        }
     }
 
     pub fn sub(&self) -> Group {
@@ -273,8 +322,10 @@ impl Cell {
             }
         });
         Group {
-            group: GroupKind::Dyn(sub),
-            domain: self.domain.clone(),
+            group: GroupKind::Dyn {
+                dyn_group: sub,
+                domain: Rc::clone(&self.domain),
+            },
         }
     }
 
@@ -286,8 +337,10 @@ impl Cell {
             }
         });
         Group {
-            group: GroupKind::Dyn(attr),
-            domain: self.domain.clone(),
+            group: GroupKind::Dyn {
+                dyn_group: attr,
+                domain: Rc::clone(&self.domain),
+            },
         }
     }
 
@@ -301,30 +354,33 @@ impl Cell {
     pub fn elevate(&self) -> Group {
         if let DynCell::Error(err) = &self.dyn_cell {
             return Group {
-                group: GroupKind::Dyn(DynGroup::from(err.clone())),
-                domain: self.domain.clone(),
+                group: GroupKind::Dyn {
+                    dyn_group: DynGroup::from(err.clone()),
+                    domain: Rc::clone(&self.domain),
+                },
             };
         }
         Group {
             group: GroupKind::Elevation(ElevationGroup(self.clone())),
-            domain: Rc::new(Domain {
-                origin: Some(self.clone()),
-            }),
         }
     }
 
     pub fn field(&self) -> Group {
         if let DynCell::Error(err) = &self.dyn_cell {
             return Group {
-                group: GroupKind::Dyn(DynGroup::from(err.clone())),
-                domain: self.domain.clone(),
+                group: GroupKind::Dyn {
+                    dyn_group: DynGroup::from(err.clone()),
+                    domain: Rc::clone(&self.domain),
+                },
             };
         }
         Group {
-            group: GroupKind::Dyn(DynGroup::from(FieldGroup {
-                cell: Rc::new(self.clone()),
-            })),
-            domain: self.domain.clone(),
+            group: GroupKind::Dyn {
+                dyn_group: DynGroup::from(FieldGroup {
+                    cell: Rc::new(self.clone()),
+                }),
+                domain: Rc::clone(&self.domain),
+            },
         }
     }
 
@@ -336,7 +392,7 @@ impl Cell {
         let path = guard_ok!(crate::pathlang::Path::parse(path), err =>
             return Cell {
                 dyn_cell: DynCell::from(err),
-                domain: self.domain.clone(),
+                domain: Rc::clone(&self.domain),
             }
         );
         PathSearch::new(self.clone(), path).first()
@@ -359,7 +415,7 @@ impl Cell {
                 Ok((c, r)) => Ok((
                     Cell {
                         dyn_cell: DynCell::from(c),
-                        domain: self.domain.clone(),
+                        domain: Rc::clone(&self.domain),
                     },
                     r,
                 )),
@@ -556,6 +612,59 @@ impl Cell {
     }
 }
 
+impl fmt::Debug for Domain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Domain{{ dyn_root={:?}, origin={:?} write_policy={:?}, is_dirty={} }}",
+            self.dyn_root.get(),
+            self.origin
+                .as_ref()
+                .map(|c| c.path().unwrap_or("<error>".into()))
+                .unwrap_or_default(),
+            self.write_policy.get(),
+            self.dirty.get()
+        )
+    }
+}
+
+impl Drop for Domain {
+    fn drop(&mut self) {
+        if self.write_policy.get() != WritePolicy::WriteBackOnDrop {
+            return;
+        }
+        if !self.dirty.get() {
+            return;
+        }
+        let target = guard_some!(self.origin.as_ref(), { return });
+        let dyn_root = guard_some!(self.dyn_root.get(), {
+            warning!("❗️root of dirty domain not found");
+            return;
+        });
+
+        let serial = dispatch_dyn_cell!(&dyn_root, |x| {
+            let r = guard_ok!(x.read(), e => {
+                warning!(
+                    "💥 cannot read root while trying to auto-save domain: {:?}",
+                    e
+                );
+                return;
+            });
+            guard_ok!(r.serial(), e => {
+                warning!("💥 cannot serialize root while trying to auto-save domain: {:?}", e);
+                return;
+            })
+        });
+
+        if let Err(e) = target.write().set_value(OwnValue::String(serial)) {
+            warning!(
+                "💥 cannot write to domain origin while trying to auto-save domain: {:?}",
+                e
+            );
+        }
+    }
+}
+
 #[test]
 fn test_cell_domain_path() -> Res<()> {
     let tree = r#"{"a": {"x": "xa", "b": {"x": "xb", "c": {"x": "xc"}}}, "m": [1, 2, 3]}"#;
@@ -575,7 +684,7 @@ fn test_cell_domain_path() -> Res<()> {
 impl Group {
     pub fn label_type(&self) -> LabelType {
         match &self.group {
-            GroupKind::Dyn(dyn_group) => {
+            GroupKind::Dyn { dyn_group, .. } => {
                 dispatch_dyn_group!(dyn_group, |x| { x.label_type() })
             }
             GroupKind::Elevation(elevation_group) => elevation_group.label_type(),
@@ -584,7 +693,7 @@ impl Group {
 
     pub fn len(&self) -> Res<usize> {
         match &self.group {
-            GroupKind::Dyn(dyn_group) => {
+            GroupKind::Dyn { dyn_group, .. } => {
                 dispatch_dyn_group!(dyn_group, |x| { x.len() })
             }
             GroupKind::Elevation(elevation_group) => elevation_group.len(),
@@ -597,22 +706,32 @@ impl Group {
 
     pub fn at(&self, index: usize) -> Cell {
         match &self.group {
-            GroupKind::Dyn(dyn_group) => {
+            GroupKind::Dyn { dyn_group, domain } => {
                 dispatch_dyn_group!(dyn_group, |x| {
                     Cell {
                         dyn_cell: match x.at(index) {
                             Ok(c) => DynCell::from(c),
                             Err(e) => DynCell::from(e),
                         },
-                        domain: self.domain.clone(),
+                        domain: Rc::clone(domain),
                     }
                 })
             }
             GroupKind::Elevation(elevation_group) => match elevation_group.at(index) {
-                Ok(c) => c,
+                Ok(c) => {
+                    if let Err(ref old_cell) = c.domain.dyn_root.set(c.dyn_cell.clone()) {
+                        warning!("❗️cannot overwrite domain dyn_root: {:?}", old_cell);
+                    }
+                    c
+                }
                 Err(e) => Cell {
                     dyn_cell: DynCell::from(e),
-                    domain: self.domain.clone(),
+                    domain: Rc::new(Domain {
+                        write_policy: cell::Cell::new(WritePolicy::ReadOnly),
+                        origin: None,
+                        dyn_root: OnceCell::new(),
+                        dirty: cell::Cell::new(false),
+                    }),
                 },
             },
         }
@@ -621,22 +740,32 @@ impl Group {
     pub fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Cell {
         let key = key.into();
         match &self.group {
-            GroupKind::Dyn(dyn_group) => {
+            GroupKind::Dyn { dyn_group, domain } => {
                 dispatch_dyn_group!(dyn_group, |x| {
                     Cell {
                         dyn_cell: match x.get(key) {
                             Ok(c) => DynCell::from(c),
                             Err(e) => DynCell::from(e),
                         },
-                        domain: self.domain.clone(),
+                        domain: Rc::clone(domain),
                     }
                 })
             }
             GroupKind::Elevation(elevation_group) => match elevation_group.get(key) {
-                Ok(c) => c,
+                Ok(c) => {
+                    if let Err(ref old_cell) = c.domain.dyn_root.set(c.dyn_cell.clone()) {
+                        warning!("❗️cannot overwrite domain dyn_root: {:?}", old_cell);
+                    }
+                    c
+                }
                 Err(e) => Cell {
                     dyn_cell: DynCell::from(e),
-                    domain: self.domain.clone(),
+                    domain: Rc::new(Domain {
+                        write_policy: cell::Cell::new(WritePolicy::ReadOnly),
+                        origin: None,
+                        dyn_root: OnceCell::new(),
+                        dirty: cell::Cell::new(false),
+                    }),
                 },
             },
         }
@@ -644,11 +773,10 @@ impl Group {
 
     pub fn err(self) -> Res<Group> {
         match self.group {
-            GroupKind::Dyn(dyn_group) => match dyn_group {
+            GroupKind::Dyn { dyn_group, domain } => match dyn_group {
                 DynGroup::Error(error) => Err(error),
                 _ => Ok(Group {
-                    group: GroupKind::Dyn(dyn_group),
-                    domain: self.domain,
+                    group: GroupKind::Dyn { dyn_group, domain },
                 }),
             },
             _ => Ok(self),
@@ -696,7 +824,7 @@ impl<'a> PathSearch<'a> {
             Some(Ok(c)) => c,
             Some(Err(e)) => Cell {
                 dyn_cell: DynCell::from(e),
-                domain: self.start.domain.clone(),
+                domain: Rc::clone(&self.start.domain),
             },
             None => {
                 let mut path = self.start.path().unwrap_or_default();
@@ -704,7 +832,7 @@ impl<'a> PathSearch<'a> {
                 warning!("💥 path search failed: {}", path);
                 Cell {
                     dyn_cell: DynCell::from(noerr().with_path(path)),
-                    domain: self.start.domain.clone(),
+                    domain: Rc::clone(&self.start.domain),
                 }
             }
         }

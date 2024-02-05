@@ -19,26 +19,50 @@ fn test_nested() -> Res<()> {
 fn test_nested_mut() -> Res<()> {
     set_verbose(true);
 
-    let text = Cell::from(r#"{"one": ["<?xml?><root><a>mytext: yaml string</a></root>"]}"#);
-    let root = text.clone();
+    println!("1");
+    let text = Cell::from(r#"{"one": ["<?xml?><root><a>mytext: yaml string</a></root>"]}"#)
+        .policy(WritePolicy::WriteBackOnDrop);
 
-    assert_eq!(
-        root.to("^json/one/[0]^xml/root/a^yaml/mytext")
-            .read()
-            .value()?,
-        "yaml string"
-    );
+    println!("2");
+    {
+        let mytext = text.be("json");
+    }
+    println!("3");
 
     {
-        let cell = root.to("^json/one/[0]^xml/root/a^yaml/mytext");
+        let mytext = text
+            .be("json")
+            .sub()
+            .get("one")
+            .sub()
+            .at(0)
+            .be("xml")
+            .sub()
+            .get("root")
+            .sub()
+            .get("a")
+            .be("yaml")
+            .sub()
+            .get("mytext");
+        println!("4");
+        assert_eq!(mytext.read().value()?, "yaml string");
+    }
+
+    println!("5");
+
+    {
+        let cell = text.to("^json/one/[0]^xml/root/a^yaml/mytext");
+        println!("6");
         assert_eq!(cell.read().value()?, "yaml string");
-        cell.write().set_value("new yaml string".into())?;
-        root.save(root.origin())?;
+        println!("7");
+        cell.write().set_value("NEW YAML STRING".into())?;
+        println!("8");
+        println!("mytext cell: {:?}\n", cell);
     }
 
     assert_eq!(
-        root.read().value()?,
-        r#"{"one": ["<?xml?><root><a>mytext: new yaml string</a></root>"]}"#
+        text.read().value()?,
+        r#"{"one":["<?xml?><root><a>mytext: NEW YAML STRING</a></root>"]}"#
     );
 
     Ok(())

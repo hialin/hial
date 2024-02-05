@@ -171,9 +171,14 @@ impl CellReaderTrait for CellReader {
             },
         };
         let mut s = String::new();
-        yaml_rust::emitter::YamlEmitter::new(&mut s)
+        let mut emitter = yaml_rust::emitter::YamlEmitter::new(&mut s);
+        emitter.compact(true);
+        emitter
             .dump(&yaml)
             .map_err(|e| caused(HErrKind::InvalidFormat, "cannot serialize yaml node", e))?;
+        if s.starts_with("---\n") {
+            s = s[4..].to_string();
+        }
         Ok(s)
     }
 }

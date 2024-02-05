@@ -163,8 +163,8 @@ impl ElevationGroup {
             Selector::Top => guard_some!(top_interpretation(&self.0), {
                 return nores();
             }),
-            Selector::Star => return userr("no interpretation for '*'".to_string()),
-            Selector::DoubleStar => return userr("no interpretation for '**'".to_string()),
+            Selector::Star => return userres("no interpretation for '*'".to_string()),
+            Selector::DoubleStar => return userres("no interpretation for '**'".to_string()),
         };
         if interp == old_interp {
             return Ok(self.0.clone());

@@ -1,7 +1,6 @@
 use core::fmt;
-use std::{cell::OnceCell, fmt::Debug, rc::Rc};
-
 use linkme::distributed_slice;
+use std::{cell::OnceCell, fmt::Debug, rc::Rc};
 use tree_sitter::{Parser, Tree, TreeCursor};
 
 use crate::{base::Cell as XCell, base::*, *};
@@ -25,6 +24,8 @@ pub(crate) struct Cell {
     domain: Rc<Domain>,
     // since the tree is in a Rc, the treecursor is valid as long as the cell is valid
     cursor: TreeCursor<'static>,
+    // cache the position since treesitter does not provide it
+    position: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -98,7 +99,7 @@ fn sitter_from_source(source: String, language: String) -> Res<Cell> {
         "javascript" => unsafe { tree_sitter_javascript() },
         // "python" => unsafe { tree_sitter_python() },
         "rust" => unsafe { tree_sitter_rust() },
-        _ => return userr(format!("unsupported language: {}", language)),
+        _ => return userres(format!("unsupported language: {}", language)),
     };
 
     debug!("sitter language: {}", language);
@@ -138,19 +139,13 @@ fn sitter_from_source(source: String, language: String) -> Res<Cell> {
         // TODO: find alternative for this unsafe change of lifetime to 'static
         // this should be safe as long as the tree is in Rc and not modified
         cursor: unsafe { std::mem::transmute(domain.tree.walk()) },
+        position: 0,
     })
 }
 
 impl CellReaderTrait for CellReader {
     fn index(&self) -> Res<usize> {
-        // TODO: this is a slow O(n) implementation
-        let mut n = self.cell.cursor.node();
-        let mut i = 0;
-        while let Some(p) = n.prev_sibling() {
-            n = p;
-            i += 1;
-        }
-        Ok(i)
+        Ok(self.cell.position)
     }
 
     fn label(&self) -> Res<Value> {
@@ -238,14 +233,30 @@ impl CellTrait for Cell {
     }
 
     fn head(&self) -> Res<(Self, Relation)> {
-        let mut cursor = self.cursor.clone();
-        if !cursor.goto_parent() {
+        let mut parent = self.cursor.clone();
+        if !parent.goto_parent() {
             return nores();
+        }
+        let mut position = 0;
+        {
+            let mut ancestor = parent.clone();
+            if ancestor.goto_parent() && ancestor.goto_first_child() {
+                loop {
+                    if ancestor.node() == parent.node() {
+                        break;
+                    }
+                    position += 1;
+                    if !ancestor.goto_next_sibling() {
+                        position = 0;
+                    }
+                }
+            }
         }
         Ok((
             Cell {
                 domain: self.domain.clone(),
-                cursor,
+                cursor: parent,
+                position,
             },
             Relation::Sub,
         ))
@@ -281,6 +292,7 @@ impl GroupTrait for Cell {
         Ok(Cell {
             domain: self.domain.clone(),
             cursor,
+            position: index,
         })
     }
 
@@ -291,11 +303,12 @@ impl GroupTrait for Cell {
         if !cursor.goto_first_child() {
             return nores();
         }
-        for _ in 0..self.cursor.node().child_count() {
+        for i in 0..self.cursor.node().child_count() {
             if key == cursor.field_name().unwrap_or_default() {
                 return Ok(Cell {
                     domain: self.domain.clone(),
                     cursor,
+                    position: i,
                 });
             }
             if !cursor.goto_next_sibling() {

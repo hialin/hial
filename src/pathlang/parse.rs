@@ -18,13 +18,13 @@ pub type NomRes<T, U> = IResult<T, U, VerboseError<T>>;
 impl<'a> Path<'a> {
     pub fn parse(input: &str) -> Res<Path> {
         let path_res = all_consuming(path_items)(input);
-        let path = guard_ok!(path_res, err => { return userr(convert_error(input, err))});
+        let path = guard_ok!(path_res, err => { return userres(convert_error(input, err))});
         Ok(path.1)
     }
 
     pub fn parse_with_starter(input: &str) -> Res<(PathStart, Path)> {
         let path_res = all_consuming(path_with_starter)(input);
-        let path = guard_ok!(path_res, err => { return userr(convert_error(input, err))});
+        let path = guard_ok!(path_res, err => { return userres(convert_error(input, err))});
         Ok(path.1)
     }
 }

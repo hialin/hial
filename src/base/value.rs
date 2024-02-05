@@ -186,7 +186,7 @@ impl<'a> fmt::Debug for Value<'a> {
             Value::Bool(x) => write!(buf, "Value::Bool({})", x),
             Value::Int(x) => write!(buf, "Value::Int({})", x),
             Value::Float(x) => write!(buf, "Value::Float({})", x),
-            Value::Str(x) => write!(buf, "Value::Str(\"{}\")", x),
+            Value::Str(x) => write!(buf, "Value::Str({:?})", x),
             // Value::OsStr(x) => write!(buf, "{}", x.to_string_lossy()),
             Value::Bytes(x) => {
                 let sb = String::from_utf8_lossy(x);

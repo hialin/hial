@@ -81,7 +81,7 @@ fn json_write() -> Res<()> {
         ]
     }"#
     .replace([' ', '\t', '\n'], "");
-    let flattree = Cell::from(treestring);
+    let flattree = Cell::from(treestring).policy(WritePolicy::NoAutoWrite);
     let json = flattree.be("json");
     pprint(&json, 0, 0);
     {
@@ -129,7 +129,7 @@ fn json_write_and_save() -> Res<()> {
 }"#
     .replace([' ', '\t', '\n'], "");
     println!("{}", treestring);
-    let flattree = Cell::from(treestring);
+    let flattree = Cell::from(treestring).policy(WritePolicy::NoAutoWrite);
     let json = flattree.be("json");
 
     // pprint::pprint(&json, 0, 0);

@@ -155,13 +155,13 @@ impl CellWriterTrait for CellWriter {
                     return fault("invalid attribute index");
                 }
                 let new_len = guard_some!(value.as_value().as_i128(), {
-                    return userr("new file size must be an integer");
+                    return userres("new file size must be an integer");
                 });
                 if new_len < 0 {
-                    return userr("new file size must be positive");
+                    return userres("new file size must be positive");
                 }
                 if new_len > u64::MAX as i128 {
-                    return userr("new file size must be smaller than 2^64");
+                    return userres("new file size must be smaller than 2^64");
                 }
 
                 let file = std::fs::File::options()

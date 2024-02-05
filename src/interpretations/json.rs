@@ -2,12 +2,16 @@ use std::{fs::File, rc::Rc};
 
 use indexmap::IndexMap;
 use linkme::distributed_slice;
-use serde_json::Value as SValue;
+use serde::Serialize;
+use serde_json::{ser::PrettyFormatter, Serializer, Value as SValue};
 
 use crate::{
     base::{Cell as XCell, *},
     guard_some,
-    utils::ownrc::*,
+    utils::{
+        indentation::{detect_file_indentation, detect_indentation},
+        ownrc::*,
+    },
 };
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
@@ -27,6 +31,7 @@ pub(crate) struct Cell {
 pub(crate) struct Group {
     nodes: NodeGroup,
     head: Option<Rc<(Cell, Relation)>>,
+    indent: Rc<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -46,6 +51,7 @@ pub(crate) enum Node {
 pub(crate) struct CellReader {
     nodes: ReadNodeGroup,
     pos: usize,
+    indent: Rc<String>,
 }
 
 #[derive(Debug)]
@@ -68,32 +74,40 @@ pub(crate) enum WriteNodeGroup {
 
 impl Cell {
     pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
-        let serde_value = match cell.interpretation() {
+        let (serde_value, indent) = match cell.interpretation() {
             "value" => {
                 let s = cell.read().value()?.to_string();
-                serde_json::from_str(s.as_ref())?
+                let indent = detect_indentation(&s);
+                (serde_json::from_str(s.as_ref())?, indent)
             }
             "fs" => {
                 let path = cell.as_file_path()?;
-                serde_json::from_reader(
-                    File::open(path).map_err(|e| caused(HErrKind::IO, "cannot read json", e))?,
-                )?
+                let indent = detect_file_indentation(path);
+                (
+                    serde_json::from_reader(
+                        File::open(path)
+                            .map_err(|e| caused(HErrKind::IO, "cannot read json", e))?,
+                    )?,
+                    indent,
+                )
             }
             "http" => {
                 let s = cell.read().value()?.to_string();
-                serde_json::from_str(s.as_ref())?
+                let indent = detect_indentation(&s);
+                (serde_json::from_str(s.as_ref())?, indent)
             }
             _ => return nores(),
         };
-        Self::from_serde_value(serde_value, Some(cell))
+        Self::from_serde_value(serde_value, Some(cell), indent)
     }
 
-    fn from_serde_value(json: SValue, origin: Option<XCell>) -> Res<XCell> {
+    fn from_serde_value(json: SValue, origin: Option<XCell>, indent: String) -> Res<XCell> {
         let nodes = OwnRc::new(vec![serde_to_node(json)]);
         let json_cell = Cell {
             group: Group {
                 nodes: NodeGroup::Array(nodes),
                 head: None,
+                indent: Rc::new(indent),
             },
             pos: 0,
         };
@@ -142,6 +156,7 @@ impl CellTrait for Cell {
                 }
             },
             pos: self.pos,
+            indent: Rc::clone(&self.group.indent),
         })
     }
 
@@ -169,10 +184,12 @@ impl CellTrait for Cell {
                 Some(Node::Array(a)) => Ok(Group {
                     nodes: NodeGroup::Array(a.clone()),
                     head: Some(Rc::new((self.clone(), Relation::Sub))),
+                    indent: Rc::clone(&self.group.indent),
                 }),
                 Some(Node::Object(o)) => Ok(Group {
                     nodes: NodeGroup::Object(o.clone()),
                     head: Some(Rc::new((self.clone(), Relation::Sub))),
+                    indent: Rc::clone(&self.group.indent),
                 }),
                 _ => nores(),
             },
@@ -184,10 +201,12 @@ impl CellTrait for Cell {
                 Some((_, Node::Array(a))) => Ok(Group {
                     nodes: NodeGroup::Array(a.clone()),
                     head: Some(Rc::new((self.clone(), Relation::Sub))),
+                    indent: Rc::clone(&self.group.indent),
                 }),
                 Some((_, Node::Object(o))) => Ok(Group {
                     nodes: NodeGroup::Object(o.clone()),
                     head: Some(Rc::new((self.clone(), Relation::Sub))),
+                    indent: Rc::clone(&self.group.indent),
                 }),
                 _ => nores(),
             },
@@ -255,20 +274,28 @@ impl CellReaderTrait for CellReader {
                 None => return fault(format!("bad index {}", self.pos)),
             },
         };
-        // Ok(serde_json::to_string_pretty(&serde_value)?)
-        Ok(serde_json::to_string(&serde_value)?)
+
+        let mut buf = Vec::new();
+        if !self.indent.is_empty() {
+            let formatter = PrettyFormatter::with_indent(self.indent.as_bytes());
+            serde_value
+                .serialize(&mut Serializer::with_formatter(&mut buf, formatter))
+                .map_err(|e| caused(HErrKind::IO, "cannot serialize json", e))?;
+        } else {
+            serde_value
+                .serialize(&mut Serializer::new(&mut buf))
+                .map_err(|e| caused(HErrKind::IO, "cannot serialize json", e))?;
+        };
+        String::from_utf8(buf)
+            .map_err(|e| caused(HErrKind::InvalidFormat, "bad json serialization", e))
     }
 }
 
 impl CellWriterTrait for CellWriter {
-    // TODO: support write policies
-    // if self.domain.write_policy == WritePolicy::ReadOnly {
-    //     return Err(HErr::ReadOnly);
-    // }
     fn set_label(&mut self, label: OwnValue) -> Res<()> {
         match self.nodes {
             WriteNodeGroup::Array(_) => {
-                return userr("cannot set label on array object");
+                return userres("cannot set label on array object");
             }
             WriteNodeGroup::Object(ref mut o) => {
                 let (_, v) = guard_some!(o.swap_remove_index(self.pos), {

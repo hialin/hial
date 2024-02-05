@@ -1,15 +1,17 @@
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::rc::Rc;
-
 use linkme::distributed_slice;
-use quick_xml::events::{BytesDecl, BytesEnd, BytesStart};
-use quick_xml::{events::Event, Error as XmlError, Reader};
+use quick_xml::{
+    events::{BytesDecl, BytesEnd, BytesStart, Event},
+    Error as XmlError, Reader,
+};
+use std::{fs::File, io::BufRead, rc::Rc};
 
 use crate::{
     base::{Cell as XCell, *},
     debug, guard_variant,
-    utils::ownrc::{OwnRc, ReadRc, WriteRc},
+    utils::{
+        indentation::{detect_file_indentation, detect_indentation},
+        ownrc::{OwnRc, ReadRc, WriteRc},
+    },
 };
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
@@ -29,6 +31,7 @@ pub(crate) struct Cell {
 pub(crate) struct Group {
     nodes: NodeGroup,
     head: Option<Rc<(Cell, Relation)>>,
+    indent: Rc<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -42,10 +45,12 @@ pub(crate) enum CellReader {
     Node {
         nodes: ReadRc<Vec<Node>>,
         pos: usize,
+        indent: Rc<String>,
     },
     Attr {
         nodes: ReadRc<Vec<Attribute>>,
         pos: usize,
+        indent: Rc<String>,
     },
 }
 
@@ -92,31 +97,29 @@ impl Cell {
                         e,
                     )
                 })?;
-                let mut reader = Reader::from_reader(BufReader::new(file));
-                println!("reader enc: {}", reader.decoder().encoding().name());
-                // let mut reader = Reader::from_file(path).map_err(HErr::from)?;
+                let indent = detect_file_indentation(path);
+                let mut reader = Reader::from_file(path).map_err(HErr::from)?;
                 let root = xml_to_node(&mut reader)?;
-                Self::from_root_node(root, Some(cell))
+                Self::from_root_node(root, Some(cell), indent)
             }
             _ => {
                 let r = cell.read();
                 let v = r.value()?;
                 let cow = v.as_cow_str();
-                // let mut reader = Reader::from_str(cow.as_ref());
-                let mut reader = Reader::from_reader(cow.as_ref().as_bytes());
-                println!("reader enc: {}", reader.decoder().encoding().name());
-                // reader.state.encoding = EncodingRef::Explicit(UTF_8);
+                let indent = detect_indentation(cow.as_ref());
+                let mut reader = Reader::from_str(cow.as_ref());
                 let root = xml_to_node(&mut reader)?;
-                Self::from_root_node(root, Some(cell))
+                Self::from_root_node(root, Some(cell), indent)
             }
         }
     }
 
-    fn from_root_node(root: Node, origin: Option<XCell>) -> Res<XCell> {
+    fn from_root_node(root: Node, origin: Option<XCell>, indent: String) -> Res<XCell> {
         let xml_cell = Cell {
             group: Group {
                 nodes: NodeGroup::Node(OwnRc::new(vec![root])),
                 head: None,
+                indent: Rc::new(indent),
             },
             pos: 0,
         };
@@ -159,7 +162,6 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
         }
         match reader.read_event_into(&mut buf) {
             Ok(Event::Decl(ref e)) => {
-                println!("decl: {:?}", e);
                 counts.count_decl += 1;
                 let mut attrs = vec![];
                 let rawversion = e.version()?;
@@ -183,7 +185,6 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 last(&mut stack)?.push(Node::DocType(doctype.into()));
             }
             Ok(Event::PI(ref e)) => {
-                println!("PI: {:?}", e);
                 counts.count_pi += 1;
                 let text = decoder.decode(e)?;
                 last(&mut stack)?.push(Node::PI(text.into()));
@@ -272,13 +273,13 @@ impl CellReaderTrait for CellReader {
 
     fn label(&self) -> Res<Value> {
         match self {
-            CellReader::Node { nodes, pos } => match &nodes[*pos] {
+            CellReader::Node { nodes, pos, .. } => match &nodes[*pos] {
                 Node::Element((x, _, _, _)) => Ok(Value::Str(x.as_str())),
                 Node::Decl(_) => Ok(Value::Str("xml")),
                 Node::DocType(x) => Ok(Value::Str("DOCTYPE")),
                 x => nores(),
             },
-            CellReader::Attr { nodes, pos } => match &nodes[*pos] {
+            CellReader::Attr { nodes, pos, .. } => match &nodes[*pos] {
                 Attribute::Attribute(k, _) => Ok(Value::Str(k.as_str())),
                 _ => nores(),
             },
@@ -287,7 +288,7 @@ impl CellReaderTrait for CellReader {
 
     fn value(&self) -> Res<Value> {
         match self {
-            CellReader::Node { nodes, pos } => match &nodes[*pos] {
+            CellReader::Node { nodes, pos, .. } => match &nodes[*pos] {
                 Node::Document(_) => nores(),
                 Node::Decl(_) => nores(),
                 Node::DocType(x) => Ok(Value::Str(x.trim())),
@@ -300,7 +301,7 @@ impl CellReaderTrait for CellReader {
                 Node::CData(x) => Ok(Value::Bytes(x.as_slice())),
                 Node::Error(x) => Ok(Value::Str(x)),
             },
-            CellReader::Attr { nodes, pos } => match &nodes[*pos] {
+            CellReader::Attr { nodes, pos, .. } => match &nodes[*pos] {
                 Attribute::Attribute(_, x) => Ok(Value::Str(x)),
                 Attribute::Error(x) => Ok(Value::Str(x)),
             },
@@ -404,8 +405,13 @@ impl CellReaderTrait for CellReader {
         }
 
         match self {
-            CellReader::Node { nodes, pos } => {
-                let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 2);
+            CellReader::Node { nodes, pos, indent } => {
+                let mut writer = if indent.is_empty() {
+                    Writer::new(Cursor::new(Vec::new()))
+                } else {
+                    let first = indent.chars().next().unwrap();
+                    Writer::new_with_indent(Cursor::new(Vec::new()), first as u8, indent.len())
+                };
                 serialize_node(&mut writer, &nodes[*pos])?;
                 let ser = String::from_utf8(writer.into_inner().into_inner()).map_err(|e| {
                     caused(
@@ -414,10 +420,9 @@ impl CellReaderTrait for CellReader {
                         e,
                     )
                 });
-                println!("ser: {:?}", ser);
                 ser
             }
-            CellReader::Attr { nodes, pos } => match &nodes[*pos] {
+            CellReader::Attr { nodes, pos, .. } => match &nodes[*pos] {
                 Attribute::Attribute(k, v) => Ok(format!("{}=\"{}\"", k, v)),
                 Attribute::Error(x) => Err(deformed(x)),
             },
@@ -429,8 +434,8 @@ impl CellWriterTrait for CellWriter {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
         match self {
             CellWriter::Node { nodes, pos } => match &mut nodes[*pos] {
-                Node::Document(_) => return userr("cannot set value of document"),
-                Node::Decl(x) => return userr("cannot set value of decl"),
+                Node::Document(_) => return userres("cannot set value of document"),
+                Node::Decl(x) => return userres("cannot set value of decl"),
                 Node::DocType(x) => *x = value.as_value().as_cow_str().to_string(),
                 Node::PI(x) => *x = value.as_value().as_cow_str().to_string(),
                 Node::Element((_, _, x, _)) => *x = value.as_value().as_cow_str().to_string(),
@@ -444,11 +449,11 @@ impl CellWriterTrait for CellWriter {
                         *x = value.as_value().as_cow_str().to_string().into_bytes();
                     }
                 }
-                Node::Error(x) => return userr("cannot set value of error node"),
+                Node::Error(x) => return userres("cannot set value of error node"),
             },
             CellWriter::Attr { nodes, pos } => match &mut nodes[*pos] {
                 Attribute::Attribute(_, x) => *x = value.as_value().as_cow_str().to_string(),
-                Attribute::Error(x) => return userr("cannot set value of error attribute"),
+                Attribute::Error(x) => return userres("cannot set value of error attribute"),
             },
         }
         Ok(())
@@ -495,10 +500,12 @@ impl CellTrait for Cell {
             NodeGroup::Node(n) => CellReader::Node {
                 nodes: n.read().ok_or_else(|| lockerr("cannot read nodes"))?,
                 pos: self.pos,
+                indent: Rc::clone(&self.group.indent),
             },
             NodeGroup::Attr(a) => CellReader::Attr {
                 nodes: a.read().ok_or_else(|| lockerr("cannot read nodes"))?,
                 pos: self.pos,
+                indent: Rc::clone(&self.group.indent),
             },
         })
     }
@@ -524,10 +531,12 @@ impl CellTrait for Cell {
                     Node::Document(x) => Ok(Group {
                         nodes: NodeGroup::Node(x.clone()),
                         head: Some(Rc::new((self.clone(), Relation::Sub))),
+                        indent: Rc::clone(&self.group.indent),
                     }),
                     Node::Element((_, _, _, x)) => Ok(Group {
                         nodes: NodeGroup::Node(x.clone()),
                         head: Some(Rc::new((self.clone(), Relation::Sub))),
+                        indent: Rc::clone(&self.group.indent),
                     }),
                     _ => nores(),
                 }
@@ -544,10 +553,12 @@ impl CellTrait for Cell {
                     Node::Decl(x) => Ok(Group {
                         nodes: NodeGroup::Attr(x.clone()),
                         head: Some(Rc::new((self.clone(), Relation::Sub))),
+                        indent: Rc::clone(&self.group.indent),
                     }),
                     Node::Element((_, x, _, _)) => Ok(Group {
                         nodes: NodeGroup::Attr(x.clone()),
                         head: Some(Rc::new((self.clone(), Relation::Sub))),
+                        indent: Rc::clone(&self.group.indent),
                     }),
                     _ => nores(),
                 }
