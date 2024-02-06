@@ -10,6 +10,8 @@
 - fix double kleene error (see test)
 - support type selector: `hial './src/tests/rust.rs^rust/:function_item'`
 - support assignment (write): `hial './src/tests/rust.rs^rust/:function_item[-1]#label = "modified_fn_name"'`
+- set value on the command line
+- later: separate api module, used by ffi and dependent crates
 
 - operations:
     - assign to variables;
@@ -21,27 +23,27 @@
         - new/append/insert_at/delete cell
         - new/set/replace/delete group (only sub or attr group)
     - diff with assignment of results in variables
+
 - ?treesitter representations are too detailed, unsure what to do
 - ?explore python implementation and usage
 - ?search should return all matches embedded in a delegation cell, which has all results
     as subs and delegates write operations to all the subs
-- ?rename XCell -> Nex, Cell -> Inex, CellTrait -> InexTrait
+- ?rename XCell, Cell, CellTrait to Nex?
 - later: python, git, database, ical, zip, markdown
-- later: separate api module, used by ffi and dependent crates
 
 
 ### Feature implementation status
 
 | *Feature*  | *Readable* | *Writeble* |
 |------------|------------|------------|
-| url        |    yes     |            |
-| path       |    yes     |            |
-| fs         |    yes     |            |
-| http       |    yes     |            |
-| json       |    yes     |            |
-| yaml       |    yes     |            |
-| toml       |    yes     |            |
-| xml        |    yes     |            |
+| url        |    yes     |    yes     |
+| path       |    yes     |    yes     |
+| fs         |    yes     |    yes     |
+| http       |    yes     |    yes     |
+| json       |    yes     |    yes     |
+| yaml       |    yes     |    yes     |
+| toml       |    yes     |    yes     |
+| xml        |    yes     |    yes     |
 | rust       |    yes     |            |
 |            |            |            |
 | git        |            |            |
@@ -70,36 +72,23 @@
 
 ### Todos, Issues, Problems
 
-- todo: write support: json, rust, fs
 - todo: c interop and a small c test
-
 - cell must implement partialeq, eq (same pointed location)
-
 - todo CLI:
-    - todo: tree guide lines
     - todo: colors: interp, type, label, value
     - todo: option to hide attrs?
 
 - todo: python interop and a larger python example
-- todo: review examples, check accessors, operators
-
 - todo: get should return an iterator; multiset labels
-
 - todo: add regex operator and shortcuts for startswith, endswith, contains
 - todo: add <, >, <=, >= operators
-
 - todo: improve nom parsing errors, use context
 - todo: interpretations parameters
-- todo: custom tree
+- todo: custom tree datastructure?
 - todo: cell symlinks
 - todo: cell path
 - todo: path bindings
 - todo: diffs
-- todo: git interpretation
-
-- todo: make ^http^rust work, allow http to function as string (auto conversions?)
-
-- unclear: file value should be the file name or file contents?
 
 - unclear: we should have some internal language:
     - Usecase: json:  `/question[/answer_entities/*.is_empty()].count()`

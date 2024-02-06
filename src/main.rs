@@ -67,9 +67,10 @@ fn main() -> Res<()> {
             debug!("Root: {}", path_start);
             debug!("Path: {}", path);
             let root = path_start.eval()?;
+            let start_value = root.path().unwrap_or_default();
 
             let mut anyfound = false;
-            let mut eval_iter = path.eval(root);
+            let mut eval_iter = path.eval(root.clone());
             for cell in &mut eval_iter {
                 anyfound = true;
                 match cell {
@@ -78,7 +79,10 @@ fn main() -> Res<()> {
                 }
             }
             if !anyfound {
-                println!("No match for {}", eval_iter.unmatched_path());
+                println!(
+                    "No match for {}",
+                    start_value + eval_iter.unmatched_path().as_str()
+                );
             }
         }
     }

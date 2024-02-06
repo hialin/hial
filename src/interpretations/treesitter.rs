@@ -102,8 +102,7 @@ fn sitter_from_source(source: String, language: String) -> Res<Cell> {
         _ => return userres(format!("unsupported language: {}", language)),
     };
 
-    debug!("sitter language: {}", language);
-
+    // debug!("sitter language: {}", language);
     // println!("node kinds:");
     // let mut nk = vec![];
     // for i in 0..sitter_language.node_kind_count() {

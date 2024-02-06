@@ -91,19 +91,15 @@ fn print_value(buffer: &mut String, indent: usize, s: &str) -> Result<(), Error>
     }
 
     let mut pre = String::new();
-    {
-        while pre.len() < SPACE_TO_SEPARATOR {
-            pre.push(' ');
-        }
-        pre.push('│');
-        while pre.len() < SPACE_TO_SEPARATOR + indent + 5 {
-            pre.push(' ');
-        }
-        pre.push_str("❝ ");
-    }
+    make_indent(indent, &mut pre)?;
+    pre.push_str("❝ ");
 
-    for l in s.split('\n') {
-        write!(buffer, "\n{}{}", pre, l)?;
+    for (i, l) in s.split('\n').enumerate() {
+        if i == 0 {
+            writeln!(buffer, "❝ {}", l)?;
+        } else {
+            writeln!(buffer, "{}{}", pre, l)?;
+        }
     }
     if buffer.ends_with("\n\n") {
         buffer.pop(); // remove last '\n'

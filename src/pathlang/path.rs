@@ -2,7 +2,6 @@ use std::fmt::{Display, Formatter};
 
 use crate::{
     base::*,
-    interpretations::*,
     pathlang::{eval::EvalIter, parseurl::*},
 };
 
@@ -123,9 +122,9 @@ fn fmt_path_item(path_item: &PathItem, f: &mut Formatter<'_>) -> std::fmt::Resul
 impl<'a> PathStart<'a> {
     pub fn eval(&self) -> Res<Cell> {
         match self {
-            PathStart::Url(u) => url::Cell::from_str(&u.to_string()),
-            PathStart::File(f) => fs::Cell::from_str_path(*f),
-            PathStart::String(s) => ownvalue::Cell::from_str(s),
+            PathStart::Url(s) => Cell::from(s.to_string()).be("url").err(),
+            PathStart::File(s) => Cell::from(*s).be("path").be("fs").err(),
+            PathStart::String(s) => Cell::from(*s).err(),
         }
     }
 }

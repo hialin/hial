@@ -18,7 +18,7 @@ The following tasks should be easy with such an API:
 
 ## The data model
 
-🚧 **Hial is currently under construction. Some things may change**. 🚧
+🚧 **Hial is currently under construction. Some things do not work yet and some other things will change**. 🚧
 
 The data model is that of a tree of simple data nodes. The tree has a root node and a hierarchy of children nodes.
 
@@ -30,7 +30,7 @@ All cells except the root cell have a **super** cell and are part of the **super
 
 A cell is always an **interpretation** of some underlying data. For example a series of bytes `7b 22 61 22 3a 31 7d` can be interpreted as a byte array (a single cell with a blob value of `7b 22 61 22 3a 31 7d`) or as an utf-8 encoded string (another cell with a string value of `{"a":1}`) or as a json tree of cells (the root cell being the json object `{}` with a sub cell with label `a` and value `1`). A cell with some value can be always explicitly re-interpreted as another type of cell.
 
-A cell also has a string **type** describing its kind, depending on the interpretation. Such types can be: "file" or "folder" (in the fs interpretation), "array" (in the json interpretation), "function_item" (in the rust interpretation), "response" (in the http interpretation), etc.
+A cell also has a string **type** describing its kind, depending on the interpretation. Such types can be: "file" or "folder" (in the *fs* interpretation), "array" (in the *json* interpretation), "function_item" (in the *rust* interpretation), "response" (in the *http* interpretation), etc.
 
 ```ascii
           ┌----------┐
@@ -67,11 +67,11 @@ A cell also has a string **type** describing its kind, depending on the interpre
 
 ### Path language
 
-This unified data model naturally supports a path language similar to a file system path, xpath or json path. A cell is always used as a starting point (e.g. the file system current folder). The '/' symbol designates moving to the *sub* group; the '@' symbol to the *attr* group. Jumping to a different interpretation is done using the '^' (elevate) symbol.
+This unified data model naturally supports a path language similar to a file system path, xpath or json path. A cell is always used as a starting point (e.g. the file system current folder). The `/` symbol designates moving to the *sub* group; the `@` symbol to the *attr* group. Jumping to a different interpretation is done using the `^` (elevate) symbol.
 
-As a special case, the starting point of a path is allowed to be a valid url (starting with http:// or https://) or a file system path (must be either absolute, starting with '/', or relative, starting with '.').
+As a special case, the starting point of a path is allowed to be a valid url (starting with `http://` or `https://`) or a file system path (must be either absolute, starting with `/`, or relative, starting with `.`).
 
-Other special operators are: the '\*' operator which selects any cell in the current group and the '\*\*' operator which selects any cell in current group and any cell descendants in the current interpretation; filtering these cells is done by boolean expressions in brackets.
+Other special operators are: the `*` operator which selects any cell in the current group and the `**` operator which selects any cell in current group and any cell descendants in the current interpretation. Filtering these cells is done by boolean expressions in brackets.
 
 Examples:
 
