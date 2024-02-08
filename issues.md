@@ -9,7 +9,7 @@
 
 - fix double kleene error (see test)
 - support type selector: `hial './src/tests/rust.rs^rust/:function_item'`
-- support assignment (write): `hial './src/tests/rust.rs^rust/:function_item[-1]#label = "modified_fn_name"'`
+- support ts write: `hial './src/tests/rust.rs^rust/:function_item[-1]#label = "modified_fn_name"'`
 - set value on the command line
 - later: separate api module, used by ffi and dependent crates
 

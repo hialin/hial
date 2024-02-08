@@ -9,21 +9,22 @@ use crate::{
     },
 };
 
-macro_rules! eval_debug {
-    (
-        $body:block
-    ) => {
-        // $body
+macro_rules! ifdebug {
+    ( $body:expr ) => {
+        $body
     };
 }
 
 #[derive(Clone, Debug)]
 pub struct EvalIter<'s> {
     path: Vec<PathItem<'s>>,
+    // dfs exploration of the cell tree in search of the path
     stack: Vec<CellNode>,
     next_max_path_index: usize,
 }
 
+// a cell that matches the search together with the indices of the path that it matches
+// one cell can match multiple indices of the same path (because of doublestars)
 #[derive(Clone, Debug)]
 pub struct CellNode {
     cell: Res<Cell>,
@@ -32,12 +33,15 @@ pub struct CellNode {
 
 impl<'s> EvalIter<'s> {
     pub(crate) fn new(start: Cell, path: Path<'s>) -> EvalIter<'s> {
-        eval_debug!({
-            println!("\n********************************");
-            println!("==> path is: {}\n", path)
-        });
+        ifdebug!(println!(
+            "\nnew EvalIter, path: {:?}:",
+            path.0
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<String>>()
+        ));
         let mut path_indices = HashSet::from([0]);
-        if Self::is_doublestar_match(&start, 0, &path.0) {
+        if Self::is_doublestar_match(&start, path.0.first()) {
             path_indices.insert(1);
         }
         let start_node = CellNode {
@@ -52,47 +56,6 @@ impl<'s> EvalIter<'s> {
         }
     }
 
-    fn update_next_max_path_index(stack: &[CellNode], next_max_path_index: &mut usize) {
-        let max_i = stack
-            .iter()
-            .map(|cn| cn.path_indices.iter().copied().max().unwrap_or(0))
-            .max()
-            .unwrap_or(0);
-        if max_i > *next_max_path_index {
-            *next_max_path_index = max_i;
-        }
-    }
-
-    /// returns the minimal path that failed to match
-    pub fn unmatched_path(&self) -> String {
-        let mut path = String::new();
-        for i in 0..self.next_max_path_index {
-            path.push_str(self.path[i].to_string().as_str());
-        }
-        if self.next_max_path_index < self.path.len() {
-            path.push_str(self.path[self.next_max_path_index].to_string().as_str());
-        }
-        path
-    }
-
-    fn is_doublestar_match(cell: &Cell, path_index: usize, path: &[PathItem<'s>]) -> bool {
-        eval_debug!({
-            // println!(
-            //     "is_doublestar_match: {} index {}",
-            //     cell.debug_string(),
-            //     path_index
-            // )
-        });
-        if let Some(path_item) = path.get(path_index) {
-            if let Some(Selector::DoubleStar) = path_item.selector {
-                if EvalIter::eval_filters_match(cell, path_item) {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
     fn eval_next(&mut self) -> Option<Res<Cell>> {
         while !self.stack.is_empty() {
             if let Some(cell) = self.pump() {
@@ -104,55 +67,62 @@ impl<'s> EvalIter<'s> {
     }
 
     fn pump(&mut self) -> Option<Res<Cell>> {
-        eval_debug!({
-            println!("----");
-            print!("stack:");
-            for cn in &self.stack {
-                print!(
-                    "    {} : {:?}",
+        ifdebug!(println!(
+            "----\nstack:{}",
+            self.stack
+                .iter()
+                .map(|cn| format!(
+                    "    `{}` : {:?}",
                     cn.cell.as_ref().unwrap().debug_string(),
                     cn.path_indices
-                );
-            }
-            println!();
-        });
+                ))
+                .collect::<Vec<String>>()
+                .join("\n")
+        ));
 
+        // pop the last cell match from the stack
         let CellNode {
             cell,
             mut path_indices,
-        } = guard_some!(self.stack.pop(), {
-            return None;
-        });
+        } = guard_some!(self.stack.pop(), { return None });
         let cell = guard_ok!(cell, err => {
             debug_err!(err);
             return None;
         });
 
-        eval_debug!({
-            println!("pump:     {} : {:?}", cell.debug_string(), path_indices);
-        });
+        ifdebug!(println!(
+            "now testing:     `{}` : {:?}",
+            cell.debug_string(),
+            path_indices
+        ));
 
+        // if there are associated path indices larger than the path length,
+        // it means that the cell is a match and we should return it
         if path_indices.iter().any(|i| *i >= self.path.len()) {
+            ifdebug!(println!(
+                "found result: `{}`;    push back with indices = {:?}",
+                cell.debug_string(),
+                path_indices
+            ));
+
+            // keep smaller path indices for further exploration
             path_indices.retain(|i| *i < self.path.len());
-            eval_debug!({
-                println!(
-                    "found result: {};    push back with indices = {:?}",
-                    cell.debug_string(),
-                    path_indices
-                );
-            });
-            self.stack.push(CellNode {
-                cell: Ok(cell.clone()),
-                path_indices,
-            });
-            Self::update_next_max_path_index(&self.stack, &mut self.next_max_path_index);
+            if !path_indices.is_empty() {
+                self.stack.push(CellNode {
+                    cell: Ok(cell.clone()),
+                    path_indices,
+                });
+                Self::update_next_max_path_index(&self.stack, &mut self.next_max_path_index);
+            }
+
             return Some(Ok(cell));
         }
 
         let has_relation =
             |r, path: &[PathItem<'s>]| path_indices.iter().any(|i| path[*i].relation == r);
+
         if has_relation(Relation::Interpretation, &self.path) {
-            match Self::subgroup(Relation::Interpretation, &cell) {
+            match cell.elevate().err() {
                 Err(err) => debug_err!(err),
                 Ok(group) => Self::push_interpretations(
                     &group,
@@ -165,34 +135,37 @@ impl<'s> EvalIter<'s> {
         }
 
         // output order is reverse: field first, attr second, subs last
+        // because we put them in a stack
         for relation in [Relation::Sub, Relation::Attr, Relation::Field] {
-            if has_relation(relation, &self.path) {
-                let (star, doublestar) = Self::has_stars(relation, &path_indices, &self.path);
-                match Self::subgroup(relation, &cell) {
-                    Err(err) => debug_err!(err),
-                    Ok(group) => {
-                        if star || doublestar {
-                            Self::push_by_relation_with_stars(
-                                relation,
-                                &group,
-                                &path_indices,
-                                &self.path,
-                                &mut self.stack,
-                                &mut self.next_max_path_index,
-                                doublestar,
-                            );
-                        } else {
-                            Self::push_by_relation_without_stars(
-                                relation,
-                                &group,
-                                &path_indices,
-                                &self.path,
-                                &mut self.stack,
-                                &mut self.next_max_path_index,
-                            )
-                        }
-                    }
-                }
+            if !has_relation(relation, &self.path) {
+                continue;
+            }
+
+            let (star, doublestar) = Self::has_stars(relation, &path_indices, &self.path);
+            let group = guard_ok!(Self::subgroup(relation, &cell), err => {
+                debug_err!(err);
+                continue;
+            });
+
+            if star || doublestar {
+                Self::push_by_relation_with_stars(
+                    relation,
+                    &group,
+                    &path_indices,
+                    &self.path,
+                    &mut self.stack,
+                    &mut self.next_max_path_index,
+                    doublestar,
+                );
+            } else {
+                Self::push_by_relation_without_stars(
+                    relation,
+                    &group,
+                    &path_indices,
+                    &self.path,
+                    &mut self.stack,
+                    &mut self.next_max_path_index,
+                )
             }
         }
 
@@ -234,13 +207,11 @@ impl<'s> EvalIter<'s> {
                     continue;
                 }
 
-                eval_debug!({
-                    println!(
-                        "push interpretation: {} : pathindex={}",
-                        subcell.debug_string(),
-                        path_index + 1
-                    );
-                });
+                ifdebug!(println!(
+                    "push interpretation: `{}` : pathindex={}",
+                    subcell.debug_string(),
+                    path_index + 1
+                ));
                 stack.push(CellNode {
                     cell: Ok(subcell),
                     path_indices: HashSet::from([path_index + 1]),
@@ -273,30 +244,32 @@ impl<'s> EvalIter<'s> {
                     continue;
                 }
                 if Self::accept_subcell(subcell.clone(), path_item) {
-                    eval_debug!({
-                        println!("match: {} for {}", subcell.debug_string(), path_item);
-                    });
+                    ifdebug!(println!(
+                        "match: `{}` for {}",
+                        subcell.debug_string(),
+                        path_item
+                    ));
                     if double_stars {
                         accepted_path_indices.insert(*path_index);
                     }
                     accepted_path_indices.insert(*path_index + 1);
-                    if Self::is_doublestar_match(&subcell, *path_index + 1, path) {
+                    if Self::is_doublestar_match(&subcell, path.get(*path_index + 1)) {
                         accepted_path_indices.insert(*path_index + 2);
                     }
                 } else {
-                    eval_debug!({
-                        println!("no match {} for {}", subcell.debug_string(), path_item);
-                    });
+                    ifdebug!(println!(
+                        "no match `{}` for {}",
+                        subcell.debug_string(),
+                        path_item
+                    ));
                 }
             }
             if !accepted_path_indices.is_empty() {
-                eval_debug!({
-                    println!(
-                        "push by star relation: {} : {:?}",
-                        subcell.debug_string(),
-                        accepted_path_indices
-                    );
-                });
+                ifdebug!(println!(
+                    "push by star relation: `{}` : {:?}",
+                    subcell.debug_string(),
+                    accepted_path_indices
+                ));
                 stack.push(CellNode {
                     cell: Ok(subcell),
                     path_indices: accepted_path_indices,
@@ -304,6 +277,17 @@ impl<'s> EvalIter<'s> {
                 Self::update_next_max_path_index(stack, next_max_path_index);
             }
         }
+    }
+
+    fn is_doublestar_match(cell: &Cell, path_item: Option<&PathItem<'s>>) -> bool {
+        if let Some(path_item) = path_item {
+            if let Some(Selector::DoubleStar) = path_item.selector {
+                if EvalIter::eval_filters_match(cell, path_item) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn push_by_relation_without_stars(
@@ -337,18 +321,16 @@ impl<'s> EvalIter<'s> {
             });
             if Self::accept_subcell(subcell.clone(), path_item) {
                 accepted_path_indices.insert(path_index + 1);
-                if Self::is_doublestar_match(&subcell, *path_index + 1, path) {
+                if Self::is_doublestar_match(&subcell, path.get(*path_index + 1)) {
                     accepted_path_indices.insert(*path_index + 2);
                 }
             }
             if !accepted_path_indices.is_empty() {
-                eval_debug!({
-                    println!(
-                        "push by non-star relation: {} : {:?}",
-                        subcell.debug_string(),
-                        accepted_path_indices
-                    );
-                });
+                ifdebug!(println!(
+                    "push by non-star relation: `{}` : {:?}",
+                    subcell.debug_string(),
+                    accepted_path_indices
+                ));
                 stack.push(CellNode {
                     cell: Ok(subcell),
                     path_indices: accepted_path_indices,
@@ -376,13 +358,11 @@ impl<'s> EvalIter<'s> {
                     continue;
                 });
 
-                eval_debug!({
-                    println!(
-                        "push by field: {} : {:?}",
-                        subcell.debug_string(),
-                        path_index + 1
-                    );
-                });
+                ifdebug!(println!(
+                    "push by field: `{}` : {:?}",
+                    subcell.debug_string(),
+                    path_index + 1
+                ));
                 stack.push(CellNode {
                     cell: Ok(subcell),
                     path_indices: HashSet::from([path_index + 1]),
@@ -406,6 +386,9 @@ impl<'s> EvalIter<'s> {
         path_indices: &HashSet<usize>,
         path: &[PathItem<'s>],
     ) -> (bool, bool) {
+        path_indices
+            .iter()
+            .any(|i| path[*i].relation == relation && path[*i].selector == Some(Selector::Star));
         let (mut star, mut doublestar) = (false, false);
         for i in path_indices {
             if relation == path[*i].relation {
@@ -452,38 +435,41 @@ impl<'s> EvalIter<'s> {
         for filter in &path_item.filters {
             match EvalIter::eval_bool_expression(subcell.clone(), &filter.expr) {
                 Err(e) => {
-                    eval_debug!({
-                        println!("verbose eval filter match ERROR");
-                    });
+                    ifdebug!(println!("eval_bool_expression failed"));
                     debug_err!(e);
                     return false;
                 }
                 Ok(false) => {
-                    eval_debug!({
-                        println!("verbose eval filter match FALSE");
-                    });
+                    ifdebug!(println!(
+                        "no match of cell `{}` for filter `{}`",
+                        subcell.debug_string(),
+                        filter
+                    ));
                     return false;
                 }
                 Ok(true) => {}
             }
         }
-        eval_debug!({
-            println!("eval filter match test is TRUE: {}", subcell.debug_string());
-        });
         true
     }
 
     fn cell_matches_selector(cell: &Cell, sel: &Selector) -> bool {
-        eval_debug!({
-            println!("cell_matches_selector: selector {:?}; cell {:?}", sel, cell);
-        });
         if *sel == Selector::Star || *sel == Selector::DoubleStar {
+            ifdebug!(println!(
+                "cell `{}` matches star selector",
+                cell.debug_string()
+            ));
             return true;
         } else {
             match cell.read().err() {
                 Ok(reader) => match reader.label() {
                     Ok(ref k) => {
                         if sel == k {
+                            ifdebug!(println!(
+                                "cell `{}` matches selector {} ",
+                                cell.debug_string(),
+                                sel,
+                            ));
                             return true;
                         }
                     }
@@ -496,6 +482,11 @@ impl<'s> EvalIter<'s> {
     }
 
     fn eval_bool_expression(cell: Cell, expr: &Expression<'s>) -> Res<bool> {
+        ifdebug!(println!(
+            "{{{{\neval_bool_expression cell `{}` for expr `{}`",
+            cell.debug_string(),
+            expr
+        ));
         let eval_iter_left = Self::new(cell, expr.left.clone());
         for cell in eval_iter_left {
             let cell = guard_ok!(cell, err => {
@@ -514,13 +505,16 @@ impl<'s> EvalIter<'s> {
                         continue;
                     });
                     if Self::eval_expr(op, lvalue, right)? {
+                        ifdebug!(println!("eval_bool_expression true\n}}}}"));
                         return Ok(true);
                     }
                 }
             } else {
+                ifdebug!(println!("eval_bool_expression true\n}}}}"));
                 return Ok(true);
             }
         }
+        ifdebug!(println!("eval_bool_expression false\n}}}}"));
         Ok(false)
     }
 
@@ -533,6 +527,29 @@ impl<'s> EvalIter<'s> {
             "!=" if left != right => Ok(true),
             _ => Ok(false),
         }
+    }
+
+    fn update_next_max_path_index(stack: &[CellNode], next_max_path_index: &mut usize) {
+        let max_i = stack
+            .iter()
+            .map(|cn| cn.path_indices.iter().copied().max().unwrap_or(0))
+            .max()
+            .unwrap_or(0);
+        if max_i > *next_max_path_index {
+            *next_max_path_index = max_i;
+        }
+    }
+
+    /// returns the minimal path that failed to match
+    pub fn unmatched_path(&self) -> String {
+        let mut path = String::new();
+        for i in 0..self.next_max_path_index {
+            path.push_str(self.path[i].to_string().as_str());
+        }
+        if self.next_max_path_index < self.path.len() {
+            path.push_str(self.path[self.next_max_path_index].to_string().as_str());
+        }
+        path
     }
 }
 

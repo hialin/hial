@@ -35,9 +35,17 @@ pub trait CellReaderTrait: Debug {
 }
 
 pub trait CellWriterTrait: Debug {
-    fn set_value(&mut self, value: OwnValue) -> Res<()>;
+    fn set_index(&mut self, value: OwnValue) -> Res<()> {
+        todo!() // TODO: remove this default implementation
+    }
 
     fn set_label(&mut self, value: OwnValue) -> Res<()> {
+        todo!() // TODO: remove this default implementation
+    }
+
+    fn set_value(&mut self, value: OwnValue) -> Res<()>;
+
+    fn set_serial(&mut self, value: OwnValue) -> Res<()> {
         todo!() // TODO: remove this default implementation
     }
 
@@ -60,7 +68,7 @@ pub trait GroupTrait: Clone + Debug {
     // fn get_all<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::SelectIterator>;
 
     fn add(&mut self) -> Res<()> {
-        todo!() // remove this default implementation
+        todo!() // TODO: remove this default implementation
     }
 }
 

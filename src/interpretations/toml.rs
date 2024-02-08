@@ -84,7 +84,8 @@ impl Cell {
                 Self::make_cell(value, Some(cell))
             }
             "fs" => {
-                let path = cell.as_file_path()?;
+                let r = cell.read();
+                let path = r.as_file_path()?;
                 Self::make_cell(
                     &std::fs::read_to_string(path)
                         .map_err(|e| caused(HErrKind::IO, "cannot read file", e))?,

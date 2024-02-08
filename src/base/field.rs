@@ -184,6 +184,12 @@ impl CellReaderTrait for FieldReader {
 
 impl CellWriterTrait for FieldWriter {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
-        todo!() // remove this default implementation
+        match self.ty {
+            FieldType::Value => self.writer.set_value(value),
+            FieldType::Label => self.writer.set_label(value),
+            FieldType::Type => userres("cannot change cell type"),
+            FieldType::Index => self.writer.set_index(value),
+            FieldType::Serial => self.writer.set_serial(value),
+        }
     }
 }

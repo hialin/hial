@@ -53,7 +53,8 @@ impl Cell {
                 Self::make_cell(source, lang.to_owned(), Some(cell))
             }
             "fs" => {
-                let path = cell.as_file_path()?;
+                let r = cell.read();
+                let path = r.as_file_path()?;
                 let source = std::fs::read_to_string(path)
                     .map_err(|e| caused(HErrKind::IO, "cannot read file", e))?;
                 Self::make_cell(source, lang.to_owned(), Some(cell))
@@ -190,7 +191,7 @@ impl CellWriterTrait for Cell {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
         // TODO: not clear how to edit the tree because afterwards
         // some cursors/cells will be invalid
-        todo!()
+        todo!() // TODO: implement this somehow
     }
 }
 

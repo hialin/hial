@@ -62,17 +62,22 @@ impl Display for PathStart<'_> {
 
 impl Display for Filter<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[")?;
-        fmt_path_items(&self.expr.left.0, f)?;
-        if let Some(op) = self.expr.op {
+        write!(f, "[{}]", self.expr)?;
+        Ok(())
+    }
+}
+
+impl Display for Expression<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        fmt_path_items(&self.left.0, f)?;
+        if let Some(op) = self.op {
             write!(f, "{}", op)?;
         }
-        match self.expr.right {
+        match self.right {
             Some(Value::Str(s)) => write!(f, "'{}'", s)?,
             Some(v) => write!(f, "{}", v)?,
             None => {}
         }
-        write!(f, "]")?;
         Ok(())
     }
 }

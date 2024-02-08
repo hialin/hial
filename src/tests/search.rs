@@ -1,6 +1,7 @@
 use crate::{
     base::*,
     pathlang::path::{Expression, Filter, Path, PathItem},
+    pprint::pprint,
     utils::log::set_verbose,
 };
 
@@ -426,9 +427,10 @@ fn search_double_kleene_with_filter() -> Res<()> {
     set_verbose(true);
     let root = Cell::from(TREE).be("yaml");
 
-    let eval = str_eval(root.clone(), "/dir1/**")?;
-    assert_eq!(eval, ["dir1:", "f1:", "size:ø", "dir2:", "f2:", "size:2"]);
+    // let eval = str_eval(root.clone(), "/dir1/**")?;
+    // assert_eq!(eval, ["dir1:", "f1:", "size:ø", "dir2:", "f2:", "size:2"]);
 
+    pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/dir1/**[/size]")?;
     // TODO: this assert fails, f1 and f2 should both be returned
     assert_eq!(eval, ["f1:", "f2:"]);

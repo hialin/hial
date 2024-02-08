@@ -227,6 +227,16 @@ impl CellReaderTrait for CellReader {
     }
 }
 impl CellReader {
+    pub fn as_file_path(&self) -> Res<&std::path::Path> {
+        if let DynCellReader::File(ref file_cell) = self.0 {
+            return file_cell.as_file_path();
+        }
+        if let DynCellReader::Path(ref path_cell) = self.0 {
+            return path_cell.as_file_path();
+        }
+        userres("this interpretation has no file path")
+    }
+
     pub fn err(self) -> Res<CellReader> {
         if let DynCellReader::Error(error) = self.0 {
             return Err(error);
@@ -588,16 +598,6 @@ impl Cell {
             }
         }
         s
-    }
-
-    pub fn as_file_path(&self) -> Res<&std::path::Path> {
-        if let DynCell::File(ref file_cell) = self.dyn_cell {
-            return file_cell.as_path();
-        }
-        if let DynCell::Path(ref path_cell) = self.dyn_cell {
-            return path_cell.as_path();
-        }
-        nores().with_path_res(self.path())
     }
 
     pub fn save(&self, target: Cell) -> Res<()> {

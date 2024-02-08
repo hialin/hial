@@ -89,7 +89,8 @@ impl Cell {
     pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
         match cell.interpretation() {
             "fs" => {
-                let path = cell.as_file_path()?;
+                let r = cell.read();
+                let path = r.as_file_path()?;
                 let file = File::open(path).map_err(|e| {
                     caused(
                         HErrKind::InvalidFormat,
@@ -413,14 +414,14 @@ impl CellReaderTrait for CellReader {
                     Writer::new_with_indent(Cursor::new(Vec::new()), first as u8, indent.len())
                 };
                 serialize_node(&mut writer, &nodes[*pos])?;
-                let ser = String::from_utf8(writer.into_inner().into_inner()).map_err(|e| {
+                let ser = writer.into_inner().into_inner();
+                String::from_utf8(ser).map_err(|e| {
                     caused(
                         HErrKind::InvalidFormat,
                         "invalid utf8 in xml serialization",
                         e,
                     )
-                });
-                ser
+                })
             }
             CellReader::Attr { nodes, pos, .. } => match &nodes[*pos] {
                 Attribute::Attribute(k, v) => Ok(format!("{}=\"{}\"", k, v)),

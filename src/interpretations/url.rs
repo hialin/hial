@@ -70,9 +70,21 @@ impl CellReaderTrait for CellReader {
     }
 }
 
+impl CellReader {
+    pub(crate) fn as_url(&self) -> Res<Url> {
+        Ok(self.0.url.clone())
+    }
+}
+
 impl CellWriterTrait for CellWriter {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
-        todo!()
+        match value {
+            OwnValue::String(s) => {
+                let url = Url::parse(s.as_str())?;
+                Ok(())
+            }
+            _ => userres(format!("cannot set url from non-string value {:?}", value)),
+        }
     }
 }
 

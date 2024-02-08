@@ -82,7 +82,8 @@ impl Cell {
             }
             "fs" => {
                 let mut source = String::new();
-                let path = cell.as_file_path()?;
+                let r = cell.read();
+                let path = r.as_file_path()?;
                 File::open(path)
                     .map_err(|e| {
                         caused(

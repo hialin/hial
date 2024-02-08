@@ -81,7 +81,8 @@ impl Cell {
                 (serde_json::from_str(s.as_ref())?, indent)
             }
             "fs" => {
-                let path = cell.as_file_path()?;
+                let r = cell.read();
+                let path = r.as_file_path()?;
                 let indent = detect_file_indentation(path);
                 (
                     serde_json::from_reader(

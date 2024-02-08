@@ -1,11 +1,14 @@
 use std::{
+    cell::OnceCell,
     path::{Path, PathBuf},
-    rc::Rc,
 };
 
 use linkme::distributed_slice;
 
-use crate::base::{Cell as XCell, *};
+use crate::{
+    base::{Cell as XCell, *},
+    utils::ownrc::{OwnRc, ReadRc, WriteRc},
+};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_PATH: ElevationConstructor = ElevationConstructor {
@@ -15,16 +18,13 @@ static VALUE_TO_PATH: ElevationConstructor = ElevationConstructor {
 };
 
 #[derive(Clone, Debug)]
-pub(crate) struct Data(PathBuf, String);
-
-#[derive(Clone, Debug)]
-pub(crate) struct Cell(Rc<Data>);
+pub(crate) struct Cell(OwnRc<PathBuf>);
 
 #[derive(Debug)]
-pub(crate) struct CellReader(Rc<Data>);
+pub(crate) struct CellReader(ReadRc<PathBuf>, OnceCell<String>);
 
 #[derive(Debug)]
-pub(crate) struct CellWriter(Rc<Data>);
+pub(crate) struct CellWriter(WriteRc<PathBuf>);
 
 impl Cell {
     pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
@@ -37,7 +37,8 @@ impl Cell {
                 Self::make_cell(PathBuf::from(value), value.to_owned(), Some(cell))
             }
             "fs" => {
-                let path = cell.as_file_path()?;
+                let r = cell.read();
+                let path = r.as_file_path()?;
                 Self::make_cell(
                     path.to_owned(),
                     path.to_string_lossy().into_owned(),
@@ -49,18 +50,17 @@ impl Cell {
     }
 
     fn make_cell(path: PathBuf, string: String, origin: Option<XCell>) -> Res<XCell> {
-        let path_cell = Cell(Rc::new(Data(path, string)));
+        let path_cell = Cell(OwnRc::new(path));
         Ok(new_cell(DynCell::from(path_cell), origin))
-    }
-
-    pub(crate) fn as_path(&self) -> Res<&Path> {
-        Ok(self.0 .0.as_path())
     }
 }
 
 impl CellReaderTrait for CellReader {
     fn value(&self) -> Res<Value> {
-        Ok(Value::Str(&self.0 .1))
+        let s = self
+            .1
+            .get_or_init(|| self.0.as_os_str().to_string_lossy().to_string());
+        Ok(Value::Str(s))
     }
 
     fn label(&self) -> Res<Value> {
@@ -76,9 +76,21 @@ impl CellReaderTrait for CellReader {
     }
 }
 
+impl CellReader {
+    pub(crate) fn as_file_path(&self) -> Res<&Path> {
+        Ok(self.0.as_path())
+    }
+}
+
 impl CellWriterTrait for CellWriter {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
-        todo!() // remove this default implementation
+        match value {
+            OwnValue::String(s) => {
+                *(self.0) = PathBuf::from(s);
+                Ok(())
+            }
+            _ => userres(format!("cannot set fs path to {:?}", value)),
+        }
     }
 }
 
@@ -96,11 +108,20 @@ impl CellTrait for Cell {
     }
 
     fn read(&self) -> Res<Self::CellReader> {
-        Ok(CellReader(self.0.clone()))
+        Ok(CellReader(
+            self.0
+                .read()
+                .ok_or_else(|| lockerr("cannot lock path for reading"))?,
+            OnceCell::new(),
+        ))
     }
 
     fn write(&self) -> Res<Self::CellWriter> {
-        Ok(CellWriter(self.0.clone()))
+        Ok(CellWriter(
+            self.0
+                .write()
+                .ok_or_else(|| lockerr("cannot lock path for writing"))?,
+        ))
     }
 
     fn head(&self) -> Res<(Self, Relation)> {

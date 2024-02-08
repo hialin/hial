@@ -129,6 +129,14 @@ impl CellReaderTrait for CellReader {
     }
 }
 
+impl CellReader {
+    pub(crate) fn as_file_path(&self) -> Res<&Path> {
+        let fileentry =
+            guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
+        Ok(fileentry.path.as_path())
+    }
+}
+
 impl CellWriterTrait for CellWriter {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
         let string_value = value.to_string();
@@ -184,19 +192,12 @@ impl CellWriterTrait for CellWriter {
             }
         }
     }
-
-    fn set_label(&mut self, value: OwnValue) -> Res<()> {
-        todo!() // add implementation
-    }
-
-    fn delete(&mut self) -> Res<()> {
-        todo!() // add implementation
-    }
 }
 
 impl Cell {
     pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
-        let path = cell.as_file_path()?;
+        let r = cell.read();
+        let path = r.as_file_path()?;
         let file_cell = Cell {
             group: Group {
                 files: Rc::new(vec![read_file(path)]),
@@ -217,12 +218,6 @@ impl Cell {
             pos: 0,
         };
         Ok(new_cell(DynCell::from(file_cell), None))
-    }
-
-    pub(crate) fn as_path(&self) -> Res<&Path> {
-        let fileentry =
-            guard_ok!(&self.group.files[self.pos as usize], err => {return Err(err.clone())});
-        Ok(fileentry.path.as_path())
     }
 }
 
