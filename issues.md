@@ -7,11 +7,13 @@
     - explicit and implicit write support (policy, include readonly)
     - fix tests, todo!() and TODO: in code
 
-- fix double kleene error (see test)
+- reimplement fs group as indexmap<file>
+- implement get_all
+- implement new search algorithm (fix double kleene error, see test)
 - support type selector: `hial './src/tests/rust.rs^rust/:function_item'`
-- support ts write: `hial './src/tests/rust.rs^rust/:function_item[-1]#label = "modified_fn_name"'`
+- support rust/ts write: `hial './src/tests/rust.rs^rust/:function_item[-1]#label = "modified_fn_name"'`
 - set value on the command line
-- later: separate api module, used by ffi and dependent crates
+- separate api module, used by ffi and dependent crates
 
 - operations:
     - assign to variables;
