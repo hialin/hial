@@ -8,7 +8,6 @@ pub trait CellTrait: Clone + Debug {
     type CellWriter: CellWriterTrait;
 
     fn interpretation(&self) -> &str;
-    fn ty(&self) -> Res<&str>;
 
     fn read(&self) -> Res<Self::CellReader>;
     fn write(&self) -> Res<Self::CellWriter>;
@@ -25,6 +24,8 @@ pub trait CellTrait: Clone + Debug {
 }
 
 pub trait CellReaderTrait: Debug {
+    fn ty(&self) -> Res<&str>;
+
     fn index(&self) -> Res<usize>;
 
     fn label(&self) -> Res<Value>;
@@ -35,6 +36,10 @@ pub trait CellReaderTrait: Debug {
 }
 
 pub trait CellWriterTrait: Debug {
+    fn set_ty(&mut self, new_type: &str) -> Res<()> {
+        todo!() // TODO: remove this default implementation
+    }
+
     fn set_index(&mut self, value: OwnValue) -> Res<()> {
         todo!() // TODO: remove this default implementation
     }

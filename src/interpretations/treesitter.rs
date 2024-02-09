@@ -144,6 +144,16 @@ fn sitter_from_source(source: String, language: String) -> Res<Cell> {
 }
 
 impl CellReaderTrait for CellReader {
+    fn ty(&self) -> Res<&str> {
+        let node = self.cell.cursor.node();
+        let typ = if node.kind() == &self.cell.domain.source[node.byte_range()] {
+            "sym"
+        } else {
+            node.kind()
+        };
+        Ok(typ)
+    }
+
     fn index(&self) -> Res<usize> {
         Ok(self.cell.position)
     }
@@ -202,16 +212,6 @@ impl CellTrait for Cell {
 
     fn interpretation(&self) -> &str {
         self.domain.language.as_str()
-    }
-
-    fn ty(&self) -> Res<&str> {
-        let node = self.cursor.node();
-        let typ = if node.kind() == &self.domain.source[node.byte_range()] {
-            "sym"
-        } else {
-            node.kind()
-        };
-        Ok(typ)
     }
 
     fn read(&self) -> Res<Self::CellReader> {

@@ -53,6 +53,10 @@ impl Cell {
 }
 
 impl CellReaderTrait for CellReader {
+    fn ty(&self) -> Res<&str> {
+        Ok("url")
+    }
+
     fn value(&self) -> Res<Value> {
         Ok(Value::Str(self.0.url.as_str()))
     }
@@ -95,10 +99,6 @@ impl CellTrait for Cell {
 
     fn interpretation(&self) -> &str {
         "url"
-    }
-
-    fn ty(&self) -> Res<&str> {
-        Ok("url")
     }
 
     fn read(&self) -> Res<CellReader> {

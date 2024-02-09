@@ -112,6 +112,19 @@ impl Cell {
 }
 
 impl CellReaderTrait for CellReader {
+    fn ty(&self) -> Res<&str> {
+        match self.nodes {
+            ReadNodeGroup::Array(ref a) => match a.get(self.pos) {
+                Some(n) => Ok(get_ty(n)),
+                None => fault(""),
+            },
+            ReadNodeGroup::Table(ref t) => match t.get_index(self.pos) {
+                Some(x) => Ok(get_ty(x.1)),
+                None => fault(""),
+            },
+        }
+    }
+
     fn index(&self) -> Res<usize> {
         Ok(self.pos)
     }
@@ -182,25 +195,6 @@ impl CellTrait for Cell {
 
     fn interpretation(&self) -> &str {
         "toml"
-    }
-
-    fn ty(&self) -> Res<&str> {
-        match self.group.nodes {
-            NodeGroup::Array(ref a) => {
-                let a = a.read().ok_or_else(|| lockerr("cannot read group"))?;
-                match a.get(self.pos) {
-                    Some(n) => Ok(get_ty(n)),
-                    None => fault(""),
-                }
-            }
-            NodeGroup::Table(ref t) => {
-                let t = t.read().ok_or_else(|| lockerr("cannot read group"))?;
-                match t.get_index(self.pos) {
-                    Some(x) => Ok(get_ty(x.1)),
-                    None => fault(""),
-                }
-            }
-        }
     }
 
     fn read(&self) -> Res<Self::CellReader> {

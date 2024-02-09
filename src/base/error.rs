@@ -214,6 +214,19 @@ impl std::fmt::Debug for HErr {
 }
 
 impl CellReaderTrait for HErr {
+    fn ty(&self) -> Res<&str> {
+        Ok(match self.kind {
+            HErrKind::None => "nores",
+            HErrKind::User => "user",
+            HErrKind::IO => "io",
+            HErrKind::Net => "net",
+            HErrKind::Internal => "internal",
+            HErrKind::ReadOnly => "readonly",
+            HErrKind::CannotLock => "cannotlock",
+            HErrKind::InvalidFormat => "invalidformat",
+        })
+    }
+
     fn value(&self) -> Res<Value> {
         Err(self.clone())
     }
@@ -244,19 +257,6 @@ impl CellTrait for HErr {
 
     fn interpretation(&self) -> &str {
         "error"
-    }
-
-    fn ty(&self) -> Res<&str> {
-        Ok(match self.kind {
-            HErrKind::None => "nores",
-            HErrKind::User => "user",
-            HErrKind::IO => "io",
-            HErrKind::Net => "net",
-            HErrKind::Internal => "internal",
-            HErrKind::ReadOnly => "readonly",
-            HErrKind::CannotLock => "cannotlock",
-            HErrKind::InvalidFormat => "invalidformat",
-        })
     }
 
     fn read(&self) -> Res<Self::CellReader> {

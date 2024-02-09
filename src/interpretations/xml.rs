@@ -265,6 +265,26 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
 }
 
 impl CellReaderTrait for CellReader {
+    fn ty(&self) -> Res<&str> {
+        Ok(match &self {
+            CellReader::Node { nodes, pos, .. } => match &nodes[*pos] {
+                Node::Document(_) => "document",
+                Node::Decl(_) => "decl",
+                Node::DocType(_) => "doctype",
+                Node::PI(_) => "PI",
+                Node::Element(_) => "element",
+                Node::Text(_) => "text",
+                Node::Comment(_) => "comment",
+                Node::CData(_) => "cdata",
+                Node::Error(_) => "error",
+            },
+            CellReader::Attr { nodes, pos, .. } => match &nodes[*pos] {
+                Attribute::Attribute(_, _) => "attribute",
+                Attribute::Error(_) => "error",
+            },
+        })
+    }
+
     fn index(&self) -> Res<usize> {
         match *self {
             CellReader::Node { pos, .. } => Ok(pos),
@@ -468,32 +488,6 @@ impl CellTrait for Cell {
 
     fn interpretation(&self) -> &str {
         "xml"
-    }
-
-    fn ty(&self) -> Res<&str> {
-        Ok(match &self.group.nodes {
-            NodeGroup::Node(n) => {
-                let nodes = n.read().ok_or_else(|| lockerr("cannot read nodes"))?;
-                match &nodes[self.pos] {
-                    Node::Document(_) => "document",
-                    Node::Decl(_) => "decl",
-                    Node::DocType(_) => "doctype",
-                    Node::PI(_) => "PI",
-                    Node::Element(_) => "element",
-                    Node::Text(_) => "text",
-                    Node::Comment(_) => "comment",
-                    Node::CData(_) => "cdata",
-                    Node::Error(_) => "error",
-                }
-            }
-            NodeGroup::Attr(a) => {
-                let attrs = a.read().ok_or_else(|| lockerr("cannot read nodes"))?;
-                match &attrs[self.pos] {
-                    Attribute::Attribute(_, _) => "attribute",
-                    Attribute::Error(_) => "error",
-                }
-            }
-        })
     }
 
     fn read(&self) -> Res<Self::CellReader> {

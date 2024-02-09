@@ -91,7 +91,7 @@ fn elevation_map(interpretation: &str) -> Res<Arc<IndexMap<&'static str, Elevate
 }
 
 pub(crate) fn top_interpretation(cell: &Cell) -> Option<&str> {
-    if cell.interpretation() == "fs" && cell.ty().ok()? == "fs" {
+    if cell.interpretation() == "fs" && cell.read().ty().ok()? == "fs" {
         if let Ok(reader) = cell.read().err() {
             if let Ok(Value::Str(name)) = reader.label() {
                 if name.ends_with(".c") {
@@ -171,13 +171,13 @@ impl ElevationGroup {
         }
         if let Ok(e) = elevation_map(old_interp) {
             if let Some((_, target_interpretation, func)) = e.get_full(interp) {
-                debug!("elevate {} to {}", old_interp, key);
+                // debug!("elevate {} to {}", old_interp, key);
                 return func(self.0.clone(), target_interpretation);
             }
         }
         if let Ok(e) = elevation_map("value") {
             if let Some((_, target_interpretation, func)) = e.get_full(interp) {
-                debug!("elevate as value from {} to {}", old_interp, key);
+                // debug!("elevate as value from {} to {}", old_interp, key);
                 return func(self.0.clone(), target_interpretation);
             }
         }

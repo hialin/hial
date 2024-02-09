@@ -111,66 +111,71 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
     use std::fmt::Write;
 
     let mut typ = String::new();
-    write!(
-        buffer,
-        "{} {}",
-        cell.interpretation(),
-        cell.ty().unwrap_or_else(|e| {
-            typ = format!("⚠{:?}⚠", e);
-            &typ
-        })
-    )?;
-    make_indent(indent, buffer)?;
-    write!(buffer, "{}", prefix)?;
+    write!(buffer, "{}", cell.interpretation(),)?;
 
     let mut empty = true;
-    match cell.read().err() {
-        Ok(reader) => {
-            let key = reader.label();
-            let value = reader.value();
-            match key {
-                Ok(k) => {
-                    if Some(&k) != value.as_ref().ok() {
-                        empty = false;
-                        write!(buffer, "{}: ", k)
-                    } else {
-                        write!(buffer, "")
-                    }
-                }
-                Err(err) => {
-                    if err.kind == HErrKind::None {
-                        write!(buffer, "")
-                    } else {
-                        empty = false;
-                        write!(buffer, "⚠{:?}⚠ ", err)
-                    }
-                }
-            }?;
-            match value {
-                Ok(v) => {
-                    // write!(buffer, "empty={} ", v.is_empty())?;
-                    if empty {
-                        empty = v.is_empty();
-                    }
-                    print_value(buffer, indent, v.as_cow_str().as_ref())
-                }
-                Err(err) => {
-                    if err.kind == HErrKind::None {
-                        write!(buffer, "")
-                    } else {
-                        empty = false;
-                        write!(buffer, "⚠{:?}⚠", err)
-                    }
-                }
-            }?;
-        }
+    let reader = match cell.read().err() {
+        Ok(reader) => Some(reader),
         Err(err) => {
             if err.kind != HErrKind::None {
                 empty = false;
-                write!(buffer, "⚠cannot read: {:?}⚠", err)?
+                write!(buffer, "⚠cannot read: {:?}⚠", err)?;
             }
+            None
         }
+    };
+
+    if let Some(reader) = reader {
+        write!(
+            buffer,
+            "{}",
+            reader.ty().unwrap_or_else(|e| {
+                typ = format!("⚠{:?}⚠", e);
+                &typ
+            })
+        )?;
+        make_indent(indent, buffer)?;
+        write!(buffer, "{}", prefix)?;
+
+        let key = reader.label();
+        let value = reader.value();
+        match key {
+            Ok(k) => {
+                if Some(&k) != value.as_ref().ok() {
+                    empty = false;
+                    write!(buffer, "{}: ", k)
+                } else {
+                    write!(buffer, "")
+                }
+            }
+            Err(err) => {
+                if err.kind == HErrKind::None {
+                    write!(buffer, "")
+                } else {
+                    empty = false;
+                    write!(buffer, "⚠{:?}⚠ ", err)
+                }
+            }
+        }?;
+        match value {
+            Ok(v) => {
+                // write!(buffer, "empty={} ", v.is_empty())?;
+                if empty {
+                    empty = v.is_empty();
+                }
+                print_value(buffer, indent, v.as_cow_str().as_ref())
+            }
+            Err(err) => {
+                if err.kind == HErrKind::None {
+                    write!(buffer, "")
+                } else {
+                    empty = false;
+                    write!(buffer, "⚠{:?}⚠", err)
+                }
+            }
+        }?;
     }
+
     if empty {
         write!(buffer, "•")?;
     }

@@ -26,6 +26,10 @@ impl Cell {
 }
 
 impl CellReaderTrait for CellReader {
+    fn ty(&self) -> Res<&str> {
+        Ok("value")
+    }
+
     fn value(&self) -> Res<Value> {
         Ok(self.0.as_value())
     }
@@ -57,10 +61,6 @@ impl CellTrait for Cell {
 
     fn interpretation(&self) -> &str {
         "value"
-    }
-
-    fn ty(&self) -> Res<&str> {
-        Ok("value")
     }
 
     fn read(&self) -> Res<CellReader> {

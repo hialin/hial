@@ -125,27 +125,6 @@ impl CellTrait for Cell {
         "json"
     }
 
-    fn ty(&self) -> Res<&str> {
-        match self.group.nodes {
-            NodeGroup::Array(ref a) => match a
-                .read()
-                .ok_or_else(|| lockerr("cannot read cell"))?
-                .get(self.pos)
-            {
-                Some(n) => Ok(get_ty(n)),
-                None => fault(format!("bad index {}", self.pos)),
-            },
-            NodeGroup::Object(ref o) => match o
-                .read()
-                .ok_or_else(|| lockerr("cannot read cell"))?
-                .get_index(self.pos)
-            {
-                Some(x) => Ok(get_ty(x.1)),
-                None => fault(format!("bad index {}", self.pos)),
-            },
-        }
-    }
-
     fn read(&self) -> Res<Self::CellReader> {
         Ok(CellReader {
             nodes: match self.group.nodes {
@@ -229,6 +208,19 @@ impl From<serde_json::Error> for HErr {
 }
 
 impl CellReaderTrait for CellReader {
+    fn ty(&self) -> Res<&str> {
+        match self.nodes {
+            ReadNodeGroup::Array(ref a) => match a.get(self.pos) {
+                Some(n) => Ok(get_ty(n)),
+                None => fault(format!("bad index {}", self.pos)),
+            },
+            ReadNodeGroup::Object(ref o) => match o.get_index(self.pos) {
+                Some(x) => Ok(get_ty(x.1)),
+                None => fault(format!("bad index {}", self.pos)),
+            },
+        }
+    }
+
     fn index(&self) -> Res<usize> {
         Ok(self.pos)
     }

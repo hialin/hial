@@ -124,10 +124,6 @@ impl CellTrait for FieldCell {
         self.cell.interpretation()
     }
 
-    fn ty(&self) -> Res<&str> {
-        Ok("field")
-    }
-
     fn read(&self) -> Res<FieldReader> {
         Ok(FieldReader {
             cell: self.cell.clone(),
@@ -154,11 +150,15 @@ impl CellTrait for FieldCell {
 }
 
 impl CellReaderTrait for FieldReader {
+    fn ty(&self) -> Res<&str> {
+        Ok("field")
+    }
+
     fn value(&self) -> Res<Value> {
         match self.ty {
             FieldType::Value => self.reader.value(),
             FieldType::Label => self.reader.label(),
-            FieldType::Type => Ok(Value::Str(self.cell.ty()?)),
+            FieldType::Type => self.reader.ty().map(Value::Str),
             FieldType::Index => Ok(Value::from(self.reader.index()? as u64)),
             FieldType::Serial => self
                 .serial

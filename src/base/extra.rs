@@ -213,17 +213,20 @@ impl fmt::Debug for Cell {
 }
 
 impl CellReaderTrait for CellReader {
+    fn ty(&self) -> Res<&str> {
+        dispatch_dyn_cell_reader!(&self.0, |x| { x.ty() })
+    }
     fn index(&self) -> Res<usize> {
-        dispatch_dyn_cell_reader!(&self.0, |x| { Ok(x.index()?) })
+        dispatch_dyn_cell_reader!(&self.0, |x| { x.index() })
     }
     fn label(&self) -> Res<Value> {
-        dispatch_dyn_cell_reader!(&self.0, |x| { Ok(x.label()?) })
+        dispatch_dyn_cell_reader!(&self.0, |x| { x.label() })
     }
     fn value(&self) -> Res<Value> {
-        dispatch_dyn_cell_reader!(&self.0, |x| { Ok(x.value()?) })
+        dispatch_dyn_cell_reader!(&self.0, |x| { x.value() })
     }
     fn serial(&self) -> Res<String> {
-        dispatch_dyn_cell_reader!(&self.0, |x| { Ok(x.serial()?) })
+        dispatch_dyn_cell_reader!(&self.0, |x| { x.serial() })
     }
 }
 impl CellReader {
@@ -285,10 +288,6 @@ impl Cell {
             .unwrap_or_else(Cell::from)
     }
 
-    pub fn ty(&self) -> Res<&str> {
-        dispatch_dyn_cell!(&self.dyn_cell, |x| { x.ty() })
-    }
-
     pub fn read(&self) -> CellReader {
         let reader: DynCellReader = dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match x.read() {
@@ -328,7 +327,7 @@ impl Cell {
         let sub = dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match x.sub() {
                 Ok(r) => DynGroup::from(r),
-                Err(e) => DynGroup::from(e),
+                Err(e) => DynGroup::from(e.with_path(self.path().unwrap_or_default())),
             }
         });
         Group {

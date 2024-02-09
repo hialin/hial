@@ -56,6 +56,10 @@ impl Cell {
 }
 
 impl CellReaderTrait for CellReader {
+    fn ty(&self) -> Res<&str> {
+        Ok("path")
+    }
+
     fn value(&self) -> Res<Value> {
         let s = self
             .1
@@ -101,10 +105,6 @@ impl CellTrait for Cell {
 
     fn interpretation(&self) -> &str {
         "path"
-    }
-
-    fn ty(&self) -> Res<&str> {
-        Ok("path")
     }
 
     fn read(&self) -> Res<Self::CellReader> {
