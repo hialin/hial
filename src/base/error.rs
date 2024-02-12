@@ -274,6 +274,7 @@ impl CellTrait for HErr {
 
 impl GroupTrait for HErr {
     type Cell = HErr;
+    type CellIterator = std::iter::Empty<Res<HErr>>;
 
     fn label_type(&self) -> LabelType {
         LabelType {
@@ -290,7 +291,11 @@ impl GroupTrait for HErr {
         Err(self.clone())
     }
 
-    fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::Cell> {
+    fn get(&self, label: Value<'_>) -> Res<Self::Cell> {
+        Err(self.clone())
+    }
+
+    fn get_all(&self, label: Value<'_>) -> Res<Self::CellIterator> {
         Err(self.clone())
     }
 }

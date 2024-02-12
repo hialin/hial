@@ -356,31 +356,12 @@ fn get_ty(node: &Node) -> &'static str {
 
 impl GroupTrait for Group {
     type Cell = Cell;
+    type CellIterator = std::iter::Once<Res<Cell>>;
 
     fn label_type(&self) -> LabelType {
         LabelType {
             is_indexed: true,
             unique_labels: true,
-        }
-    }
-
-    fn get<'s, S: Into<Selector<'s>>>(&self, key: S) -> Res<Cell> {
-        match &self.nodes {
-            NodeGroup::Array(a) => nores(),
-            NodeGroup::Object(o) => match key.into() {
-                Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
-                Selector::Str(k) => match o
-                    .read()
-                    .ok_or_else(|| lockerr("cannot read group"))?
-                    .get_index_of(k)
-                {
-                    Some(pos) => Ok(Cell {
-                        group: self.clone(),
-                        pos,
-                    }),
-                    _ => nores(),
-                },
-            },
         }
     }
 
@@ -418,6 +399,31 @@ impl GroupTrait for Group {
             }
             _ => nores(),
         }
+    }
+
+    fn get(&self, key: Value) -> Res<Cell> {
+        match &self.nodes {
+            NodeGroup::Array(a) => nores(),
+            NodeGroup::Object(o) => match key {
+                Value::Str(k) => match o
+                    .read()
+                    .ok_or_else(|| lockerr("cannot read group"))?
+                    .get_index_of(k)
+                {
+                    Some(pos) => Ok(Cell {
+                        group: self.clone(),
+                        pos,
+                    }),
+                    _ => nores(),
+                },
+                _ => nores(),
+            },
+        }
+    }
+
+    fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
+        let cell = self.get(key)?;
+        Ok(std::iter::once(Ok(cell)))
     }
 }
 

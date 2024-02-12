@@ -36,7 +36,7 @@ fn test_rustapi() -> Res<()> {
         pprint(&yaml, 0, 0);
         let service_node = yaml.sub().get("services").sub().at(0);
         let mut filename = format!("{}.yaml", service_node.read().label()?);
-        while folder.get(&filename).err().is_ok() {
+        while folder.get(filename.as_str()).err().is_ok() {
             filename = format!("{}.yaml", filename);
         }
         println!("{}", filename);
@@ -57,7 +57,7 @@ fn test_rustapi_with_path() -> Res<()> {
         let service = stack.to("/dockerCompose^string^yaml/services");
         println!("service found");
         let mut filename = format!("{}.yaml", service.read().value()?);
-        while folder.sub().get(&filename).err().is_ok() {
+        while folder.sub().get(filename.as_str()).err().is_ok() {
             filename = format!("{}.yaml", filename);
         }
         // folder.new(filename).be("yaml").set(yaml)

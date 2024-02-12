@@ -28,6 +28,13 @@ pub(crate) struct Cell {
 }
 
 #[derive(Clone, Debug)]
+pub(crate) struct CellIterator {
+    group: Group,
+    next_pos: usize,
+    key: OwnValue,
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct Group {
     nodes: NodeGroup,
     head: Option<Rc<(Cell, Relation)>>,
@@ -570,8 +577,37 @@ impl CellTrait for Cell {
     }
 }
 
+impl Iterator for CellIterator {
+    type Item = Res<Cell>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        fn inner(this: &mut CellIterator) -> Res<Cell> {
+            loop {
+                let cell = this.group.at(this.next_pos)?;
+                this.next_pos += 1;
+                let reader = cell.read()?;
+                let k = reader.label()?;
+                if this.key.as_value() == k {
+                    return Ok(cell);
+                }
+            }
+        }
+        match inner(self) {
+            Ok(cell) => Some(Ok(cell)),
+            Err(e) => {
+                if e.kind == HErrKind::None {
+                    None
+                } else {
+                    Some(Err(e))
+                }
+            }
+        }
+    }
+}
+
 impl GroupTrait for Group {
     type Cell = Cell;
+    type CellIterator = CellIterator;
 
     fn label_type(&self) -> LabelType {
         LabelType {
@@ -603,8 +639,7 @@ impl GroupTrait for Group {
         })
     }
 
-    fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, key: S) -> Res<Cell> {
-        let key = key.into();
+    fn get(&self, key: Value) -> Res<Cell> {
         for i in 0..self.len()? {
             if let Ok(cell) = self.at(i) {
                 if let Ok(reader) = cell.read() {
@@ -617,6 +652,14 @@ impl GroupTrait for Group {
             }
         }
         nores()
+    }
+
+    fn get_all(&self, key: Value) -> Res<CellIterator> {
+        Ok(CellIterator {
+            group: self.clone(),
+            next_pos: 0,
+            key: key.to_owned_value(),
+        })
     }
 }
 

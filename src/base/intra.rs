@@ -61,7 +61,7 @@ pub trait CellWriterTrait: Debug {
 
 pub trait GroupTrait: Clone + Debug {
     type Cell: CellTrait;
-    // type SelectIterator: Iterator<Item = Res<Self::Cell>>;
+    type CellIterator: Iterator<Item = Res<Self::Cell>>;
 
     fn label_type(&self) -> LabelType;
     fn len(&self) -> Res<usize>;
@@ -69,8 +69,8 @@ pub trait GroupTrait: Clone + Debug {
         self.len().map_or(false, |l| l == 0)
     }
     fn at(&self, index: usize) -> Res<Self::Cell>;
-    fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::Cell>;
-    // fn get_all<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::SelectIterator>;
+    fn get(&self, label: Value<'_>) -> Res<Self::Cell>;
+    fn get_all(&self, label: Value<'_>) -> Res<Self::CellIterator>;
 
     fn add(&mut self) -> Res<()> {
         todo!() // TODO: remove this default implementation
@@ -86,6 +86,7 @@ impl<C> From<C> for VoidGroup<C> {
 }
 impl<C: CellTrait> GroupTrait for VoidGroup<C> {
     type Cell = C;
+    type CellIterator = std::iter::Empty<Res<C>>;
 
     fn label_type(&self) -> LabelType {
         LabelType::default()
@@ -99,7 +100,11 @@ impl<C: CellTrait> GroupTrait for VoidGroup<C> {
         nores()
     }
 
-    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<C> {
+    fn get(&self, key: Value) -> Res<C> {
+        nores()
+    }
+
+    fn get_all(&self, label: Value) -> Res<Self::CellIterator> {
         nores()
     }
 }

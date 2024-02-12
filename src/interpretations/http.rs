@@ -251,7 +251,7 @@ impl CellWriterTrait for CellWriter {
 
 impl GroupTrait for Group {
     type Cell = Cell;
-    // type SelectIterator = std::vec::IntoIter<Res<Cell>>;
+    type CellIterator = std::iter::Once<Res<Cell>>;
 
     fn label_type(&self) -> LabelType {
         LabelType {
@@ -301,8 +301,7 @@ impl GroupTrait for Group {
         }
     }
 
-    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
-        let key = key.into();
+    fn get(&self, key: Value) -> Res<Cell> {
         match (self.kind, key) {
             (GroupKind::Attr, sel) if sel == "status" => Ok(Cell {
                 group: self.clone(),
@@ -320,27 +319,29 @@ impl GroupTrait for Group {
                 group: self.clone(),
                 pos: 1,
             }),
-            (GroupKind::Headers, sel) => match sel {
-                Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
-                Selector::Str(k) => {
-                    if let Some((i, _, _)) = self
-                        .response
-                        .read()
-                        .ok_or_else(|| lockerr("cannot read group"))?
-                        .headers
-                        .get_full(k)
-                    {
-                        Ok(Cell {
-                            group: self.clone(),
-                            pos: i,
-                        })
-                    } else {
-                        nores()
-                    }
+            (GroupKind::Headers, Value::Str(key)) => {
+                if let Some((i, _, _)) = self
+                    .response
+                    .read()
+                    .ok_or_else(|| lockerr("cannot read group"))?
+                    .headers
+                    .get_full(key)
+                {
+                    Ok(Cell {
+                        group: self.clone(),
+                        pos: i,
+                    })
+                } else {
+                    nores()
                 }
-            },
+            }
             _ => nores(),
         }
+    }
+
+    fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
+        let cell = self.get(key);
+        Ok(std::iter::once(cell))
     }
 }
 

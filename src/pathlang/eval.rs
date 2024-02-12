@@ -7,6 +7,7 @@ use crate::{
         path::{Expression, PathItem},
         Path,
     },
+    warning,
 };
 
 macro_rules! ifdebug {
@@ -198,6 +199,14 @@ impl<'s> EvalIter<'s> {
                 continue;
             }
             if let Some(interpretation) = path_item.selector {
+                let interpretation = match interpretation {
+                    Selector::Star | Selector::DoubleStar => {
+                        warning!("star or doublestar in interpretation");
+                        Value::None
+                    }
+                    Selector::Top => Value::None,
+                    Selector::Str(s) => Value::Str(s),
+                };
                 let subcell = guard_ok!(group.get(interpretation).err(), err => {
                     debug_err!(err);
                     continue;
@@ -305,7 +314,16 @@ impl<'s> EvalIter<'s> {
                 continue;
             }
             let subcell_res = if let Some(sel) = path_item.selector {
-                group.get(sel).err()
+                let key = match sel {
+                    Selector::Star | Selector::DoubleStar => {
+                        warning!("star or doublestar in relation");
+                        Value::None
+                    }
+                    Selector::Top => Value::None,
+                    Selector::Str(s) => Value::Str(s),
+                };
+
+                group.get(key).err()
             } else if let Some(idx) = path_item.index {
                 group.at(idx).err()
             } else {
@@ -352,8 +370,15 @@ impl<'s> EvalIter<'s> {
             if path_item.relation != Relation::Field {
                 continue;
             }
-            if let Some(field) = path_item.selector {
-                let subcell = guard_ok!(group.get(field).err(), err => {
+            if let Some(field_selector) = path_item.selector {
+                let key = match field_selector {
+                    Selector::Str(s) => Value::Str(s),
+                    _ => {
+                        warning!("star or doublestar or top in field relation");
+                        Value::None
+                    }
+                };
+                let subcell = guard_ok!(group.get(key).err(), err => {
                     debug_err!(err);
                     continue;
                 });

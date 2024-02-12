@@ -425,7 +425,7 @@ impl CellTrait for Cell {
 
 impl GroupTrait for Group {
     type Cell = Cell;
-    // type SelectIterator = std::vec::IntoIter<Res<Cell>>;
+    type CellIterator = std::iter::Once<Res<Cell>>;
 
     fn label_type(&self) -> LabelType {
         LabelType {
@@ -471,9 +471,7 @@ impl GroupTrait for Group {
         }
     }
 
-    fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, key: S) -> Res<Cell> {
-        let key = key.into();
-        // verbose!("get by key: {};   group.kind = {:?}", key, self.kind);
+    fn get(&self, key: Value) -> Res<Cell> {
         match self.ty {
             GroupType::Folder => {
                 let files = self
@@ -481,8 +479,7 @@ impl GroupTrait for Group {
                     .read()
                     .ok_or_else(|| lockerr("cannot read files"))?;
                 let pos = match key {
-                    Selector::Str(key) => files.list.get_full(key).ok_or(noerr())?.0,
-                    Selector::Star | Selector::DoubleStar if !files.list.is_empty() => 0,
+                    Value::Str(key) => files.list.get_full(key).ok_or(noerr())?.0,
                     _ => return nores(),
                 };
                 Ok(Cell {
@@ -501,6 +498,11 @@ impl GroupTrait for Group {
                 }
             }
         }
+    }
+
+    fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
+        let cell = self.get(key)?;
+        Ok(std::iter::once(Ok(cell)))
     }
 }
 

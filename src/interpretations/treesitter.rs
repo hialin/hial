@@ -265,6 +265,7 @@ impl CellTrait for Cell {
 
 impl GroupTrait for Cell {
     type Cell = Cell;
+    type CellIterator = std::iter::Once<Res<Cell>>;
 
     fn label_type(&self) -> LabelType {
         LabelType {
@@ -296,9 +297,7 @@ impl GroupTrait for Cell {
         })
     }
 
-    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
-        let key = key.into();
-
+    fn get(&self, key: Value) -> Res<Cell> {
         let mut cursor = self.cursor.clone();
         if !cursor.goto_first_child() {
             return nores();
@@ -316,5 +315,10 @@ impl GroupTrait for Cell {
             }
         }
         nores()
+    }
+
+    fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
+        let cell = self.get(key);
+        Ok(std::iter::once(cell))
     }
 }

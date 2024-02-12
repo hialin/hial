@@ -273,6 +273,7 @@ impl CellTrait for Cell {
 
 impl GroupTrait for Group {
     type Cell = Cell;
+    type CellIterator = std::iter::Once<Res<Cell>>;
 
     fn label_type(&self) -> LabelType {
         LabelType {
@@ -281,12 +282,11 @@ impl GroupTrait for Group {
         }
     }
 
-    fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
+    fn get(&self, key: Value) -> Res<Cell> {
         match &self.nodes {
             NodeGroup::Array(a) => nores(),
-            NodeGroup::Table(t) => match key.into() {
-                Selector::Star | Selector::DoubleStar | Selector::Top => self.at(0),
-                Selector::Str(k) => {
+            NodeGroup::Table(t) => match key {
+                Value::Str(k) => {
                     let t = t.read().ok_or_else(|| lockerr("cannot read group"))?;
                     match t.get_index_of(k) {
                         Some(pos) => Ok(Cell {
@@ -296,6 +296,7 @@ impl GroupTrait for Group {
                         _ => nores(),
                     }
                 }
+                _ => nores(),
             },
         }
     }
@@ -320,6 +321,11 @@ impl GroupTrait for Group {
             }),
             _ => nores(),
         }
+    }
+
+    fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
+        let cell = self.get(key)?;
+        Ok(std::iter::once(Ok(cell)))
     }
 }
 

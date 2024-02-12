@@ -394,7 +394,7 @@ impl Cell {
     }
 
     pub fn be(&self, interpretation: &str) -> Cell {
-        self.elevate().get(interpretation)
+        self.elevate().get(Value::Str(interpretation))
     }
 
     pub fn to(&self, path: &str) -> Cell {
@@ -736,7 +736,7 @@ impl Group {
         }
     }
 
-    pub fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Cell {
+    pub fn get<'a>(&self, key: impl Into<Value<'a>>) -> Cell {
         let key = key.into();
         match &self.group {
             GroupKind::Dyn { dyn_group, domain } => {

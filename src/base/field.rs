@@ -58,6 +58,7 @@ impl TryFrom<usize> for FieldType {
 
 impl GroupTrait for FieldGroup {
     type Cell = FieldCell;
+    type CellIterator = std::iter::Once<Res<Self::Cell>>;
 
     fn label_type(&self) -> LabelType {
         LabelType {
@@ -99,9 +100,8 @@ impl GroupTrait for FieldGroup {
         })
     }
 
-    fn get<'s, 'a, S: Into<Selector<'a>>>(&'s self, label: S) -> Res<Self::Cell> {
-        let label = label.into();
-        if let Selector::Str(l) = label {
+    fn get(&self, label: Value) -> Res<Self::Cell> {
+        if let Value::Str(l) = label {
             return match l {
                 "value" => self.at(FieldType::Value as usize),
                 "label" => self.at(FieldType::Label as usize),
@@ -112,6 +112,11 @@ impl GroupTrait for FieldGroup {
             };
         }
         nores()
+    }
+
+    fn get_all(&self, label: Value) -> Res<Self::CellIterator> {
+        let cell = self.get(label)?;
+        Ok(std::iter::once(Ok(cell)))
     }
 }
 

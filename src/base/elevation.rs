@@ -155,16 +155,14 @@ impl ElevationGroup {
         }
     }
 
-    pub fn get<'a, S: Into<Selector<'a>>>(&self, key: S) -> Res<Cell> {
-        let key = key.into();
+    pub fn get(&self, key: Value) -> Res<Cell> {
         let old_interp = self.0.interpretation();
         let interp = match key {
-            Selector::Str(k) => k,
-            Selector::Top => guard_some!(top_interpretation(&self.0), {
+            Value::None => guard_some!(top_interpretation(&self.0), {
                 return nores();
             }),
-            Selector::Star => return userres("no interpretation for '*'".to_string()),
-            Selector::DoubleStar => return userres("no interpretation for '**'".to_string()),
+            Value::Str(k) => k,
+            _ => return userres("no interpretation for non-string value".to_string()),
         };
         if interp == old_interp {
             return Ok(self.0.clone());
