@@ -126,11 +126,12 @@ impl CellReaderTrait for CellReader {
                 }
                 if self.cached_value.get().is_none() {
                     // TODO: reading file value should return bytes, not string
-                    let content = std::fs::read_to_string(&fe.path).map_err(|e| {
+                    let content = std::fs::read(&fe.path).map_err(|e| {
                         caused(HErrKind::IO, format!("cannot read file: {:?}", fe.path), e)
                     })?;
+                    let content = String::from_utf8_lossy(&content);
                     self.cached_value
-                        .set(content)
+                        .set(content.into_owned())
                         .map_err(|_| faulterr("cannot set cached value, it is already set"))?;
                 }
                 Ok(Value::Str(self.cached_value.get().unwrap()))
