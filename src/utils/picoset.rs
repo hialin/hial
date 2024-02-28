@@ -96,6 +96,12 @@ impl<T: Default + Eq + Hash + Copy> PicoSet<T> {
         p
     }
 
+    pub fn from_value(arg: T) -> PicoSet<T> {
+        let mut p = PicoSet::new();
+        p.insert(arg);
+        p
+    }
+
     pub fn iter(&self) -> PicoSetIter<'_, T> {
         match self {
             PicoSet::Inline { buffer, len } => PicoSetIter::Inline {
@@ -139,6 +145,15 @@ impl<'a, T: Default + Eq + Hash + Copy> Iterator for PicoSetIter<'a, T> {
             },
             PicoSetIter::Heap(iter) => iter.next().copied(),
         }
+    }
+}
+
+impl<'a, T: Default + Eq + Hash + Copy> IntoIterator for &'a PicoSet<T> {
+    type Item = T;
+    type IntoIter = PicoSetIter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 

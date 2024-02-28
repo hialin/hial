@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::{
     base::*,
-    pathlang::{eval::EvalIter, parseurl::*},
+    pathlang::{parseurl::*, search::Searcher},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -135,7 +135,7 @@ impl<'a> PathStart<'a> {
 }
 
 impl<'a> Path<'a> {
-    pub fn eval(self, cell: Cell) -> EvalIter<'a> {
-        EvalIter::new(cell, self)
+    pub fn eval(self, cell: Cell) -> Searcher<'a> {
+        Searcher::new(cell, self)
     }
 }

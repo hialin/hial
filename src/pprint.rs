@@ -111,7 +111,7 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
     use std::fmt::Write;
 
     let mut typ = String::new();
-    write!(buffer, "{}", cell.interpretation(),)?;
+    write!(buffer, "{} ", cell.interpretation(),)?;
 
     let mut empty = true;
     let reader = match cell.read().err() {

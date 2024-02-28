@@ -5,8 +5,11 @@ use std::{
 };
 
 use crate::{
-    base::*, enumerated_dynamic_type, guard_ok, guard_some, interpretations::*,
-    pathlang::eval::EvalIter, pathlang::Path, warning,
+    base::*,
+    enumerated_dynamic_type, guard_ok, guard_some,
+    interpretations::*,
+    pathlang::{search::Searcher, Path},
+    warning,
 };
 
 const MAX_PATH_ITEMS: usize = 1000;
@@ -126,6 +129,7 @@ enumerated_dynamic_type! {
 
 #[derive(Clone, Debug)]
 pub struct Group {
+    // wrap enum in a struct to avoid making all enum variants public
     group: GroupKind,
 }
 
@@ -137,6 +141,40 @@ pub(crate) enum GroupKind {
     },
     Elevation(ElevationGroup),
     // Mixed(Vec<Cell>),
+}
+
+#[derive(Clone, Debug)]
+pub struct CellIterator {
+    cell_iterator: CellIteratorKind,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum CellIteratorKind {
+    DynCellIterator {
+        dyn_cell: DynCellIterator,
+        domain: Rc<Domain>,
+    },
+    Elevation(Res<Cell>),
+}
+
+enumerated_dynamic_type! {
+    #[derive(Clone, Debug)]
+    pub(crate) enum DynCellIterator {
+        Error(std::iter::Once<Res<HErr>>),
+        Field(std::iter::Once<Res<FieldCell>>),
+        OwnValue(std::iter::Empty<Res<ownvalue::Cell>>),
+        File(std::iter::Once<Res<fs::Cell>>),
+        Json(std::iter::Once<Res<json::Cell>>),
+        Toml(std::iter::Once<Res<toml::Cell>>),
+        Yaml(std::iter::Once<Res<yaml::Cell>>),
+        Xml(xml::CellIterator),
+        Url(std::iter::Empty<Res<url::Cell>>),
+        Path(std::iter::Empty<Res<path::Cell>>),
+        Http(std::iter::Once<Res<http::Cell>>),
+        TreeSitter(std::iter::Once<Res<treesitter::Cell>>),
+        // None is an addition to interpretation variants
+         None(std::iter::Empty<Res<HErr>>),
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -770,6 +808,35 @@ impl Group {
         }
     }
 
+    pub fn get_all<'a>(&self, key: impl Into<Value<'a>>) -> CellIterator {
+        let key = key.into();
+        match &self.group {
+            GroupKind::Dyn { dyn_group, domain } => {
+                let dci = dispatch_dyn_group!(dyn_group, |x| {
+                    match x.get_all(key) {
+                        Ok(iter) => DynCellIterator::from(iter),
+                        Err(e) => {
+                            if e.kind == HErrKind::None {
+                                DynCellIterator::None(std::iter::empty())
+                            } else {
+                                DynCellIterator::Error(std::iter::once(Err(e)))
+                            }
+                        }
+                    }
+                });
+                CellIterator {
+                    cell_iterator: CellIteratorKind::DynCellIterator {
+                        dyn_cell: dci,
+                        domain: Rc::clone(domain),
+                    },
+                }
+            }
+            GroupKind::Elevation(elevation_group) => CellIterator {
+                cell_iterator: CellIteratorKind::Elevation(elevation_group.get(key)),
+            },
+        }
+    }
+
     pub fn err(self) -> Res<Group> {
         match self.group {
             GroupKind::Dyn { dyn_group, domain } => match dyn_group {
@@ -805,21 +872,81 @@ impl Iterator for GroupIter {
     }
 }
 
+impl Iterator for CellIterator {
+    type Item = Cell;
+    fn next(&mut self) -> Option<Self::Item> {
+        match &mut self.cell_iterator {
+            CellIteratorKind::DynCellIterator { dyn_cell, domain } => {
+                dispatch_dyn_cell_iterator!(dyn_cell, |x| {
+                    x.next().map(|cell_res| Cell {
+                        dyn_cell: match cell_res {
+                            Ok(cell) => DynCell::from(cell),
+                            Err(err) => DynCell::from(err),
+                        },
+                        domain: Rc::clone(domain),
+                    })
+                })
+            }
+            CellIteratorKind::Elevation(cell_res) => match cell_res {
+                Ok(cell) => Some(cell.clone()),
+                Err(err) => Some(Cell {
+                    dyn_cell: DynCell::from(err.clone()),
+                    domain: Rc::new(Domain {
+                        write_policy: cell::Cell::new(WritePolicy::ReadOnly),
+                        origin: None,
+                        dyn_root: OnceCell::new(),
+                        dirty: cell::Cell::new(false),
+                    }),
+                }),
+            },
+        }
+    }
+}
+
+impl CellIterator {
+    pub fn err(self) -> Res<CellIterator> {
+        match self.cell_iterator {
+            CellIteratorKind::DynCellIterator { dyn_cell, domain } => match dyn_cell {
+                DynCellIterator::Error(mut error_iterator) => match error_iterator.next() {
+                    Some(Ok(err)) => Err(err),
+                    Some(Err(err)) => Err(err),
+                    None => Ok(CellIterator {
+                        cell_iterator: CellIteratorKind::DynCellIterator {
+                            dyn_cell: DynCellIterator::None(std::iter::empty()),
+                            domain,
+                        },
+                    }),
+                },
+                _ => Ok(CellIterator {
+                    cell_iterator: CellIteratorKind::DynCellIterator { dyn_cell, domain },
+                }),
+            },
+            CellIteratorKind::Elevation(cell_res) => match cell_res {
+                Ok(cell) => Ok(CellIterator {
+                    cell_iterator: CellIteratorKind::Elevation(Ok(cell)),
+                }),
+                Err(err) => Err(err),
+            },
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct PathSearch<'a> {
     start: Cell,
-    eval_iter: EvalIter<'a>,
+    // eval_iter: EvalIter<'a>,
+    searcher: Searcher<'a>,
 }
 impl<'a> PathSearch<'a> {
     pub fn new(cell: Cell, path: Path<'a>) -> Self {
         PathSearch {
             start: cell.clone(),
-            eval_iter: EvalIter::new(cell, path),
+            searcher: Searcher::new(cell, path),
         }
     }
 
     pub fn first(mut self) -> Cell {
-        match self.eval_iter.next() {
+        match self.searcher.next() {
             Some(Ok(c)) => c,
             Some(Err(e)) => Cell {
                 dyn_cell: DynCell::from(e),
@@ -827,7 +954,7 @@ impl<'a> PathSearch<'a> {
             },
             None => {
                 let mut path = self.start.path().unwrap_or_default();
-                path += self.eval_iter.unmatched_path().as_str();
+                path += self.searcher.unmatched_path().as_str();
                 warning!("💥 path search failed: {}", path);
                 Cell {
                     dyn_cell: DynCell::from(noerr().with_path(path)),
@@ -838,6 +965,6 @@ impl<'a> PathSearch<'a> {
     }
 
     pub fn all(self) -> Res<Vec<Cell>> {
-        self.eval_iter.collect::<Res<Vec<_>>>()
+        self.searcher.collect::<Res<Vec<_>>>()
     }
 }

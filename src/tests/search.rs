@@ -122,15 +122,16 @@ fn search_simple_search_with_index() -> Res<()> {
         </a>
     </test>
         "#;
-    let root = Cell::from(TREE).be("yaml");
+    let root = Cell::from(TREE).be("xml");
 
-    let eval = str_eval(root.clone(), "/a[0]")?;
+    pprint(&root, 0, 0);
+    let eval = str_eval(root.clone(), "/test/a[0]")?;
     assert_eq!(eval, ["x:1"]);
 
-    let eval = str_eval(root.clone(), "/a[1]")?;
+    let eval = str_eval(root.clone(), "/test/a[1]")?;
     assert_eq!(eval, ["y:2"]);
 
-    let eval = str_eval(root.clone(), "/a[2]")?;
+    let eval = str_eval(root.clone(), "/test/a[2]")?;
     assert_eq!(eval, ["z:3"]);
 
     Ok(())
@@ -152,18 +153,23 @@ fn search_kleene() -> Res<()> {
         "#;
     let root = Cell::from(TREE).be("yaml");
 
+    pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), pr("/*"))?;
     assert_eq!(eval, ["a:", "m:mval", "n:nval", "o:ø"]);
 
+    pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), pr("/*#label"))?;
     assert_eq!(eval, [":a", ":m", ":n", ":o"]);
 
+    pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), pr("/*[#label=='a']"))?;
     assert_eq!(eval, ["a:"]);
 
+    pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), pr("/*[#label=='a']#index"))?;
     assert_eq!(eval, [":0"]);
 
+    pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/*/x")?;
     assert_eq!(eval, ["x:xa"]);
 
@@ -194,7 +200,7 @@ fn search_filter() -> Res<()> {
 }
 
 #[test]
-fn search_double_kleene_simple() -> Res<()> {
+fn search_double_kleene_basic() -> Res<()> {
     const TREE_SIMPLE: &str = r#"
             a:
               x: xval
@@ -204,10 +210,9 @@ fn search_double_kleene_simple() -> Res<()> {
     set_verbose(true);
     let root = Cell::from(TREE_SIMPLE).be("yaml");
 
-    crate::pprint::pprint(&root, 0, 0);
-
     let path = "/**/m";
     println!("\npath: {}\n", path);
+    pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), path)?;
     assert_eq!(eval, ["m:mval"]);
 
@@ -215,7 +220,7 @@ fn search_double_kleene_simple() -> Res<()> {
 }
 
 #[test]
-fn search_double_kleene() -> Res<()> {
+fn search_double_kleene_simple() -> Res<()> {
     const TREE: &str = r#"
             a:
               x: xa
@@ -232,16 +237,20 @@ fn search_double_kleene() -> Res<()> {
     let root = Cell::from(TREE).be("yaml");
 
     //  doublestar should match on multiple levels
+    pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/**/x")?;
     assert_eq!(eval, ["x:xa", "x:xb", "x:xc"]);
 
+    pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/**/y")?;
     assert_eq!(eval, ["y:yc"]);
 
     //  doublestar should match even nothing at all
+    pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/**/m")?;
     assert_eq!(eval, ["m:mval"]);
 
+    pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/a/**/b")?;
     assert_eq!(eval, ["b:"]);
 
@@ -315,6 +324,7 @@ fn search_double_kleene_all() -> Res<()> {
 
     let root = Cell::from(TREE).be("yaml");
 
+    pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/**")?;
     assert_eq!(
         eval,
@@ -402,12 +412,11 @@ fn search_double_kleene_repeat() -> Res<()> {
     set_verbose(true);
     let root = Cell::from(TREE).be("yaml");
 
-    // crate::pprint::pprint(&root, 0, 0);
-    // println!("\npath: {}\n", "/**/b/b");
+    // pprint(&root, 0, 0);
+    // let eval = str_eval(root.clone(), "/**/b/b")?;
+    // assert_eq!(eval, ["b:", "b:bval"]);
 
-    let eval = str_eval(root.clone(), "/**/b/b")?;
-    assert_eq!(eval, ["b:", "b:bval"]);
-
+    pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/**/b/**/b")?;
     assert_eq!(eval, ["b:", "b:bval"]);
 
@@ -421,19 +430,30 @@ fn search_double_kleene_with_filter() -> Res<()> {
             f1:
                 size: null
             dir2:
+                size: null
                 f2:
                     size: 2
+            dir3:
+                f3:
+                    size: 3
         "#;
     set_verbose(true);
     let root = Cell::from(TREE).be("yaml");
 
-    // let eval = str_eval(root.clone(), "/dir1/**")?;
-    // assert_eq!(eval, ["dir1:", "f1:", "size:ø", "dir2:", "f2:", "size:2"]);
+    pprint(&root, 0, 0);
+    let eval = str_eval(root.clone(), "/dir1/**")?;
+    assert_eq!(
+        eval,
+        ["dir1:", "f1:", "size:ø", "dir2:", "size:ø", "f2:", "size:2", "dir3:", "f3:", "size:3"]
+    );
 
     pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/dir1/**[/size]")?;
-    // TODO: this assert fails, f1 and f2 should both be returned
-    assert_eq!(eval, ["f1:", "f2:"]);
+    assert_eq!(eval, ["f1:", "dir2:", "f2:"]);
+
+    pprint(&root, 0, 0);
+    let eval = str_eval(root.clone(), "/dir1/**/*[/size]")?;
+    assert_eq!(eval, ["f1:", "dir2:", "f2:", "f3:"]);
 
     Ok(())
 }

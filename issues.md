@@ -7,9 +7,6 @@
     - explicit and implicit write support (policy, include readonly)
     - fix tests, todo!() and TODO: in code
 
-- celltrait: remove the simple get, rename get_all to get
-- add extra::Cell::get that returns iterator
-- implement new search algorithm (fix double kleene error, see test)
 - support type selector: `hial './src/tests/rust.rs^rust/:function_item'`
 - support rust/ts write: `hial './src/tests/rust.rs^rust/:function_item[-1]#label = "modified_fn_name"'`
 - set value on the command line
