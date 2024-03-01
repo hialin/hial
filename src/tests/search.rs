@@ -111,6 +111,13 @@ fn search_simple_search() -> Res<()> {
 fn search_simple_search_with_index() -> Res<()> {
     const TREE: &str = r#"
     <test>
+        <w>
+            <x>1</x>
+        </w>
+        <w>
+            <y>2</y>
+        </w>
+        <t/>
         <a>
             <x>1</x>
         </a>
@@ -120,18 +127,19 @@ fn search_simple_search_with_index() -> Res<()> {
         <a>
             <z>3</z>
         </a>
+        <s/>
     </test>
         "#;
     let root = Cell::from(TREE).be("xml");
 
     pprint(&root, 0, 0);
-    let eval = str_eval(root.clone(), "/test/a[0]")?;
+    let eval = str_eval(root.clone(), "/test/a[0]/*")?;
     assert_eq!(eval, ["x:1"]);
 
-    let eval = str_eval(root.clone(), "/test/a[1]")?;
+    let eval = str_eval(root.clone(), "/test/a[1]/*")?;
     assert_eq!(eval, ["y:2"]);
 
-    let eval = str_eval(root.clone(), "/test/a[2]")?;
+    let eval = str_eval(root.clone(), "/test/a[2]/*")?;
     assert_eq!(eval, ["z:3"]);
 
     Ok(())
@@ -412,13 +420,13 @@ fn search_double_kleene_repeat() -> Res<()> {
     set_verbose(true);
     let root = Cell::from(TREE).be("yaml");
 
-    // pprint(&root, 0, 0);
-    // let eval = str_eval(root.clone(), "/**/b/b")?;
-    // assert_eq!(eval, ["b:", "b:bval"]);
+    pprint(&root, 0, 0);
+    let eval = str_eval(root.clone(), "/**/b/b")?;
+    assert_eq!(eval, ["b:", "b:bval"]);
 
     pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/**/b/**/b")?;
-    assert_eq!(eval, ["b:", "b:bval"]);
+    assert_eq!(eval, ["b:", "b:bval", "b:bval"]); // two ways to reach node b:bval
 
     Ok(())
 }

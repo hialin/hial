@@ -381,8 +381,8 @@ impl GroupTrait for Group {
         }
     }
 
-    fn get(&self, key: Value) -> Res<Cell> {
-        match &self.nodes {
+    fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
+        let cell = match &self.nodes {
             NodeGroup::Array(a) => nores(),
             NodeGroup::Object(o) => match key {
                 Value::Str(k) => {
@@ -397,12 +397,8 @@ impl GroupTrait for Group {
                 }
                 _ => nores(),
             },
-        }
-    }
-
-    fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
-        let cell = self.get(key)?;
-        Ok(std::iter::once(Ok(cell)))
+        };
+        Ok(std::iter::once(cell))
     }
 }
 

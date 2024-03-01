@@ -123,14 +123,15 @@ impl<'s> Searcher<'s> {
         if path_index >= self.path.len() {
             return Some(Ok(parent));
         }
+        let pi = &self.path[path_index];
 
         ifdebug!(println!(
-            "test children of `{}` against index {}",
+            "test children of `{}` against `{}` (path index {})",
             parent.debug_string(),
+            pi,
             path_index
         ));
 
-        let pi = &self.path[path_index];
         let group = match pi.relation {
             Relation::Sub => parent.sub(),
             Relation::Attr => parent.attr(),
@@ -163,7 +164,7 @@ impl<'s> Searcher<'s> {
             Self::process_cell(
                 &mut self.stack,
                 &self.path,
-                &parent,
+                parent,
                 path_index,
                 true,
                 &mut self.next_max_path_index,
@@ -180,7 +181,7 @@ impl<'s> Searcher<'s> {
         group: Group,
         path_index: usize,
         next_max_path_index: &mut usize,
-    ) -> Option<Res<()>> {
+    ) {
         let pi = &path[path_index];
         match (pi.selector, pi.index) {
             (Some(Selector::Star) | Some(Selector::DoubleStar), None) => {
@@ -193,71 +194,77 @@ impl<'s> Searcher<'s> {
                     Self::process_cell(
                         stack,
                         path,
-                        &cell,
+                        cell,
                         path_index,
                         pi.selector != Some(Selector::DoubleStar),
                         next_max_path_index,
                     )
                 }
             }
-            (selector, Some(index)) => {
+            (None | Some(Selector::Star) | Some(Selector::DoubleStar), Some(index)) => {
                 ifdebug!(println!("get child by index"));
                 let cell = guard_ok!(group.at(index).err(), err => {
                     if err.kind != HErrKind::None {
                         warning!("Error while searching: cannot get cell: {:?}", err);
                     }
-                    return None;
+                    return ;
                 });
-                if let Some(Selector::Str(label)) = selector {
-                    if cell.read().label().unwrap_or(Value::None) != Value::Str(label) {
-                        ifdebug!(println!("cell by index but label does not match selector"));
-                        return None;
-                    }
-                }
                 Self::process_cell(
                     stack,
                     path,
-                    &cell,
+                    cell,
                     path_index,
-                    selector != Some(Selector::DoubleStar),
+                    pi.selector != Some(Selector::DoubleStar),
                     next_max_path_index,
                 );
             }
-            (Some(Selector::Str(label)), None) => {
+            (Some(Selector::Str(label)), opt_index) => {
                 ifdebug!(println!("iterating over children by label"));
-                let iter = guard_ok!(group.get_all(label).err(), err => {
+                let mut iter = guard_ok!(group.get_all(label).err(), err => {
                     if err.kind != HErrKind::None {
                         warning!("Error while searching: cannot get cell iterator: {:?}", err);
                     }
-                    return None;
+                    return ;
                 });
-                for cell in iter {
-                    Self::process_cell(stack, path, &cell, path_index, true, next_max_path_index)
+                if let Some(index) = opt_index {
+                    if let Some(cell) = iter.nth(index) {
+                        Self::process_cell(stack, path, cell, path_index, true, next_max_path_index)
+                    }
+                } else {
+                    for cell in iter {
+                        Self::process_cell(stack, path, cell, path_index, true, next_max_path_index)
+                    }
                 }
             }
             (None, None) => {
-                return Some(userres("missing both selector and index in search"));
+                warning!("missing both selector and index in search");
             }
             (Some(Selector::Top), _) => {
-                return Some(userres("Selector::Top not supported in search"));
+                warning!("Selector::Top not supported in search");
             }
         }
-        None
     }
 
     fn process_cell(
         stack: &mut Vec<MatchTest>,
         path: &[PathItem],
-        cell: &Cell,
+        cell: Cell,
         path_index: usize,
         advance_index: bool,
         next_max_path_index: &mut usize,
     ) {
+        let cell = guard_ok!(cell.err(), err => {
+            if err.kind != HErrKind::None {
+                warning!("Error while searching: cannot get cell: {:?}", err);
+            }
+            return;
+        });
+
         let pi = &path[path_index];
 
         ifdebug!(println!("test: `{}` for {}", cell.debug_string(), pi));
 
-        if !Self::eval_filters_match(cell, pi) {
+        if !Self::eval_filters_match(&cell, pi) {
             ifdebug!(println!("no match `{}` for {}", cell.debug_string(), pi));
             return;
         }

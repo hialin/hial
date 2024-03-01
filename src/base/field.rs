@@ -100,23 +100,20 @@ impl GroupTrait for FieldGroup {
         })
     }
 
-    fn get(&self, label: Value) -> Res<Self::Cell> {
-        if let Value::Str(l) = label {
-            return match l {
+    fn get_all(&self, label: Value) -> Res<Self::CellIterator> {
+        let cell = if let Value::Str(l) = label {
+            match l {
                 "value" => self.at(FieldType::Value as usize),
                 "label" => self.at(FieldType::Label as usize),
                 "type" => self.at(FieldType::Type as usize),
                 "index" => self.at(FieldType::Index as usize),
                 "serial" => self.at(FieldType::Serial as usize),
-                _ => nores(),
-            };
-        }
-        nores()
-    }
-
-    fn get_all(&self, label: Value) -> Res<Self::CellIterator> {
-        let cell = self.get(label)?;
-        Ok(std::iter::once(Ok(cell)))
+                _ => return nores(),
+            }
+        } else {
+            return nores();
+        };
+        Ok(std::iter::once(cell))
     }
 }
 

@@ -301,8 +301,8 @@ impl GroupTrait for Group {
         }
     }
 
-    fn get(&self, key: Value) -> Res<Cell> {
-        match (self.kind, key) {
+    fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
+        let cell = match (self.kind, key) {
             (GroupKind::Attr, sel) if sel == "status" => Ok(Cell {
                 group: self.clone(),
                 pos: 0,
@@ -336,11 +336,7 @@ impl GroupTrait for Group {
                 }
             }
             _ => nores(),
-        }
-    }
-
-    fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
-        let cell = self.get(key);
+        };
         Ok(std::iter::once(cell))
     }
 }

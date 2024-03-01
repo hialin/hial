@@ -7,6 +7,7 @@
     - explicit and implicit write support (policy, include readonly)
     - fix tests, todo!() and TODO: in code
 
+- change search: multiple path indices for one cell
 - support type selector: `hial './src/tests/rust.rs^rust/:function_item'`
 - support rust/ts write: `hial './src/tests/rust.rs^rust/:function_item[-1]#label = "modified_fn_name"'`
 - set value on the command line

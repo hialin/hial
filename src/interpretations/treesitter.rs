@@ -297,28 +297,24 @@ impl GroupTrait for Cell {
         })
     }
 
-    fn get(&self, key: Value) -> Res<Cell> {
+    fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
         let mut cursor = self.cursor.clone();
         if !cursor.goto_first_child() {
             return nores();
         }
         for i in 0..self.cursor.node().child_count() {
             if key == cursor.field_name().unwrap_or_default() {
-                return Ok(Cell {
+                let cell = Cell {
                     domain: self.domain.clone(),
                     cursor,
                     position: i,
-                });
+                };
+                return Ok(std::iter::once(Ok(cell)));
             }
             if !cursor.goto_next_sibling() {
                 return nores();
             }
         }
         nores()
-    }
-
-    fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
-        let cell = self.get(key);
-        Ok(std::iter::once(cell))
     }
 }

@@ -291,10 +291,6 @@ impl GroupTrait for HErr {
         Err(self.clone())
     }
 
-    fn get(&self, label: Value<'_>) -> Res<Self::Cell> {
-        Err(self.clone())
-    }
-
     fn get_all(&self, label: Value<'_>) -> Res<Self::CellIterator> {
         Err(self.clone())
     }

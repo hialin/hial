@@ -282,25 +282,6 @@ impl GroupTrait for Group {
         }
     }
 
-    fn get(&self, key: Value) -> Res<Cell> {
-        match &self.nodes {
-            NodeGroup::Array(a) => nores(),
-            NodeGroup::Table(t) => match key {
-                Value::Str(k) => {
-                    let t = t.read().ok_or_else(|| lockerr("cannot read group"))?;
-                    match t.get_index_of(k) {
-                        Some(pos) => Ok(Cell {
-                            group: self.clone(),
-                            pos,
-                        }),
-                        _ => nores(),
-                    }
-                }
-                _ => nores(),
-            },
-        }
-    }
-
     fn len(&self) -> Res<usize> {
         Ok(match &self.nodes {
             NodeGroup::Array(a) => a.read().ok_or_else(|| lockerr("cannot read group"))?.len(),
@@ -324,8 +305,23 @@ impl GroupTrait for Group {
     }
 
     fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
-        let cell = self.get(key)?;
-        Ok(std::iter::once(Ok(cell)))
+        let cell = match &self.nodes {
+            NodeGroup::Array(a) => nores(),
+            NodeGroup::Table(t) => match key {
+                Value::Str(k) => {
+                    let t = t.read().ok_or_else(|| lockerr("cannot read group"))?;
+                    match t.get_index_of(k) {
+                        Some(pos) => Ok(Cell {
+                            group: self.clone(),
+                            pos,
+                        }),
+                        _ => nores(),
+                    }
+                }
+                _ => nores(),
+            },
+        };
+        Ok(std::iter::once(cell))
     }
 }
 

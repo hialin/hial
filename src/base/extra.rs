@@ -234,22 +234,6 @@ impl From<HErr> for Cell {
     }
 }
 
-impl fmt::Debug for Cell {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let orig = format!("{:?}", self.domain.origin).replace('\n', "\n\t");
-        let root = format!("{:?}", self.domain.dyn_root).replace('\n', "\n\t");
-        write!(
-            f,
-            "Cell{{\n\tdyn_cell={:?}, \n\tdomain={{ write_policy={:?}, is_dirty={}, root={}, origin={} }}",
-            self.dyn_cell,
-            self.domain.write_policy.get(),
-            self.domain.dirty.get(),
-            root,
-            orig,
-        )
-    }
-}
-
 impl CellReaderTrait for CellReader {
     fn ty(&self) -> Res<&str> {
         dispatch_dyn_cell_reader!(&self.0, |x| { x.ty() })
@@ -649,18 +633,34 @@ impl Cell {
     }
 }
 
+impl fmt::Debug for Cell {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let orig = format!("{:?}", self.domain.origin).replace('\n', "\n\t");
+        let root = format!("{:?}", self.domain.dyn_root).replace('\n', "\n\t");
+        write!(
+            f,
+            "Cell{{\n\tdyn_cell={:?}, \n\tdomain={{ write_policy={:?}, is_dirty={}, root={}, origin={} }}",
+            self.dyn_cell,
+            self.domain.write_policy.get(),
+            self.domain.dirty.get(),
+            root,
+            orig,
+        )
+    }
+}
+
 impl fmt::Debug for Domain {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Domain{{ dyn_root={:?}, origin={:?} write_policy={:?}, is_dirty={} }}",
+            "Domain{{ write_policy={:?}, is_dirty={} root={:?}, origin={:?} }}",
+            self.write_policy.get(),
+            self.dirty.get(),
             self.dyn_root.get(),
             self.origin
                 .as_ref()
                 .map(|c| c.path().unwrap_or("<error>".into()))
                 .unwrap_or_default(),
-            self.write_policy.get(),
-            self.dirty.get()
         )
     }
 }
@@ -780,8 +780,12 @@ impl Group {
             GroupKind::Dyn { dyn_group, domain } => {
                 dispatch_dyn_group!(dyn_group, |x| {
                     Cell {
-                        dyn_cell: match x.get(key) {
-                            Ok(c) => DynCell::from(c),
+                        dyn_cell: match x.get_all(key) {
+                            Ok(mut iter) => match iter.next() {
+                                Some(Ok(cell)) => DynCell::from(cell),
+                                Some(Err(err)) => DynCell::from(err),
+                                None => DynCell::from(noerr()),
+                            },
                             Err(e) => DynCell::from(e),
                         },
                         domain: Rc::clone(domain),
@@ -831,8 +835,18 @@ impl Group {
                     },
                 }
             }
-            GroupKind::Elevation(elevation_group) => CellIterator {
-                cell_iterator: CellIteratorKind::Elevation(elevation_group.get(key)),
+            GroupKind::Elevation(elevation_group) => match elevation_group.get(key) {
+                Ok(c) => {
+                    if let Err(ref old_cell) = c.domain.dyn_root.set(c.dyn_cell.clone()) {
+                        warning!("❗️cannot overwrite domain dyn_root: {:?}", old_cell);
+                    }
+                    CellIterator {
+                        cell_iterator: CellIteratorKind::Elevation(Ok(c)),
+                    }
+                }
+                Err(e) => CellIterator {
+                    cell_iterator: CellIteratorKind::Elevation(Err(e)),
+                },
             },
         }
     }
@@ -888,16 +902,26 @@ impl Iterator for CellIterator {
                 })
             }
             CellIteratorKind::Elevation(cell_res) => match cell_res {
-                Ok(cell) => Some(cell.clone()),
-                Err(err) => Some(Cell {
-                    dyn_cell: DynCell::from(err.clone()),
-                    domain: Rc::new(Domain {
-                        write_policy: cell::Cell::new(WritePolicy::ReadOnly),
-                        origin: None,
-                        dyn_root: OnceCell::new(),
-                        dirty: cell::Cell::new(false),
-                    }),
-                }),
+                Ok(cell) => {
+                    let cell = cell.clone();
+                    *cell_res = nores();
+                    Some(cell)
+                }
+                Err(err) => {
+                    if err.kind == HErrKind::None {
+                        None
+                    } else {
+                        Some(Cell {
+                            dyn_cell: DynCell::from(err.clone()),
+                            domain: Rc::new(Domain {
+                                write_policy: cell::Cell::new(WritePolicy::ReadOnly),
+                                origin: None,
+                                dyn_root: OnceCell::new(),
+                                dirty: cell::Cell::new(false),
+                            }),
+                        })
+                    }
+                }
             },
         }
     }

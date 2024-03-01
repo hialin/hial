@@ -586,8 +586,7 @@ impl Iterator for CellIterator {
                 let cell = this.group.at(this.next_pos)?;
                 this.next_pos += 1;
                 let reader = cell.read()?;
-                let k = reader.label()?;
-                if this.key.as_value() == k {
+                if Some(this.key.as_value()) == reader.label().ok() {
                     return Ok(cell);
                 }
             }
@@ -637,21 +636,6 @@ impl GroupTrait for Group {
             group: self.clone(),
             pos: index,
         })
-    }
-
-    fn get(&self, key: Value) -> Res<Cell> {
-        for i in 0..self.len()? {
-            if let Ok(cell) = self.at(i) {
-                if let Ok(reader) = cell.read() {
-                    if let Ok(k) = reader.label() {
-                        if key == k {
-                            return Ok(cell);
-                        }
-                    }
-                }
-            }
-        }
-        nores()
     }
 
     fn get_all(&self, key: Value) -> Res<CellIterator> {

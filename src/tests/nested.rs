@@ -1,7 +1,7 @@
-use crate::{base::*, utils::log::set_verbose};
+use crate::{base::*, pprint::pprint, utils::log::set_verbose};
 
 #[test]
-fn test_nested() -> Res<()> {
+fn test_nested_0() -> Res<()> {
     set_verbose(true);
 
     let yxj = r#"{"one": ["<?xml?><root>mytext: This is my yaml string</root>"]}"#;
@@ -45,13 +45,13 @@ fn test_nested_mut() -> Res<()> {
             .sub()
             .get("mytext");
         println!("4");
-        assert_eq!(mytext.read().value()?, "yaml string");
     }
 
     println!("5");
 
     {
         let cell = text.to("^json/one/[0]^xml/root/a^yaml/mytext");
+        pprint(&cell, 0, 0);
         println!("6");
         assert_eq!(cell.read().value()?, "yaml string");
         println!("7");

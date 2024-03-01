@@ -69,7 +69,6 @@ pub trait GroupTrait: Clone + Debug {
         self.len().map_or(false, |l| l == 0)
     }
     fn at(&self, index: usize) -> Res<Self::Cell>;
-    fn get(&self, label: Value<'_>) -> Res<Self::Cell>;
     fn get_all(&self, label: Value<'_>) -> Res<Self::CellIterator>;
 
     fn add(&mut self) -> Res<()> {
@@ -97,10 +96,6 @@ impl<C: CellTrait> GroupTrait for VoidGroup<C> {
     }
 
     fn at(&self, index: usize) -> Res<C> {
-        nores()
-    }
-
-    fn get(&self, key: Value) -> Res<C> {
         nores()
     }
 

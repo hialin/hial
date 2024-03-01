@@ -472,8 +472,8 @@ impl GroupTrait for Group {
         }
     }
 
-    fn get(&self, key: Value) -> Res<Cell> {
-        match self.ty {
+    fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
+        let cell = match self.ty {
             GroupType::Folder => {
                 let files = self
                     .files
@@ -498,12 +498,8 @@ impl GroupTrait for Group {
                     nores()
                 }
             }
-        }
-    }
-
-    fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
-        let cell = self.get(key)?;
-        Ok(std::iter::once(Ok(cell)))
+        };
+        Ok(std::iter::once(cell))
     }
 }
 
