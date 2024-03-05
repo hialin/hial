@@ -7,8 +7,7 @@ fn test_rust() -> Res<()> {
     let folder = Cell::from(".").be("path").be("fs").err().unwrap();
     let root = folder.to("/src/tests/rust.rs^rust");
     assert_eq!(
-        root.search("/*[#type=='function_item']/name")?
-            .all()?
+        root.all("/*[#type=='function_item']/name")?
             .into_iter()
             .map(|c| c.debug_string())
             .collect::<Vec<_>>(),
@@ -48,7 +47,7 @@ fn rust_write_and_save() -> Res<()> {
         .set_value("modified_rust_fn".into())?;
     assert_eq!(root.to("/[7]/[1]").read().value()?, "modified_rust_fn");
 
-    root.save(root.origin())?;
+    root.save(&root.origin())?;
     assert_eq!(file.to("^rust/[7]/[1]").read().value()?, "modified_rust_fn",);
 
     root.to("/[7]/[1]")
@@ -56,7 +55,7 @@ fn rust_write_and_save() -> Res<()> {
         .set_value("editable_rust_fn".into())?;
     assert_eq!(root.to("/[7]/[1]").read().value()?, "editable_rust_fn");
 
-    root.save(file.clone())?;
+    root.save(&file.clone())?;
     assert_eq!(file.to("^rust/[7]/[1]").read().value()?, "editable_rust_fn",);
 
     Ok(())

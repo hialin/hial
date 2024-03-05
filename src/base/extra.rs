@@ -5,11 +5,8 @@ use std::{
 };
 
 use crate::{
-    base::*,
-    enumerated_dynamic_type, guard_ok, guard_some,
-    interpretations::*,
-    pathlang::{search::Searcher, Path},
-    warning,
+    base::*, enumerated_dynamic_type, guard_ok, guard_some, interpretations::*,
+    pathlang::search::Searcher, warning,
 };
 
 const MAX_PATH_ITEMS: usize = 1000;
@@ -420,18 +417,44 @@ impl Cell {
     }
 
     pub fn to(&self, path: &str) -> Cell {
+        if let DynCell::Error(err) = &self.dyn_cell {
+            return self.clone();
+        }
         let path = guard_ok!(crate::pathlang::Path::parse(path), err =>
             return Cell {
                 dyn_cell: DynCell::from(err),
                 domain: Rc::clone(&self.domain),
             }
         );
-        PathSearch::new(self.clone(), path).first()
+        let mut searcher = Searcher::new(self.clone(), path);
+        match searcher.next() {
+            Some(Ok(c)) => c,
+            Some(Err(e)) => Cell {
+                dyn_cell: DynCell::from(e),
+                domain: Rc::clone(&self.domain),
+            },
+            None => {
+                let mut path = self.path().unwrap_or_default();
+                path += searcher.unmatched_path().as_str();
+                warning!("💥 path search failed: {}", path);
+                Cell {
+                    dyn_cell: DynCell::from(noerr().with_path(path)),
+                    domain: Rc::clone(&self.domain),
+                }
+            }
+        }
     }
 
-    pub fn search<'a>(&self, path: &'a str) -> Res<PathSearch<'a>> {
+    pub fn search<'a>(&self, path: &'a str) -> Res<Searcher<'a>> {
+        if let DynCell::Error(err) = &self.dyn_cell {
+            return Err(err.clone());
+        }
         let path = guard_ok!(crate::pathlang::Path::parse(path), err => {return Err(err)});
-        Ok(PathSearch::new(self.clone(), path))
+        Ok(Searcher::new(self.clone(), path))
+    }
+
+    pub fn all(&self, path: &str) -> Res<Vec<Cell>> {
+        self.search(path)?.collect()
     }
 
     pub fn head(&self) -> Res<(Cell, Relation)> {
@@ -621,15 +644,29 @@ impl Cell {
         s
     }
 
-    pub fn save(&self, target: Cell) -> Res<()> {
+    pub fn save(&self, target: &Cell) -> Res<()> {
         if let DynCell::Error(err) = &self.dyn_cell {
             return Err(err.clone());
         }
         if let DynCell::Error(err) = &target.dyn_cell {
             return Err(err.clone());
         }
-        let s = self.read().serial()?;
-        target.write().set_value(OwnValue::String(s))
+        Self::save_from_to(&self.dyn_cell, target)
+    }
+
+    pub fn save_domain(&self, target: &Cell) -> Res<()> {
+        if let DynCell::Error(err) = &target.dyn_cell {
+            return Err(err.clone());
+        }
+        let dyn_root = guard_some!(self.domain.dyn_root.get(), {
+            return fault("domain root not found while saving domain");
+        });
+        Self::save_from_to(dyn_root, target)
+    }
+
+    fn save_from_to(dyn_cell: &DynCell, target: &Cell) -> Res<()> {
+        let serial = dispatch_dyn_cell!(dyn_cell, |x| { x.read()?.serial()? });
+        target.write().set_value(OwnValue::String(serial))
     }
 }
 
@@ -679,25 +716,8 @@ impl Drop for Domain {
             return;
         });
 
-        let serial = dispatch_dyn_cell!(&dyn_root, |x| {
-            let r = guard_ok!(x.read(), e => {
-                warning!(
-                    "💥 cannot read root while trying to auto-save domain: {:?}",
-                    e
-                );
-                return;
-            });
-            guard_ok!(r.serial(), e => {
-                warning!("💥 cannot serialize root while trying to auto-save domain: {:?}", e);
-                return;
-            })
-        });
-
-        if let Err(e) = target.write().set_value(OwnValue::String(serial)) {
-            warning!(
-                "💥 cannot write to domain origin while trying to auto-save domain: {:?}",
-                e
-            );
+        if let Err(err) = Cell::save_from_to(dyn_root, target) {
+            warning!("💥 while trying to auto-save domain: {:?}", err);
         }
     }
 }
@@ -952,43 +972,5 @@ impl CellIterator {
                 Err(err) => Err(err),
             },
         }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct PathSearch<'a> {
-    start: Cell,
-    // eval_iter: EvalIter<'a>,
-    searcher: Searcher<'a>,
-}
-impl<'a> PathSearch<'a> {
-    pub fn new(cell: Cell, path: Path<'a>) -> Self {
-        PathSearch {
-            start: cell.clone(),
-            searcher: Searcher::new(cell, path),
-        }
-    }
-
-    pub fn first(mut self) -> Cell {
-        match self.searcher.next() {
-            Some(Ok(c)) => c,
-            Some(Err(e)) => Cell {
-                dyn_cell: DynCell::from(e),
-                domain: Rc::clone(&self.start.domain),
-            },
-            None => {
-                let mut path = self.start.path().unwrap_or_default();
-                path += self.searcher.unmatched_path().as_str();
-                warning!("💥 path search failed: {}", path);
-                Cell {
-                    dyn_cell: DynCell::from(noerr().with_path(path)),
-                    domain: Rc::clone(&self.start.domain),
-                }
-            }
-        }
-    }
-
-    pub fn all(self) -> Res<Vec<Cell>> {
-        self.searcher.collect::<Res<Vec<_>>>()
     }
 }

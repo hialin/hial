@@ -17,7 +17,7 @@ use crate::{
 
 macro_rules! ifdebug {
     ( $body:expr ) => {
-        $body
+        // $body
     };
 }
 
@@ -101,7 +101,10 @@ impl<'s> Searcher<'s> {
                     "returning cell {:?}",
                     cell.as_ref().map(|x| x.debug_string())
                 ));
-                return Some(cell);
+                match cell.and_then(|cell| cell.err()) {
+                    Ok(cell) => return Some(Ok(cell)),
+                    Err(e) => warning!("search error: {}", e),
+                }
             }
         }
         None

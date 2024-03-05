@@ -146,7 +146,7 @@ fn json_write_and_save() -> Res<()> {
     assert_eq!(json.to(path1).read().value()?, newvalue);
     assert_eq!(json.to(path2).read().value()?, Value::None);
 
-    json.save(json.origin())?;
+    json.save(&json.origin())?;
 
     assert_eq!(
         flattree.read().value()?.to_string(),

@@ -467,8 +467,7 @@ fn search_double_kleene_with_filter() -> Res<()> {
 }
 
 pub fn str_eval(root: Cell, path: &str) -> Res<Vec<String>> {
-    root.search(path)?
-        .all()?
+    root.all(path)?
         .into_iter()
         .map(|cell| -> Res<String> {
             // if let Ok(ref cell) = cres {

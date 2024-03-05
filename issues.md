@@ -7,11 +7,12 @@
     - explicit and implicit write support (policy, include readonly)
     - fix tests, todo!() and TODO: in code
 
-- change search: multiple path indices for one cell
-- support type selector: `hial './src/tests/rust.rs^rust/:function_item'`
-- support rust/ts write: `hial './src/tests/rust.rs^rust/:function_item[-1]#label = "modified_fn_name"'`
+- support type selector: `hial './src/tests/rust.rs^rust/*[:function_item]'`
+- support rust/ts write: `hial './src/tests/rust.rs^rust/*[:function_item].label = "modified_fn_name"'`
 - set value on the command line
-- separate api module, used by ffi and dependent crates
+- new structure: /api, /api/impl, /interpretations/api, /interpretations/*, /search
+
+-
 
 - operations:
     - assign to variables;
@@ -24,11 +25,12 @@
         - new/set/replace/delete group (only sub or attr group)
     - diff with assignment of results in variables
 
+- ?change search: multiple path indices for one cell
 - ?treesitter representations are too detailed, unsure what to do
 - ?explore python implementation and usage
 - ?search should return all matches embedded in a delegation cell, which has all results
     as subs and delegates write operations to all the subs
-- ?rename XCell, Cell, CellTrait to Nex?
+- ?rename XCell, Cell, CellTrait to Nex/NexIn/NexInTrait
 - later: python, git, database, ical, zip, markdown
 
 
@@ -97,4 +99,14 @@
 ```
     './**[.name=='config.yaml'][as composefile]^yaml/services/*/image[^string^http@status/code!=200]
     tree 'result' -> [composefile] -> image
+```
+
+### Examples
+
+1. Extract the general structure of a rust file. Get the struct/enum/type definitions (just the name and the type) and the function definitions (just the name and the signature). Get all implementations of traits and the functions inside them, as a tree.
+
+```
+hial 'item = ./src/tests/rust.rs^rust/**[:struct_item|:enum_item|:type_item|:function_item]; item/'
+
+'
 ```

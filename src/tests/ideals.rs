@@ -20,14 +20,14 @@ fn tree() -> Res<()> {
     // and write back by doing a put request
     let cell = Cell::from("./examples/write.json")
         .policy(WritePolicy::WriteBackOnDrop)
-        .to("^path^fs^json/");
+        .to("^path^fs^json");
     pprint(&cell, 0, 0);
     assert!(cell.clone().err().is_ok());
     // assert!(cell.write().set_value("weak as putty".into()).is_ok());
 
     // let cell = Cell::from(".")
     //     .policy(WritePolicy::WriteBackOnDrop)
-    //     .to("/examples/productiondump.json^file")
+    //     .to("^path^fs/examples/productiondump.json")
     //     .to("^json/stacks/*/dockerCompose")
     //     .to("^docker.compose/services/scheduler/image")
     //     .to("^docker.imagetag/tag")

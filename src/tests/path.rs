@@ -24,7 +24,7 @@ fn test_multihop_path() -> Res<()> {
     let start = Cell::from("http://api.github.com");
     let path = "^http^json/rate_limit_url^http^json/resources/core/limit";
 
-    let results = start.search(path)?.all()?;
+    let results = start.all(path)?;
     assert_eq!(results.len(), 1);
     let result = &results[0];
 
