@@ -1,4 +1,6 @@
-pub static mut VERBOSE: bool = false;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+pub static VERBOSE: AtomicBool = AtomicBool::new(false);
 
 #[macro_export]
 macro_rules! warning {
@@ -10,7 +12,7 @@ macro_rules! debug {
     (
         $($arg:tt)*
     ) => (
-        if unsafe{$crate::utils::log::VERBOSE} {
+        if $crate::utils::log::VERBOSE.load(std::sync::atomic::Ordering::SeqCst) {
             println!("‣ {}", format!($($arg)*))
         }
     );
@@ -21,7 +23,7 @@ macro_rules! debug_err {
     (
         $arg:expr
     ) => {
-        if unsafe { $crate::utils::log::VERBOSE } {
+        if $crate::utils::log::VERBOSE.load(std::sync::atomic::Ordering::SeqCst) {
             if $arg.kind != HErrKind::None {
                 println!("‣Error: {:?}", $arg)
             }
@@ -30,5 +32,5 @@ macro_rules! debug_err {
 }
 
 pub fn set_verbose(flag: bool) {
-    unsafe { VERBOSE = flag }
+    VERBOSE.store(flag, Ordering::SeqCst);
 }

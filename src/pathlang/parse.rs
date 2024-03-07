@@ -11,7 +11,7 @@ use nom::{
     sequence::{delimited, terminated, tuple},
     IResult,
 };
-use std::str::{from_utf8_unchecked, FromStr};
+use std::str::{from_utf8, FromStr};
 
 pub type NomRes<T, U> = IResult<T, U, VerboseError<T>>;
 
@@ -202,10 +202,10 @@ fn path_item_start(input: &str) -> NomRes<&str, char> {
     context(
         "path_item_start",
         alt((
-            tag(unsafe { from_utf8_unchecked(&[Relation::Attr as u8]) }),
-            tag(unsafe { from_utf8_unchecked(&[Relation::Sub as u8]) }),
-            tag(unsafe { from_utf8_unchecked(&[Relation::Interpretation as u8]) }),
-            tag(unsafe { from_utf8_unchecked(&[Relation::Field as u8]) }),
+            tag(from_utf8(&[Relation::Attr as u8]).unwrap()),
+            tag(from_utf8(&[Relation::Sub as u8]).unwrap()),
+            tag(from_utf8(&[Relation::Interpretation as u8]).unwrap()),
+            tag(from_utf8(&[Relation::Field as u8]).unwrap()),
         )),
     )(input)
     .map(|(next_input, res)| (next_input, res.chars().next().unwrap()))
