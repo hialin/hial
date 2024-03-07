@@ -31,6 +31,7 @@ pub(crate) struct Cell {
 pub(crate) struct CellIterator {
     group: Group,
     next_pos: usize,
+    next_back_pos: usize,
     key: OwnValue,
 }
 
@@ -603,6 +604,33 @@ impl Iterator for CellIterator {
         }
     }
 }
+impl DoubleEndedIterator for CellIterator {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        fn inner(this: &mut CellIterator) -> Res<Cell> {
+            loop {
+                if this.next_back_pos == 0 {
+                    return nores();
+                }
+                this.next_back_pos -= 1;
+                let cell = this.group.at(this.next_back_pos)?;
+                let reader = cell.read()?;
+                if Some(this.key.as_value()) == reader.label().ok() {
+                    return Ok(cell);
+                }
+            }
+        }
+        match inner(self) {
+            Ok(cell) => Some(Ok(cell)),
+            Err(e) => {
+                if e.kind == HErrKind::None {
+                    None
+                } else {
+                    Some(Err(e))
+                }
+            }
+        }
+    }
+}
 
 impl GroupTrait for Group {
     type Cell = Cell;
@@ -642,6 +670,7 @@ impl GroupTrait for Group {
         Ok(CellIterator {
             group: self.clone(),
             next_pos: 0,
+            next_back_pos: self.len()?,
             key: key.to_owned_value(),
         })
     }

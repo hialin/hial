@@ -206,7 +206,16 @@ impl<'s> Searcher<'s> {
             }
             (None | Some(Selector::Star) | Some(Selector::DoubleStar), Some(index)) => {
                 ifdebug!(println!("get child by index"));
-                let cell = guard_ok!(group.at(index).err(), err => {
+                let at_index = if index < 0 {
+                    let len = group.len().unwrap_or_else(|e| {
+                        warning!("Error while searching: cannot get group length: {:?}", e);
+                        0
+                    });
+                    (len as isize + index) as usize
+                } else {
+                    index as usize
+                };
+                let cell = guard_ok!(group.at(at_index).err(), err => {
                     if err.kind != HErrKind::None {
                         warning!("Error while searching: cannot get cell: {:?}", err);
                     }
@@ -230,7 +239,12 @@ impl<'s> Searcher<'s> {
                     return ;
                 });
                 if let Some(index) = opt_index {
-                    if let Some(cell) = iter.nth(index) {
+                    let opt_cell = if index < 0 {
+                        iter.rev().nth((-index - 1) as usize)
+                    } else {
+                        iter.nth(index as usize)
+                    };
+                    if let Some(cell) = opt_cell {
                         Self::process_cell(stack, path, cell, path_index, true, next_max_path_index)
                     }
                 } else {

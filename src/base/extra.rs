@@ -947,6 +947,46 @@ impl Iterator for CellIterator {
     }
 }
 
+impl DoubleEndedIterator for CellIterator {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        match &mut self.cell_iterator {
+            CellIteratorKind::DynCellIterator { dyn_cell, domain } => {
+                dispatch_dyn_cell_iterator!(dyn_cell, |x| {
+                    x.next_back().map(|cell_res| Cell {
+                        dyn_cell: match cell_res {
+                            Ok(cell) => DynCell::from(cell),
+                            Err(err) => DynCell::from(err),
+                        },
+                        domain: Rc::clone(domain),
+                    })
+                })
+            }
+            CellIteratorKind::Elevation(cell_res) => match cell_res {
+                Ok(cell) => {
+                    let cell = cell.clone();
+                    *cell_res = nores();
+                    Some(cell)
+                }
+                Err(err) => {
+                    if err.kind == HErrKind::None {
+                        None
+                    } else {
+                        Some(Cell {
+                            dyn_cell: DynCell::from(err.clone()),
+                            domain: Rc::new(Domain {
+                                write_policy: cell::Cell::new(WritePolicy::ReadOnly),
+                                origin: None,
+                                dyn_root: OnceCell::new(),
+                                dirty: cell::Cell::new(false),
+                            }),
+                        })
+                    }
+                }
+            },
+        }
+    }
+}
+
 impl CellIterator {
     pub fn err(self) -> Res<CellIterator> {
         match self.cell_iterator {

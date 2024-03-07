@@ -61,7 +61,7 @@ pub trait CellWriterTrait: Debug {
 
 pub trait GroupTrait: Clone + Debug {
     type Cell: CellTrait;
-    type CellIterator: Iterator<Item = Res<Self::Cell>>;
+    type CellIterator: DoubleEndedIterator<Item = Res<Self::Cell>>;
 
     fn label_type(&self) -> LabelType;
     fn len(&self) -> Res<usize>;

@@ -165,10 +165,10 @@ fn path_item_selector(input: &str) -> NomRes<&str, Selector> {
         .map(|(next_input, res)| (next_input, Selector::from(res)))
 }
 
-fn path_item_index(input: &str) -> NomRes<&str, usize> {
+fn path_item_index(input: &str) -> NomRes<&str, isize> {
     context(
         "path_item_index",
-        delimited(tag("["), number_usize, tag("]")),
+        delimited(tag("["), number_isize, tag("]")),
     )(input)
 }
 
@@ -212,8 +212,21 @@ fn path_item_start(input: &str) -> NomRes<&str, char> {
 }
 
 fn number_usize(input: &str) -> NomRes<&str, usize> {
-    context("number", recognize(many1(one_of("0123456789"))))(input).map(|(next_input, res)| {
-        let n = usize::from_str(res).unwrap_or_else(|_| panic!("parse error, logic error"));
+    context("positive number", recognize(many1(one_of("0123456789"))))(input).map(
+        |(next_input, res)| {
+            let n = usize::from_str(res).unwrap_or_else(|_| panic!("parse error, logic error"));
+            (next_input, n)
+        },
+    )
+}
+
+fn number_isize(input: &str) -> NomRes<&str, isize> {
+    context(
+        "number",
+        recognize(tuple((opt(one_of("+-")), many1(one_of("0123456789"))))),
+    )(input)
+    .map(|(next_input, res)| {
+        let n = isize::from_str(res).unwrap_or_else(|_| panic!("parse error, logic error"));
         (next_input, n)
     })
 }

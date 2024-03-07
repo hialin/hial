@@ -17,6 +17,17 @@ fn path_simple_item() -> Res<()> {
             filters: vec![],
         },]
     );
+
+    let path = Path::parse("/a[-2]")?;
+    assert_eq!(
+        path.0.as_slice(),
+        &[PathItem {
+            relation: Relation::Sub,
+            selector: Some(Selector::Str("a")),
+            index: Some(-2),
+            filters: vec![],
+        },]
+    );
     Ok(())
 }
 
@@ -141,6 +152,12 @@ fn search_simple_search_with_index() -> Res<()> {
 
     let eval = str_eval(root.clone(), "/test/a[2]/*")?;
     assert_eq!(eval, ["z:3"]);
+
+    let eval = str_eval(root.clone(), "/test/a[-1]/*")?;
+    assert_eq!(eval, ["z:3"]);
+
+    let eval = str_eval(root.clone(), "/test/a[-2]/*")?;
+    assert_eq!(eval, ["y:2"]);
 
     Ok(())
 }

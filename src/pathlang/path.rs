@@ -19,8 +19,8 @@ pub enum PathStart<'a> {
 pub struct PathItem<'a> {
     pub(crate) relation: Relation,
     pub(crate) selector: Option<Selector<'a>>, // field name (string) or '*' or '**'
-    pub(crate) index: Option<usize>,           // or index
-    pub(crate) filters: Vec<Filter<'a>>,       // [@size>0] or [.name.endswith('.rs')]
+    pub(crate) index: Option<isize>,
+    pub(crate) filters: Vec<Filter<'a>>, // [@size>0] or [.name.endswith('.rs')]
 }
 
 #[derive(Clone, Debug, PartialEq)]
