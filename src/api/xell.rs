@@ -5,8 +5,8 @@ use std::{
 };
 
 use crate::{
-    base::*, enumerated_dynamic_type, guard_ok, guard_some, interpretations::*,
-    pathlang::search::Searcher, warning,
+    api::internal::*, api::interpretation::*, api::*, enumerated_dynamic_type, guard_ok,
+    guard_some, interpretations::*, search::searcher::Searcher, warning,
 };
 
 const MAX_PATH_ITEMS: usize = 1000;
@@ -136,7 +136,7 @@ pub(crate) enum GroupKind {
         dyn_group: DynGroup,
         domain: Rc<Domain>,
     },
-    Elevation(ElevationGroup),
+    Elevation(elevation::ElevationGroup),
     // Mixed(Vec<Cell>),
 }
 
@@ -158,7 +158,7 @@ enumerated_dynamic_type! {
     #[derive(Clone, Debug)]
     pub(crate) enum DynCellIterator {
         Error(std::iter::Once<Res<HErr>>),
-        Field(std::iter::Once<Res<FieldCell>>),
+        Field(std::iter::Once<Res<field::FieldCell>>),
         OwnValue(std::iter::Empty<Res<ownvalue::Cell>>),
         File(std::iter::Once<Res<fs::Cell>>),
         Json(std::iter::Once<Res<json::Cell>>),
@@ -231,20 +231,20 @@ impl From<HErr> for Cell {
     }
 }
 
-impl CellReaderTrait for CellReader {
-    fn ty(&self) -> Res<&str> {
+impl CellReader {
+    pub fn ty(&self) -> Res<&str> {
         dispatch_dyn_cell_reader!(&self.0, |x| { x.ty() })
     }
-    fn index(&self) -> Res<usize> {
+    pub fn index(&self) -> Res<usize> {
         dispatch_dyn_cell_reader!(&self.0, |x| { x.index() })
     }
-    fn label(&self) -> Res<Value> {
+    pub fn label(&self) -> Res<Value> {
         dispatch_dyn_cell_reader!(&self.0, |x| { x.label() })
     }
-    fn value(&self) -> Res<Value> {
+    pub fn value(&self) -> Res<Value> {
         dispatch_dyn_cell_reader!(&self.0, |x| { x.value() })
     }
-    fn serial(&self) -> Res<String> {
+    pub fn serial(&self) -> Res<String> {
         dispatch_dyn_cell_reader!(&self.0, |x| { x.serial() })
     }
 }
@@ -267,15 +267,30 @@ impl CellReader {
     }
 }
 
-impl CellWriterTrait for CellWriter {
-    fn label(&mut self, value: OwnValue) -> Res<()> {
+impl CellWriter {
+    pub fn label(&mut self, value: OwnValue) -> Res<()> {
         self.domain.dirty.set(true);
-        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.label(value) })
+        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.set_label(value) })
     }
 
-    fn value(&mut self, ov: OwnValue) -> Res<()> {
+    pub fn value(&mut self, ov: OwnValue) -> Res<()> {
         self.domain.dirty.set(true);
-        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.value(ov) })
+        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.set_value(ov) })
+    }
+
+    pub fn index(&mut self, index: usize) -> Res<()> {
+        self.domain.dirty.set(true);
+        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.set_index(index) })
+    }
+
+    pub fn ty(&mut self, ty: &str) -> Res<()> {
+        self.domain.dirty.set(true);
+        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.set_ty(ty) })
+    }
+
+    pub fn serial(&mut self, serial: OwnValue) -> Res<()> {
+        self.domain.dirty.set(true);
+        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.set_serial(serial) })
     }
 }
 impl CellWriter {
@@ -389,7 +404,7 @@ impl Cell {
             };
         }
         Group {
-            group: GroupKind::Elevation(ElevationGroup(self.clone())),
+            group: GroupKind::Elevation(elevation::ElevationGroup(self.clone())),
         }
     }
 
@@ -404,7 +419,7 @@ impl Cell {
         }
         Group {
             group: GroupKind::Dyn {
-                dyn_group: DynGroup::from(FieldGroup {
+                dyn_group: DynGroup::from(field::FieldGroup {
                     cell: Rc::new(self.clone()),
                 }),
                 domain: Rc::clone(&self.domain),
@@ -420,7 +435,7 @@ impl Cell {
         if let DynCell::Error(err) = &self.dyn_cell {
             return self.clone();
         }
-        let path = guard_ok!(crate::pathlang::Path::parse(path), err =>
+        let path = guard_ok!(crate::search::Path::parse(path), err =>
             return Cell {
                 dyn_cell: DynCell::from(err),
                 domain: Rc::clone(&self.domain),
@@ -449,7 +464,7 @@ impl Cell {
         if let DynCell::Error(err) = &self.dyn_cell {
             return Err(err.clone());
         }
-        let path = guard_ok!(crate::pathlang::Path::parse(path), err => {return Err(err)});
+        let path = guard_ok!(crate::search::Path::parse(path), err => {return Err(err)});
         Ok(Searcher::new(self.clone(), path))
     }
 

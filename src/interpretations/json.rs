@@ -6,7 +6,8 @@ use serde::Serialize;
 use serde_json::{ser::PrettyFormatter, Serializer, Value as SValue};
 
 use crate::{
-    base::{Cell as XCell, *},
+    api::interpretation::*,
+    api::{Cell as XCell, *},
     guard_some,
     utils::{
         indentation::{detect_file_indentation, detect_indentation},
@@ -285,7 +286,7 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn label(&mut self, label: OwnValue) -> Res<()> {
+    fn set_label(&mut self, label: OwnValue) -> Res<()> {
         match self.nodes {
             WriteNodeGroup::Array(_) => {
                 return userres("cannot set label on array object");
@@ -300,7 +301,7 @@ impl CellWriterTrait for CellWriter {
         };
         Ok(())
     }
-    fn value(&mut self, value: OwnValue) -> Res<()> {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
         match self.nodes {
             WriteNodeGroup::Array(ref mut a) => {
                 a[self.pos] = Node::Scalar(ownvalue_to_serde(value));

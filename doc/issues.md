@@ -12,7 +12,6 @@
 - support diff  ./file.json^json^tree  ./file.xml^xml^tree
 - '**[filter]' must be work as '**/*[filter]' (filter to be applied only on leaves)
 - support rust/ts write: `hial './src/tests/rust.rs^rust/*[:function_item].label = "modified_fn_name"'`
-- new structure: /api, /api/impl, /interpretations/api, /interpretations/*, /search
 - add http interpretation params: method=HEAD, accept=""
 - functions
 - should blobs/bytes be part of value? they are only useful by reinterpretation

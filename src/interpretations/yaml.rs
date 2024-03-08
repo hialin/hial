@@ -5,8 +5,10 @@ use indexmap::IndexMap;
 use linkme::distributed_slice;
 use yaml_rust::{ScanError, Yaml, YamlLoader};
 
-use crate::base::{Cell as XCell, *};
-use crate::utils::ownrc::{OwnRc, ReadRc, WriteRc};
+use crate::{
+    api::{interpretation::*, Cell as XCell, *},
+    utils::ownrc::{OwnRc, ReadRc, WriteRc},
+};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_YAML: ElevationConstructor = ElevationConstructor {
@@ -188,7 +190,7 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn value(&mut self, value: OwnValue) -> Res<()> {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
         match self.nodes {
             WriteNodeGroup::Array(ref mut a) => match a.get_mut(self.pos) {
                 Some(x) => *x = Node::Scalar(ownvalue_to_yaml(value)?),

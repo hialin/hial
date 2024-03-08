@@ -6,11 +6,12 @@ use quick_xml::{
 use std::{fs::File, io::BufRead, rc::Rc};
 
 use crate::{
-    base::{Cell as XCell, *},
+    api::{interpretation::*, Cell as XCell, *},
     debug, guard_variant,
     utils::{
         indentation::{detect_file_indentation, detect_indentation},
         ownrc::{OwnRc, ReadRc, WriteRc},
+        ownrcutils::read,
     },
 };
 
@@ -460,7 +461,7 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn value(&mut self, value: OwnValue) -> Res<()> {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
         match self {
             CellWriter::Node { nodes, pos } => match &mut nodes[*pos] {
                 Node::Document(_) => return userres("cannot set value of document"),

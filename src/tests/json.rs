@@ -1,6 +1,4 @@
-use crate::base::*;
-use crate::pprint::pprint;
-use crate::utils::log::set_verbose;
+use crate::{api::*, pprint::pprint, utils::log::set_verbose};
 
 #[test]
 fn test_json() -> Res<()> {

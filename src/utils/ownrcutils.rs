@@ -1,6 +1,7 @@
-use crate::utils::ownrc::{OwnRc, ReadRc, WriteRc};
-
-use super::{lockerr, Res};
+use crate::{
+    api::*,
+    utils::ownrc::{OwnRc, ReadRc, WriteRc},
+};
 
 pub fn read<T>(o: &OwnRc<T>) -> Res<ReadRc<T>> {
     o.read().ok_or_else(|| lockerr("cannot read"))

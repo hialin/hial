@@ -1,4 +1,4 @@
-use crate::base::{Cell as XCell, *};
+use crate::api::{interpretation::*, Cell as XCell, *};
 use crate::utils::ownrc::{OwnRc, ReadRc, WriteRc};
 
 #[derive(Clone, Debug)]
@@ -48,7 +48,7 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn value(&mut self, value: OwnValue) -> Res<()> {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
         *self.0 = value;
         Ok(())
     }

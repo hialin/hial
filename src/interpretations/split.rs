@@ -1,25 +1,25 @@
 use std::rc::Rc;
 
 use linkme::distributed_slice;
-use reqwest::Url;
-use url::ParseError;
 
-use crate::api::{interpretation::*, Cell as XCell, *};
+use crate::base::{Cell as XCell, *};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_URL: ElevationConstructor = ElevationConstructor {
     source_interpretations: &["value"],
-    target_interpretations: &["url"],
     constructor: Cell::from_cell,
 };
 
 #[derive(Clone, Debug)]
 pub(crate) struct Data {
-    url: Url,
+    captures: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Cell(Rc<Data>);
+pub(crate) enum Cell {
+    Root(OwnRc<Data>),
+    Capture(OwnRc<Data>, usize),
+}
 
 #[derive(Debug)]
 pub(crate) struct CellReader(Rc<Data>);
@@ -28,13 +28,14 @@ pub(crate) struct CellReader(Rc<Data>);
 pub(crate) struct CellWriter {}
 
 impl Cell {
-    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: XCell, _: &str, params: ElevationParams) -> Res<XCell> {
         match cell.interpretation() {
             "value" => {
                 let r = cell.read();
                 let v = r.value()?;
                 let cow = v.as_cow_str();
                 let value = cow.as_ref();
+                let captures = value.split('/').map(|s| s.to_string()).collect();
                 let url_cell = Cell(Rc::new(Data {
                     url: Url::parse(value)?,
                 }));
@@ -81,7 +82,7 @@ impl CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+    fn value(&mut self, value: OwnValue) -> Res<()> {
         match value {
             OwnValue::String(s) => {
                 let url = Url::parse(s.as_str())?;

@@ -6,7 +6,8 @@ use std::{
 use linkme::distributed_slice;
 
 use crate::{
-    base::{Cell as XCell, *},
+    api::interpretation::*,
+    api::{Cell as XCell, *},
     utils::ownrc::{OwnRc, ReadRc, WriteRc},
 };
 
@@ -87,7 +88,7 @@ impl CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn value(&mut self, value: OwnValue) -> Res<()> {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
         match value {
             OwnValue::String(s) => {
                 *(self.0) = PathBuf::from(s);

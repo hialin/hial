@@ -3,7 +3,10 @@ use linkme::distributed_slice;
 use std::{cell::OnceCell, fmt::Debug, rc::Rc};
 use tree_sitter::{Parser, Tree, TreeCursor};
 
-use crate::{base::Cell as XCell, base::*, *};
+use crate::{
+    api::{interpretation::*, Cell as XCell, *},
+    guard_ok, guard_some,
+};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_RUST: ElevationConstructor = ElevationConstructor {
@@ -98,9 +101,9 @@ impl Cell {
 fn sitter_from_source(source: String, language: String) -> Res<Cell> {
     let sitter_language = match language.as_str() {
         // "go" => unsafe { tree_sitter_go() },
-        "javascript" => unsafe { tree_sitter_javascript() },
+        "javascript" => unsafe { crate::tree_sitter_javascript() },
         // "python" => unsafe { tree_sitter_python() },
-        "rust" => unsafe { tree_sitter_rust() },
+        "rust" => unsafe { crate::tree_sitter_rust() },
         _ => return userres(format!("unsupported language: {}", language)),
     };
 
@@ -199,7 +202,7 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for Cell {
-    fn value(&mut self, value: OwnValue) -> Res<()> {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
         // TODO: not clear how to edit the tree because afterwards
         // some cursors/cells will be invalid
         todo!() // TODO: implement this somehow

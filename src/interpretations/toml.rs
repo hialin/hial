@@ -6,7 +6,7 @@ use nom::AsBytes;
 use {toml, toml::Value as TomlValue};
 
 use crate::{
-    base::{Cell as XCell, *},
+    api::{interpretation::*, Cell as XCell, *},
     utils::ownrc::{OwnRc, ReadRc, WriteRc},
 };
 
@@ -173,7 +173,7 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn value(&mut self, value: OwnValue) -> Res<()> {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
         match self.nodes {
             WriteNodeGroup::Array(ref mut a) => {
                 a[self.pos] = Node::Scalar(to_toml(value)?);

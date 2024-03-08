@@ -1,4 +1,4 @@
-use hiallib::base::*;
+use hiallib::api::*;
 // use hiallib::c_api::*;
 // use std::ffi::CString;
 

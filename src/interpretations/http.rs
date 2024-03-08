@@ -3,7 +3,8 @@ use linkme::distributed_slice;
 use reqwest::{blocking::Client, Error as ReqwestError};
 
 use crate::{
-    base::{Cell as XCell, *},
+    api::interpretation::*,
+    api::{Cell as XCell, *},
     utils::ownrc::*,
 };
 
@@ -244,7 +245,7 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn value(&mut self, value: OwnValue) -> Res<()> {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
         fault("set_value not yet implemented for http")
     }
 }

@@ -1,6 +1,6 @@
 use std::{fmt::Debug, marker::PhantomData};
 
-use crate::base::*;
+use crate::api::*;
 
 pub trait CellTrait: Clone + Debug {
     type Group: GroupTrait;
@@ -40,15 +40,15 @@ pub trait CellWriterTrait: Debug {
         todo!() // TODO: remove this default implementation
     }
 
-    fn set_index(&mut self, value: OwnValue) -> Res<()> {
+    fn set_index(&mut self, value: usize) -> Res<()> {
         todo!() // TODO: remove this default implementation
     }
 
-    fn label(&mut self, value: OwnValue) -> Res<()> {
+    fn set_label(&mut self, value: OwnValue) -> Res<()> {
         todo!() // TODO: remove this default implementation
     }
 
-    fn value(&mut self, value: OwnValue) -> Res<()>;
+    fn set_value(&mut self, value: OwnValue) -> Res<()>;
 
     fn set_serial(&mut self, value: OwnValue) -> Res<()> {
         todo!() // TODO: remove this default implementation

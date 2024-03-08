@@ -1,4 +1,4 @@
-use crate::{base::*, utils::log::set_verbose};
+use crate::{api::*, utils::log::set_verbose};
 
 #[test]
 fn test_simple_path() -> Res<()> {

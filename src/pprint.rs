@@ -1,6 +1,6 @@
 use std::fmt::{Error, Write};
 
-use crate::base::*;
+use crate::api::*;
 
 const SPACE_TO_SEPARATOR: usize = 32;
 const SEPARATORS: &[&str] = &["│ ", "╞ ", "┝ ", "├ "];

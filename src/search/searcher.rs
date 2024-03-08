@@ -6,9 +6,9 @@
 /// cell.
 /// Loosely inspired from https://swtch.com/~rsc/regexp/regexp2.html
 use crate::{
-    base::*,
+    api::*,
     debug_err, guard_ok, guard_some,
-    pathlang::{
+    search::{
         path::{Expression, PathItem},
         Path,
     },

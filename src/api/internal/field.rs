@@ -3,7 +3,7 @@
 ///
 use std::{cell::OnceCell, rc::Rc};
 
-use crate::base::*;
+use crate::{api::interpretation::*, api::*};
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -185,13 +185,25 @@ impl CellReaderTrait for FieldReader {
 }
 
 impl CellWriterTrait for FieldWriter {
-    fn value(&mut self, value: OwnValue) -> Res<()> {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
         match self.ty {
             FieldType::Value => self.writer.value(value),
             FieldType::Label => self.writer.label(value),
-            FieldType::Type => userres("cannot change cell type"),
-            FieldType::Index => self.writer.set_index(value),
-            FieldType::Serial => self.writer.set_serial(value),
+            FieldType::Type => {
+                if let OwnValue::String(t) = value {
+                    self.writer.ty(t.as_str())
+                } else {
+                    userres("set type argument must be a string")
+                }
+            }
+            FieldType::Index => {
+                if let OwnValue::Int(i) = value {
+                    self.writer.index(i.as_i128() as usize)
+                } else {
+                    userres("set type argument must be a string")
+                }
+            }
+            FieldType::Serial => self.writer.serial(value),
         }
     }
 }

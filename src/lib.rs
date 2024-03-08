@@ -8,12 +8,12 @@ bare_trait_objects,
 // missing_docs
 )]
 
-pub mod base;
+pub mod api;
 // pub mod c_api;
 mod interpretations;
-pub mod pathlang;
 pub mod perftests;
 pub mod pprint;
+pub mod search;
 pub mod utils;
 
 #[cfg(test)]

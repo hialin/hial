@@ -1,6 +1,6 @@
-use std::borrow::Borrow;
-use std::cell::OnceCell;
 use std::{
+    borrow::Borrow,
+    cell::OnceCell,
     cmp::Ordering,
     ffi::OsString,
     fs,
@@ -10,10 +10,11 @@ use std::{
 use indexmap::{indexmap, IndexMap};
 use linkme::distributed_slice;
 
-use crate::utils::ownrc::{OwnRc, ReadRc, WriteRc};
 use crate::{
-    base::{Cell as XCell, *},
+    api::interpretation::*,
+    api::{Cell as XCell, *},
     guard_ok, guard_some,
+    utils::ownrc::{OwnRc, ReadRc, WriteRc},
 };
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
@@ -172,7 +173,7 @@ impl CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn value(&mut self, value: OwnValue) -> Res<()> {
+    fn set_value(&mut self, value: OwnValue) -> Res<()> {
         let string_value = value.to_string();
         let fe = self.fileentry()?;
         let md = fe.metadata.as_ref().map_err(|e| e.clone())?;
