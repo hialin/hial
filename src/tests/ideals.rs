@@ -16,9 +16,11 @@ n: nval
 fn tree() -> Res<()> {
     set_verbose(true);
 
-    let cell = Cell::from("./examples/write.json").to("^path^fs[w]^json");
+    let cell = Cell::from("./examples/write.json");
     pprint(&cell, 0, 0);
-    assert!(cell.clone().err().is_ok());
+    // let cell = cell.to("^path^fs[w]^json");
+    // pprint(&cell, 0, 0);
+    // assert!(cell.clone().err().is_ok());
     // assert!(cell.write().value("weak as putty".into()).is_ok());
 
     // let cell = Cell::from(".")

@@ -1,9 +1,9 @@
 // #![feature(test)]
 #![allow(unused_variables, dead_code)]
 #![deny(
-// warnings, // todo uncomment this
+// warnings, // TODO: uncomment this
 missing_debug_implementations,
-// missing_copy_implementations, // todo uncomment this
+// missing_copy_implementations, // TODO: uncomment this
 bare_trait_objects,
 // missing_docs
 )]

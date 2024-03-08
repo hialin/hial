@@ -1,4 +1,4 @@
-use std::fmt::Error;
+use std::fmt::{Error, Write};
 
 use crate::base::*;
 
@@ -84,32 +84,7 @@ fn make_indent(indent: usize, buffer: &mut String) -> Result<(), Error> {
     Ok(())
 }
 
-fn print_value(buffer: &mut String, indent: usize, s: &str) -> Result<(), Error> {
-    use std::fmt::Write;
-    if !s.contains('\n') {
-        return write!(buffer, "{}", s);
-    }
-
-    let mut pre = String::new();
-    make_indent(indent, &mut pre)?;
-    pre.push_str("❝ ");
-
-    for (i, l) in s.split('\n').enumerate() {
-        if i == 0 {
-            writeln!(buffer, "❝ {}", l)?;
-        } else {
-            writeln!(buffer, "{}{}", pre, l)?;
-        }
-    }
-    if buffer.ends_with("\n\n") {
-        buffer.pop(); // remove last '\n'
-    }
-    Ok(())
-}
-
 fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> Result<(), Error> {
-    use std::fmt::Write;
-
     let mut typ = String::new();
     write!(buffer, "{} ", cell.interpretation(),)?;
 
@@ -163,7 +138,7 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
                 if empty {
                     empty = v.is_empty();
                 }
-                print_value(buffer, indent, v.as_cow_str().as_ref())
+                print_value(buffer, indent, v)
             }
             Err(err) => {
                 if err.kind == HErrKind::None {
@@ -182,5 +157,45 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
 
     println!("{}", buffer);
     buffer.clear();
+    Ok(())
+}
+
+fn print_value(buffer: &mut String, indent: usize, v: Value) -> Result<(), Error> {
+    match v {
+        Value::None => write!(buffer, "None"),
+        Value::Bool(x) => write!(buffer, "{}", x),
+        Value::Int(x) => write!(buffer, "{}", x),
+        Value::Float(x) => write!(buffer, "{}", x),
+        Value::Str(x) => print_string(buffer, indent, x),
+        Value::Bytes(x) => {
+            write!(buffer, "⟨")?;
+            write_bytes(buffer, x)?;
+            write!(buffer, "⟩")
+        }
+    }
+}
+
+fn print_string(buffer: &mut String, indent: usize, s: &str) -> Result<(), Error> {
+    if !s.contains('\n') {
+        return write!(buffer, "{}", s);
+    }
+
+    let mut pre = String::new();
+    make_indent(indent, &mut pre)?;
+    pre.push_str("❝ ");
+
+    for (i, l) in s.split('\n').enumerate() {
+        if i == 0 {
+            writeln!(buffer, "❝ {}", l)?;
+        } else {
+            writeln!(buffer, "{}{}", pre, l)?;
+        }
+    }
+    if buffer.ends_with("\n\n") {
+        buffer.pop(); // remove last '\n'
+    }
+    if buffer.ends_with('\n') {
+        buffer.pop();
+    }
     Ok(())
 }
