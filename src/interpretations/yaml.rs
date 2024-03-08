@@ -85,20 +85,10 @@ impl Cell {
                 let r = cell.read();
                 let path = r.as_file_path()?;
                 File::open(path)
-                    .map_err(|e| {
-                        caused(
-                            HErrKind::IO,
-                            format!("cannot open file: {}", path.to_string_lossy()),
-                            e,
-                        )
-                    })?
+                    .map_err(|e| caused(HErrKind::IO, format!("cannot open file: {:?}", path), e))?
                     .read_to_string(&mut source)
                     .map_err(|e| {
-                        caused(
-                            HErrKind::IO,
-                            format!("cannot read file: {}", path.to_string_lossy()),
-                            e,
-                        )
+                        caused(HErrKind::IO, format!("cannot read file: {:?}", path), e)
                     })?;
                 Cell::make_cell(source, Some(cell))
             }
@@ -198,7 +188,7 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+    fn value(&mut self, value: OwnValue) -> Res<()> {
         match self.nodes {
             WriteNodeGroup::Array(ref mut a) => match a.get_mut(self.pos) {
                 Some(x) => *x = Node::Scalar(ownvalue_to_yaml(value)?),

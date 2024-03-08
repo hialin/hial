@@ -90,8 +90,8 @@ fn elevation_map(interpretation: &str) -> Res<Arc<IndexMap<&'static str, Elevate
     nores()
 }
 
-pub(crate) fn top_interpretation(cell: &Cell) -> Option<&str> {
-    if cell.interpretation() == "fs" && cell.read().ty().ok()? == "fs" {
+pub(crate) fn auto_interpretation(cell: &Cell) -> Option<&str> {
+    if cell.interpretation() == "fs" && cell.read().ty().ok()? == "file" {
         if let Ok(reader) = cell.read().err() {
             if let Ok(Value::Str(name)) = reader.label() {
                 if name.ends_with(".c") {
@@ -158,7 +158,7 @@ impl ElevationGroup {
     pub fn get(&self, key: Value) -> Res<Cell> {
         let old_interp = self.0.interpretation();
         let interp = match key {
-            Value::None => guard_some!(top_interpretation(&self.0), {
+            Value::None => guard_some!(auto_interpretation(&self.0), {
                 return nores();
             }),
             Value::Str(k) => k,

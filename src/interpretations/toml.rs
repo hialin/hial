@@ -87,8 +87,9 @@ impl Cell {
                 let r = cell.read();
                 let path = r.as_file_path()?;
                 Self::make_cell(
-                    &std::fs::read_to_string(path)
-                        .map_err(|e| caused(HErrKind::IO, "cannot read file", e))?,
+                    &std::fs::read_to_string(path).map_err(|e| {
+                        caused(HErrKind::IO, format!("cannot read file: {:?}", path), e)
+                    })?,
                     Some(cell),
                 )
             }
@@ -172,7 +173,7 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+    fn value(&mut self, value: OwnValue) -> Res<()> {
         match self.nodes {
             WriteNodeGroup::Array(ref mut a) => {
                 a[self.pos] = Node::Scalar(to_toml(value)?);

@@ -45,7 +45,7 @@ fn rust_write_and_save() -> Res<()> {
     // TODO: writable rust
     // root.to("/[7]/[1]")
     //     .write()
-    //     .set_value("modified_rust_fn".into())?;
+    //     .value("modified_rust_fn".into())?;
     // assert_eq!(root.to("/[7]/[1]").read().value()?, "modified_rust_fn");
 
     // root.save(&root.origin())?;
@@ -53,7 +53,7 @@ fn rust_write_and_save() -> Res<()> {
 
     // root.to("/[7]/[1]")
     //     .write()
-    //     .set_value("editable_rust_fn".into())?;
+    //     .value("editable_rust_fn".into())?;
     // assert_eq!(root.to("/[7]/[1]").read().value()?, "editable_rust_fn");
 
     // root.save(&file.clone())?;

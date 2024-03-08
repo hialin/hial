@@ -44,11 +44,11 @@ pub trait CellWriterTrait: Debug {
         todo!() // TODO: remove this default implementation
     }
 
-    fn set_label(&mut self, value: OwnValue) -> Res<()> {
+    fn label(&mut self, value: OwnValue) -> Res<()> {
         todo!() // TODO: remove this default implementation
     }
 
-    fn set_value(&mut self, value: OwnValue) -> Res<()>;
+    fn value(&mut self, value: OwnValue) -> Res<()>;
 
     fn set_serial(&mut self, value: OwnValue) -> Res<()> {
         todo!() // TODO: remove this default implementation

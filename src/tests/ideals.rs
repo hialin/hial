@@ -16,21 +16,16 @@ n: nval
 fn tree() -> Res<()> {
     set_verbose(true);
 
-    // this should set the json value on the cell
-    // and write back by doing a put request
-    let cell = Cell::from("./examples/write.json")
-        .policy(WritePolicy::WriteBackOnDrop)
-        .to("^path^fs^json");
+    let cell = Cell::from("./examples/write.json").to("^path^fs[w]^json");
     pprint(&cell, 0, 0);
     assert!(cell.clone().err().is_ok());
-    // assert!(cell.write().set_value("weak as putty".into()).is_ok());
+    // assert!(cell.write().value("weak as putty".into()).is_ok());
 
     // let cell = Cell::from(".")
-    //     .policy(WritePolicy::WriteBackOnDrop)
-    //     .to("^path^fs/examples/productiondump.json")
+    //     .to("^path^fs[w]/examples/productiondump.json")
     //     .to("^json/stacks/*/dockerCompose")
-    //     .to("^docker.compose/services/scheduler/image")
-    //     .to("^docker.imagetag/tag")
+    //     .to("^yaml/services/scheduler/image")
+    //     .to("^split(':')/[-1]")
     //     .err()?;
 
     // assert_eq!(
@@ -44,7 +39,7 @@ fn tree() -> Res<()> {
     //     .policy(WritePolicy::WriteBackOnDrop)
     //     .to(cell.path()?.as_str())
     //     .write()
-    //     .set_value("0.8.8".into())?;
+    //     .value("0.8.8".into())?;
 
     // assert_eq!(
     //     cell.origin().to(cell.path()?.as_str()).read().value()?,

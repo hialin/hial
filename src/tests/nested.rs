@@ -55,7 +55,7 @@ fn test_nested_mut() -> Res<()> {
         println!("6");
         assert_eq!(cell.read().value()?, "yaml string");
         println!("7");
-        cell.write().set_value("NEW YAML STRING".into())?;
+        cell.write().value("NEW YAML STRING".into())?;
         println!("8");
         println!("mytext cell: {:?}\n", cell);
     }

@@ -48,7 +48,7 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+    fn value(&mut self, value: OwnValue) -> Res<()> {
         *self.0 = value;
         Ok(())
     }

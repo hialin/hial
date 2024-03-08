@@ -1,11 +1,9 @@
 # List of Todos and other Issues
 
-- replace set_value(x) with value(x)
+- support type selector: `hial './src/tests/rust.rs^rust/*[:function_item]'`
 - add split(":") and regex interpretations
-- /*[type().ends_with()] ?? -> or not, just replace it with #type^split("_")/[-1]=="xx"
 - /*[name|parameters|return_type] ??
-- ^fs[rw] ??
-- should blobs/bytes be part of value? they are only useful by reinterpretation
+- ^fs[w] ??
 - set value on the command line: '/username = "newuser"'
 - https://raw.githubusercontent.com/rust-lang/rust/master/src/tools/rustfmt/src/lib.rs^http^rust does not work
 - support zip, markdown
@@ -13,11 +11,11 @@
 - support ^json^tree^xml
 - support diff  ./file.json^json^tree  ./file.xml^xml^tree
 - '**[filter]' must be work as '**/*[filter]' (filter to be applied only on leaves)
-- support type selector: `hial './src/tests/rust.rs^rust/*[:function_item]'`
 - support rust/ts write: `hial './src/tests/rust.rs^rust/*[:function_item].label = "modified_fn_name"'`
 - new structure: /api, /api/impl, /interpretations/api, /interpretations/*, /search
 - add http interpretation params: method=HEAD, accept=""
 - functions
+- should blobs/bytes be part of value? they are only useful by reinterpretation
 
 - release first minimal version:
     - interpretations: path+fs, json+yaml+toml+xml, rust+js, url?+http

@@ -87,7 +87,7 @@ impl CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+    fn value(&mut self, value: OwnValue) -> Res<()> {
         match value {
             OwnValue::String(s) => {
                 *(self.0) = PathBuf::from(s);

@@ -285,7 +285,7 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn set_label(&mut self, label: OwnValue) -> Res<()> {
+    fn label(&mut self, label: OwnValue) -> Res<()> {
         match self.nodes {
             WriteNodeGroup::Array(_) => {
                 return userres("cannot set label on array object");
@@ -300,7 +300,7 @@ impl CellWriterTrait for CellWriter {
         };
         Ok(())
     }
-    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+    fn value(&mut self, value: OwnValue) -> Res<()> {
         match self.nodes {
             WriteNodeGroup::Array(ref mut a) => {
                 a[self.pos] = Node::Scalar(ownvalue_to_serde(value));

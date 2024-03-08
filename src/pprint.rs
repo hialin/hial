@@ -180,20 +180,6 @@ fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> 
         write!(buffer, "•")?;
     }
 
-    match cell.sub().err() {
-        Ok(group) => {
-            let kt = group.label_type();
-            write!(buffer, "{}", if kt.is_indexed { "" } else { " ∤" })
-        }
-        Err(err) => {
-            if err.kind == HErrKind::None {
-                write!(buffer, "")
-            } else {
-                write!(buffer, "⚠{:?}⚠", err)
-            }
-        }
-    }?;
-
     println!("{}", buffer);
     buffer.clear();
     Ok(())

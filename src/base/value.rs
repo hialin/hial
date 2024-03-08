@@ -6,6 +6,7 @@ use core::{
 use std::borrow::{Borrow, Cow};
 
 pub const DISPLAY_VALUE_NONE: &str = "ø"; // ❍•⸰·
+pub const DISPLAY_BYTES_VALUE_LEN: usize = 72;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Int {
@@ -174,7 +175,11 @@ impl<'a> Display for Value<'a> {
             Value::Float(x) => write!(buf, "{}", x),
             Value::Str(x) => write!(buf, "{}", x),
             // Value::OsStr(x) => write!(buf, "{}", x.to_string_lossy()),
-            Value::Bytes(x) => write!(buf, "{}", String::from_utf8_lossy(x)),
+            Value::Bytes(x) => {
+                write!(buf, "⟨")?;
+                write_bytes(buf, x)?;
+                write!(buf, "⟩")
+            }
         }
     }
 }
@@ -189,15 +194,29 @@ impl<'a> fmt::Debug for Value<'a> {
             Value::Str(x) => write!(buf, "Value::Str({:?})", x),
             // Value::OsStr(x) => write!(buf, "{}", x.to_string_lossy()),
             Value::Bytes(x) => {
-                let sb = String::from_utf8_lossy(x);
-                let s = sb.as_ref();
-                if s.len() > 120 {
-                    write!(buf, "Value::Bytes(len {}, \"{}\"...)", s.len(), &s[..120])
-                } else {
-                    write!(buf, "Value::Bytes(len {}, \"{}\")", s.len(), s)
-                }
+                write!(buf, "Value::Bytes(len {}, \"", x.len())?;
+                write_bytes(buf, x)?;
+                write!(buf, "\")")
             }
         }
+    }
+}
+
+fn write_bytes(buf: &mut fmt::Formatter, x: &[u8]) -> fmt::Result {
+    let sb = String::from_utf8_lossy(x);
+    let s = sb.as_ref();
+    let not_ascii = |c| !(' '..='~').contains(&c);
+    if s.contains(not_ascii) {
+        let s = s.replace(not_ascii, ".");
+        if s.len() > DISPLAY_BYTES_VALUE_LEN {
+            write!(buf, "{}", &s[..DISPLAY_BYTES_VALUE_LEN])
+        } else {
+            write!(buf, "{}", s)
+        }
+    } else if s.len() > DISPLAY_BYTES_VALUE_LEN {
+        write!(buf, "{}", &s[..DISPLAY_BYTES_VALUE_LEN])
+    } else {
+        write!(buf, "{}", s)
     }
 }
 

@@ -34,7 +34,7 @@ pub(crate) struct CellReader {
     files: ReadRc<FileList>,
     ty: GroupType,
     pos: u32,
-    cached_value: OnceCell<String>,
+    cached_value: OnceCell<Box<[u8]>>,
 }
 
 #[derive(Debug)]
@@ -129,12 +129,13 @@ impl CellReaderTrait for CellReader {
                     let content = std::fs::read(&fe.path).map_err(|e| {
                         caused(HErrKind::IO, format!("cannot read file: {:?}", fe.path), e)
                     })?;
-                    let content = String::from_utf8_lossy(&content);
+                    // let content = String::from_utf8_lossy(&content);
                     self.cached_value
-                        .set(content.into_owned())
+                        .set(content.into_boxed_slice())
                         .map_err(|_| faulterr("cannot set cached value, it is already set"))?;
                 }
-                Ok(Value::Str(self.cached_value.get().unwrap()))
+                // Ok(Value::Str(self.cached_value.get().unwrap()))
+                Ok(Value::Bytes(self.cached_value.get().unwrap()))
             }
             GroupType::FileAttributes(fpos) => {
                 if self.pos != 0 {
@@ -171,7 +172,7 @@ impl CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+    fn value(&mut self, value: OwnValue) -> Res<()> {
         let string_value = value.to_string();
         let fe = self.fileentry()?;
         let md = fe.metadata.as_ref().map_err(|e| e.clone())?;

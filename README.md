@@ -25,7 +25,7 @@ hial 'http://api.github.com^http^json/rate_limit_url^http^json/resources/core'
 
 ```bash
 hial './myfile.json^json/question[count(/answer_entities/*)==0]'
-# 🚧 wip: functions: sum, count, min, max
+# 🚧 todo: functions: sum, count, min, max
 ``` -->
 
 Print all services with inaccessible images in a Docker compose file:
@@ -33,8 +33,8 @@ Print all services with inaccessible images in a Docker compose file:
 ```bash
 # shell
 hial './config.yaml^yaml/services/*[ /image^split[":"]/[0]^http[HEAD]@status/code>=400 ]'
-# 🚧 wip: split interpretation (regex[( ([^:]*): )*]
-# 🚧 wip: HEAD param for http
+# 🚧 todo: split interpretation (regex[( ([^:]*): )*]
+# 🚧 todo: HEAD param for http
 ```
 
 ```rust
@@ -54,7 +54,7 @@ Print the structure of a rust file (struct, enum, type, functions) as a tree:
 
 ```bash
 hial './src/tests/rust.rs^rust/**[#type^split["_"]/[-1]=="item"]/*[name|parameters|return_type]'
-# 🚧 wip: search results as tree
+# 🚧 todo: search results as tree
 ```
 
 ##### 2. Modify data selected as above.
@@ -62,30 +62,30 @@ hial './src/tests/rust.rs^rust/**[#type^split["_"]/[-1]=="item"]/*[name|paramete
 Change the default mysql port systemwide:
 ```bash
 # shell
-hial '/etc/mysql/my.cnf^fs[rw]^ini/mysqld/port = 3307'
-# 🚧 wip: rw parameter for fs interpretation
+hial '/etc/mysql/my.cnf^fs[w]^ini/mysqld/port = 3307'
+# 🚧 todo: rw parameter for fs interpretation
 ```
 
 ```bash
 // rust
 Cell::from("/etc/mysql/my.cnf")
-    .to("^fs[rw]^ini/mysqld/port")
+    .to("^fs[w]^ini/mysqld/port")
     .write()
-    .set_value(3307)?;
+    .value(3307)?;
 ```
 
 Change the user's docker configuration:
 ```bash
 # shell
 hial '~/.docker/config.json^json/auths/docker.io/username = "newuser"'
-# 🚧 wip: support ~
+# 🚧 todo: support ~
 ```
 ```rust
 // rust
 Cell::from("~/.docker/config.json")
-    .to("^fs[rw]^json/auths/docker.io/username")
+    .to("^fs[w]^json/auths/docker.io/username")
     .write()
-    .set_value("newuser")?;
+    .value("newuser")?;
 ```
 
 ##### 3. Copy pieces of data from one place to another.
@@ -94,19 +94,20 @@ Copy a string from some json object entry which is embedded in a zip file, into 
 
 ```bash
 # shell
-hial 'copy( ./assets.zip^zip/data.json^json/meshes/sphere  ./src/assets/sphere.rs^rust/**[:let_declaration][/pattern=sphere]/value )'
-# 🚧 wip: support copy
-# 🚧 wip: support zip
-# 🚧 wip: support :type filter
-# 🚧 wip: /**[filter] should match leaves only
+hial 'copy ./assets.zip^zip/data.json^json/meshes/sphere  ./src/assets/sphere.rs^rust/**[#type=="let_declaration"][/pattern=sphere]/value'
+# 🚧 todo: support copy
+# 🚧 todo: support zip
+# 🚧 todo: /**[filter] should match leaves only
 ```
 
 Split a markdown file into sections and put each in a separate file:
 
 ```bash
 # shell
-`hial 'copy  ./book.md^md/*[:heading1][as x]  ./{label(x)}.md'
-# 🚧 wip: support markdown
+`hial 'copy  ./book.md^md/*[#type=="heading1"][as x]  ./{label(x)}.md'
+# 🚧 todo: support copy
+# 🚧 todo: support markdown
+# 🚧 todo: support interpolation in destination
 ```
 
 ##### 4. Transform data from one format or shape into another.
@@ -116,7 +117,8 @@ Transform a json file into an xml file with the same format and vice versa:
 ```bash
 hial 'copy  file.json^json^tree^xml  ./file.xml'
 hial 'copy  file.xml^xml^tree^json  ./file.json'
-# 🚧 wip: support tree implementation and conversion
+# 🚧 todo: support copy
+# 🚧 todo: support tree implementation and conversion
 ```
 
 ##### 5. Structured diffs
@@ -125,7 +127,8 @@ Compare two files in different formats and print the resulting diff tree:
 
 ```bash
 hial 'diff  ./file.json^json^tree  ./file.xml^xml^tree'
-# 🚧 wip: support diff
+# 🚧 todo: support diff
+# 🚧 todo: support tree implementation and conversion
 ```
 
 ## Installation and usage
@@ -154,7 +157,7 @@ Cell: value = String("{\"a\":1}"),
 
 3. a json object which is represented by a tree of cells, the root cell being the json object `{}` with a sub cell with label `a` and value `1`:
 
-```json
+```yaml
 Cell:
     type: "object",
     sub:

@@ -43,9 +43,9 @@ fn fs_write() -> Res<()> {
         .policy(WritePolicy::NoAutoWrite)
         .to(p)
         .err()?;
-    c.write().set_value(t.into())?;
+    c.write().value(t.into())?;
     assert_eq!(Cell::from(".").to(p).read().value()?, t);
-    c.write().set_value("-".into())?;
+    c.write().value("-".into())?;
     assert_eq!(Cell::from(".").to(p).read().value()?, "-");
     Ok(())
 }

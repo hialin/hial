@@ -268,14 +268,14 @@ impl CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn set_label(&mut self, value: OwnValue) -> Res<()> {
+    fn label(&mut self, value: OwnValue) -> Res<()> {
         self.domain.dirty.set(true);
-        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.set_label(value) })
+        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.label(value) })
     }
 
-    fn set_value(&mut self, ov: OwnValue) -> Res<()> {
+    fn value(&mut self, ov: OwnValue) -> Res<()> {
         self.domain.dirty.set(true);
-        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.set_value(ov) })
+        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.value(ov) })
     }
 }
 impl CellWriter {
@@ -372,11 +372,11 @@ impl Cell {
         }
     }
 
-    pub fn top_interpretation(&self) -> Option<&str> {
+    pub fn auto_interpretation(&self) -> Option<&str> {
         if let DynCell::Error(_) = self.dyn_cell {
             return None;
         }
-        elevation::top_interpretation(self)
+        elevation::auto_interpretation(self)
     }
 
     pub fn elevate(&self) -> Group {
@@ -666,7 +666,7 @@ impl Cell {
 
     fn save_from_to(dyn_cell: &DynCell, target: &Cell) -> Res<()> {
         let serial = dispatch_dyn_cell!(dyn_cell, |x| { x.read()?.serial()? });
-        target.write().set_value(OwnValue::String(serial))
+        target.write().value(OwnValue::String(serial))
     }
 }
 

@@ -245,7 +245,7 @@ impl CellReaderTrait for HErr {
 }
 
 impl CellWriterTrait for HErr {
-    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+    fn value(&mut self, value: OwnValue) -> Res<()> {
         Err(self.clone())
     }
 }

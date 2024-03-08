@@ -52,7 +52,7 @@ fn toml_write_and_save() -> Res<()> {
     let v = toml.to("/number/x");
     assert_eq!(v.read().value()?, Value::from(23.1415));
 
-    v.write().set_value(1.1415.into())?;
+    v.write().value(1.1415.into())?;
     let v = toml.to("/number/x");
     assert_eq!(v.read().value()?, Value::from(1.1415));
 

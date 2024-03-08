@@ -460,7 +460,7 @@ impl CellReaderTrait for CellReader {
 }
 
 impl CellWriterTrait for CellWriter {
-    fn set_value(&mut self, value: OwnValue) -> Res<()> {
+    fn value(&mut self, value: OwnValue) -> Res<()> {
         match self {
             CellWriter::Node { nodes, pos } => match &mut nodes[*pos] {
                 Node::Document(_) => return userres("cannot set value of document"),
