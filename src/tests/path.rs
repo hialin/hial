@@ -11,7 +11,7 @@ fn test_simple_path() -> Res<()> {
                     x: xc
                     y: yc
         "#;
-    let root = Cell::from(TREE).be("yaml");
+    let root = Xell::from(TREE).be("yaml");
     let x = root.to("/a/b/c/x");
     assert_eq!(x.path()?, "`\\n            a:...`^yaml/a/b/c/x");
     Ok(())
@@ -21,7 +21,7 @@ fn test_simple_path() -> Res<()> {
 fn test_multihop_path() -> Res<()> {
     set_verbose(true);
 
-    let start = Cell::from("http://api.github.com");
+    let start = Xell::from("http://api.github.com");
     let path = "^http^json/rate_limit_url^http^json/resources/core/limit";
 
     let results = start.all(path)?;

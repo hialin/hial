@@ -4,7 +4,7 @@ use std::{cell::OnceCell, fmt::Debug, rc::Rc};
 use tree_sitter::{Parser, Tree, TreeCursor};
 
 use crate::{
-    api::{interpretation::*, Cell as XCell, *},
+    api::{interpretation::*, *},
     guard_ok, guard_some,
 };
 
@@ -49,7 +49,7 @@ impl fmt::Debug for Cell {
 }
 
 impl Cell {
-    pub(crate) fn from_cell(cell: XCell, lang: &'static str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: Xell, lang: &'static str) -> Res<Xell> {
         match cell.interpretation() {
             "value" => {
                 let source = cell.read().value()?.as_cow_str().into_owned();
@@ -67,9 +67,9 @@ impl Cell {
         }
     }
 
-    fn make_cell(source: String, language: String, origin: Option<XCell>) -> Res<XCell> {
+    fn make_cell(source: String, language: String, origin: Option<Xell>) -> Res<Xell> {
         let ts_cell = sitter_from_source(source, language)?;
-        Ok(new_cell(DynCell::from(ts_cell), origin))
+        Ok(new_xell(DynCell::from(ts_cell), origin))
     }
 
     fn is_leaf(&self) -> bool {

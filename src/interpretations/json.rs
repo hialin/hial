@@ -7,7 +7,7 @@ use serde_json::{ser::PrettyFormatter, Serializer, Value as SValue};
 
 use crate::{
     api::interpretation::*,
-    api::{Cell as XCell, *},
+    api::*,
     guard_some,
     utils::{
         indentation::{detect_file_indentation, detect_indentation},
@@ -74,7 +74,7 @@ pub(crate) enum WriteNodeGroup {
 }
 
 impl Cell {
-    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: Xell, _: &str) -> Res<Xell> {
         let (serde_value, indent) = match cell.interpretation() {
             "value" => {
                 let s = cell.read().value()?.to_string();
@@ -103,7 +103,7 @@ impl Cell {
         Self::from_serde_value(serde_value, Some(cell), indent)
     }
 
-    fn from_serde_value(json: SValue, origin: Option<XCell>, indent: String) -> Res<XCell> {
+    fn from_serde_value(json: SValue, origin: Option<Xell>, indent: String) -> Res<Xell> {
         let nodes = OwnRc::new(vec![serde_to_node(json)]);
         let json_cell = Cell {
             group: Group {
@@ -113,7 +113,7 @@ impl Cell {
             },
             pos: 0,
         };
-        Ok(new_cell(DynCell::from(json_cell), origin))
+        Ok(new_xell(DynCell::from(json_cell), origin))
     }
 }
 

@@ -125,17 +125,17 @@ fn fmt_path_item(path_item: &PathItem, f: &mut Formatter<'_>) -> std::fmt::Resul
 }
 
 impl<'a> PathStart<'a> {
-    pub fn eval(&self) -> Res<Cell> {
+    pub fn eval(&self) -> Res<Xell> {
         match self {
-            PathStart::Url(s) => Cell::from(s.to_string()).be("url").err(),
-            PathStart::File(s) => Cell::from(*s).be("path").be("fs").err(),
-            PathStart::String(s) => Cell::from(*s).err(),
+            PathStart::Url(s) => Xell::from(s.to_string()).be("url").err(),
+            PathStart::File(s) => Xell::from(*s).be("path").be("fs").err(),
+            PathStart::String(s) => Xell::from(*s).err(),
         }
     }
 }
 
 impl<'a> Path<'a> {
-    pub fn eval(self, cell: Cell) -> Searcher<'a> {
+    pub fn eval(self, cell: Xell) -> Searcher<'a> {
         Searcher::new(cell, self)
     }
 }

@@ -17,18 +17,18 @@ pub enum FieldType {
 
 #[derive(Clone, Debug)]
 pub struct FieldGroup {
-    pub(crate) cell: Rc<Cell>,
+    pub(crate) cell: Rc<Xell>,
 }
 
 #[derive(Clone, Debug)]
 pub struct FieldCell {
-    pub(crate) cell: Rc<Cell>,
+    pub(crate) cell: Rc<Xell>,
     pub(crate) ty: FieldType,
 }
 
 #[derive(Debug)]
 pub struct FieldReader {
-    pub(crate) cell: Rc<Cell>,
+    pub(crate) cell: Rc<Xell>,
     pub(crate) ty: FieldType,
     pub(crate) reader: Box<CellReader>,
     pub(crate) serial: OnceCell<Res<String>>,
@@ -36,7 +36,7 @@ pub struct FieldReader {
 
 #[derive(Debug)]
 pub struct FieldWriter {
-    pub(crate) cell: Rc<Cell>,
+    pub(crate) cell: Rc<Xell>,
     pub(crate) ty: FieldType,
     pub(crate) writer: Box<CellWriter>,
 }
@@ -144,7 +144,7 @@ impl CellTrait for FieldCell {
     }
 
     fn head(&self) -> Res<(Self, Relation)> {
-        // This cannot be implemented, we should return a XCell here but the
+        // This cannot be implemented, we should return a Xell here but the
         // trait type does not allow us. This is fixed by extra::Cell which
         // returns the correct head.
         unimplemented!()

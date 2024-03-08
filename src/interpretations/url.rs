@@ -4,7 +4,7 @@ use linkme::distributed_slice;
 use reqwest::Url;
 use url::ParseError;
 
-use crate::api::{interpretation::*, Cell as XCell, *};
+use crate::api::{interpretation::*, *};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_URL: ElevationConstructor = ElevationConstructor {
@@ -28,7 +28,7 @@ pub(crate) struct CellReader(Rc<Data>);
 pub(crate) struct CellWriter {}
 
 impl Cell {
-    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: Xell, _: &str) -> Res<Xell> {
         match cell.interpretation() {
             "value" => {
                 let r = cell.read();
@@ -38,17 +38,17 @@ impl Cell {
                 let url_cell = Cell(Rc::new(Data {
                     url: Url::parse(value)?,
                 }));
-                Ok(new_cell(DynCell::from(url_cell), Some(cell)))
+                Ok(new_xell(DynCell::from(url_cell), Some(cell)))
             }
             _ => nores(),
         }
     }
 
-    pub(crate) fn from_str(s: &str) -> Res<XCell> {
+    pub(crate) fn from_str(s: &str) -> Res<Xell> {
         let url_cell = Cell(Rc::new(Data {
             url: Url::parse(s)?,
         }));
-        Ok(new_cell(DynCell::from(url_cell), None))
+        Ok(new_xell(DynCell::from(url_cell), None))
     }
 }
 

@@ -6,7 +6,7 @@ use quick_xml::{
 use std::{fs::File, io::BufRead, rc::Rc};
 
 use crate::{
-    api::{interpretation::*, Cell as XCell, *},
+    api::{interpretation::*, *},
     debug, guard_variant,
     utils::{
         indentation::{detect_file_indentation, detect_indentation},
@@ -95,7 +95,7 @@ pub(crate) enum Attribute {
 }
 
 impl Cell {
-    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: Xell, _: &str) -> Res<Xell> {
         match cell.interpretation() {
             "fs" => {
                 let r = cell.read();
@@ -124,7 +124,7 @@ impl Cell {
         }
     }
 
-    fn from_root_node(root: Node, origin: Option<XCell>, indent: String) -> Res<XCell> {
+    fn from_root_node(root: Node, origin: Option<Xell>, indent: String) -> Res<Xell> {
         let xml_cell = Cell {
             group: Group {
                 nodes: NodeGroup::Node(OwnRc::new(vec![root])),
@@ -133,7 +133,7 @@ impl Cell {
             },
             pos: 0,
         };
-        Ok(new_cell(DynCell::from(xml_cell), origin))
+        Ok(new_xell(DynCell::from(xml_cell), origin))
     }
 }
 

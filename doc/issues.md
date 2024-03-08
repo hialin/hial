@@ -1,9 +1,11 @@
 # List of Todos and other Issues
 
+- ^fs[w] ??
+    - dyn elevate cell as interpretation
+    - remove special elevategroup
 - support type selector: `hial './src/tests/rust.rs^rust/*[:function_item]'`
 - add split(":") and regex interpretations
 - /*[name|parameters|return_type] ??
-- ^fs[w] ??
 - set value on the command line: '/username = "newuser"'
 - https://raw.githubusercontent.com/rust-lang/rust/master/src/tools/rustfmt/src/lib.rs^http^rust does not work
 - support zip, markdown
@@ -38,7 +40,6 @@
 - ?explore python implementation and usage
 - ?search should return all matches embedded in a delegation cell, which has all results
     as subs and delegates write operations to all the subs
-- ?rename XCell to Xell
 - later: python, git, database, ical, zip, markdown
 
 

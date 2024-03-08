@@ -6,7 +6,7 @@ use crate::{api::interpretation::*, api::*, debug, guard_ok, guard_some, warning
 
 use linkme::distributed_slice;
 
-pub type ElevateFn = fn(source: Cell, target_interpretation: &'static str) -> Res<Cell>;
+pub type ElevateFn = fn(source: Xell, target_interpretation: &'static str) -> Res<Xell>;
 type TargetMap = IndexMap<&'static str, ElevateFn>;
 type ElevationsMap = IndexMap<&'static str, Arc<TargetMap>>;
 
@@ -90,7 +90,7 @@ fn elevation_map(interpretation: &str) -> Res<Arc<IndexMap<&'static str, Elevate
     nores()
 }
 
-pub(crate) fn auto_interpretation(cell: &Cell) -> Option<&str> {
+pub(crate) fn auto_interpretation(cell: &Xell) -> Option<&str> {
     if cell.interpretation() == "fs" && cell.read().ty().ok()? == "file" {
         if let Ok(reader) = cell.read().err() {
             if let Ok(Value::Str(name)) = reader.label() {
@@ -127,7 +127,7 @@ pub(crate) fn auto_interpretation(cell: &Cell) -> Option<&str> {
 }
 
 #[derive(Debug, Clone)]
-pub struct ElevationGroup(pub Cell);
+pub struct ElevationGroup(pub Xell);
 
 impl ElevationGroup {
     pub fn label_type(&self) -> LabelType {
@@ -146,7 +146,7 @@ impl ElevationGroup {
         self.len().map_or(false, |x| x == 0)
     }
 
-    pub fn at(&self, index: usize) -> Res<Cell> {
+    pub fn at(&self, index: usize) -> Res<Xell> {
         let e = guard_ok!(elevation_map(self.0.interpretation()), err => { return Err(err) });
         if let Some((target_interpretation, func)) = e.get_index(index) {
             func(self.0.clone(), target_interpretation)
@@ -155,7 +155,7 @@ impl ElevationGroup {
         }
     }
 
-    pub fn get(&self, key: Value) -> Res<Cell> {
+    pub fn get(&self, key: Value) -> Res<Xell> {
         let old_interp = self.0.interpretation();
         let interp = match key {
             Value::None => guard_some!(auto_interpretation(&self.0), {

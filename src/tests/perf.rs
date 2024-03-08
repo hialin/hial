@@ -19,8 +19,8 @@ fn test_cell_sizes() -> Res<()> {
     println!("size of url cell: {}", std::mem::size_of::<url::Cell>());
     println!("size of xml cell: {}", std::mem::size_of::<xml::Cell>());
     println!("size of yaml cell: {}", std::mem::size_of::<yaml::Cell>());
-    println!("size of cell: {}", std::mem::size_of::<Cell>());
+    println!("size of cell: {}", std::mem::size_of::<Xell>());
 
-    assert!(std::mem::size_of::<Cell>() <= 8 * 8);
+    assert!(std::mem::size_of::<Xell>() <= 8 * 8);
     Ok(())
 }

@@ -16,7 +16,7 @@ n: nval
 fn tree() -> Res<()> {
     set_verbose(true);
 
-    let cell = Cell::from("./examples/write.json");
+    let cell = Xell::from("./examples/write.json");
     pprint(&cell, 0, 0);
     // let cell = cell.to("^path^fs[w]^json");
     // pprint(&cell, 0, 0);

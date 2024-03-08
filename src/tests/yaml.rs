@@ -13,7 +13,7 @@ fn test_yaml() -> Res<()> {
                   "group2": true
                   "power": "strong"
         "#;
-    let yaml = Cell::from(yaml).be("yaml");
+    let yaml = Xell::from(yaml).be("yaml");
     // pprint::pprint(&yaml, 0, 0);
     let hosts = yaml.sub().get("hosts").sub();
     assert_eq!(hosts.len()?, 2);
@@ -41,7 +41,7 @@ hosts:
       "group2": true
       "power": "strong"
         "#;
-    let yaml = Cell::from(yaml).be("yaml").to("/hosts/[1]/labels/power");
+    let yaml = Xell::from(yaml).be("yaml").to("/hosts/[1]/labels/power");
     assert_eq!(
         yaml.path()?,
         "`\\nhosts:\\n  - ho...`^yaml/hosts/[1]/labels/power"
@@ -51,7 +51,7 @@ hosts:
 
 #[test]
 fn yaml_write_and_save() -> Res<()> {
-    let text = Cell::from(
+    let text = Xell::from(
         r#"
   hosts:
     - host_id: 1h48

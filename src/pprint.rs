@@ -6,7 +6,7 @@ const SPACE_TO_SEPARATOR: usize = 32;
 const SEPARATORS: &[&str] = &["│ ", "╞ ", "┝ ", "├ "];
 const INDENT: usize = 4;
 
-pub fn pprint(cell: &Cell, depth: usize, breadth: usize) {
+pub fn pprint(cell: &Xell, depth: usize, breadth: usize) {
     let mut buffer = String::new();
     if let Err(e) = _pprint(cell, "", depth, breadth, 0, &mut buffer) {
         eprintln!("pprint error: {:?}", e);
@@ -14,7 +14,7 @@ pub fn pprint(cell: &Cell, depth: usize, breadth: usize) {
 }
 
 fn _pprint(
-    cell: &Cell,
+    cell: &Xell,
     prefix: &str,
     depth: usize,
     breadth: usize,
@@ -84,7 +84,7 @@ fn make_indent(indent: usize, buffer: &mut String) -> Result<(), Error> {
     Ok(())
 }
 
-fn print_cell(cell: &Cell, prefix: &str, indent: usize, buffer: &mut String) -> Result<(), Error> {
+fn print_cell(cell: &Xell, prefix: &str, indent: usize, buffer: &mut String) -> Result<(), Error> {
     let mut typ = String::new();
     write!(buffer, "{} ", cell.interpretation(),)?;
 

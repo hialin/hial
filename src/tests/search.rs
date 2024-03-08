@@ -104,7 +104,7 @@ fn search_simple_search() -> Res<()> {
             m: mval
             n: nval
         "#;
-    let root = Cell::from(TREE).be("yaml");
+    let root = Xell::from(TREE).be("yaml");
 
     let eval = str_eval(root.clone(), "/a/b/x")?;
     assert_eq!(eval, ["x:xb"]);
@@ -141,7 +141,7 @@ fn search_simple_search_with_index() -> Res<()> {
         <s/>
     </test>
         "#;
-    let root = Cell::from(TREE).be("xml");
+    let root = Xell::from(TREE).be("xml");
 
     pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/test/a[0]/*")?;
@@ -176,7 +176,7 @@ fn search_kleene() -> Res<()> {
             n: nval
             o: null
         "#;
-    let root = Cell::from(TREE).be("yaml");
+    let root = Xell::from(TREE).be("yaml");
 
     pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), pr("/*"))?;
@@ -214,7 +214,7 @@ fn search_filter() -> Res<()> {
             m: mval
             n: nval
         "#;
-    let root = Cell::from(TREE).be("yaml");
+    let root = Xell::from(TREE).be("yaml");
     let eval = str_eval(root.clone(), pr("/*[/x]"))?;
     assert_eq!(eval, ["a:"]);
     let eval = str_eval(root.clone(), pr("/a/*[/x]"))?;
@@ -233,7 +233,7 @@ fn search_double_kleene_basic() -> Res<()> {
             n: nval
         "#;
     set_verbose(true);
-    let root = Cell::from(TREE_SIMPLE).be("yaml");
+    let root = Xell::from(TREE_SIMPLE).be("yaml");
 
     let path = "/**/m";
     println!("\npath: {}\n", path);
@@ -259,7 +259,7 @@ fn search_double_kleene_simple() -> Res<()> {
         "#;
 
     set_verbose(true);
-    let root = Cell::from(TREE).be("yaml");
+    let root = Xell::from(TREE).be("yaml");
 
     //  doublestar should match on multiple levels
     pprint(&root, 0, 0);
@@ -297,7 +297,7 @@ fn search_double_kleene_top_filter() -> Res<()> {
         "#;
 
     set_verbose(true);
-    let root = Cell::from(TREE).be("yaml");
+    let root = Xell::from(TREE).be("yaml");
 
     let eval = str_eval(root.clone(), pr("/*[#label=='a']/**[=='xa']"))?;
     assert_eq!(eval, ["x:xa"]);
@@ -321,7 +321,7 @@ fn search_double_kleene_deep_filter() -> Res<()> {
             n: nval
         "#;
 
-    let root = Cell::from(TREE).be("yaml");
+    let root = Xell::from(TREE).be("yaml");
     let eval = str_eval(root.clone(), "/**/*[#label=='x']")?;
     assert_eq!(eval, ["x:xa", "x:xb", "x:xc"]);
     let eval = str_eval(root.clone(), "/a/**[#label!='x']/y")?;
@@ -347,7 +347,7 @@ fn search_double_kleene_all() -> Res<()> {
             n: nval
         "#;
 
-    let root = Cell::from(TREE).be("yaml");
+    let root = Xell::from(TREE).be("yaml");
 
     pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/**")?;
@@ -381,7 +381,7 @@ fn search_double_kleene_labels_json() -> Res<()> {
         "n": "nval"
     }"#;
 
-    let root = Cell::from(TREE).be("json");
+    let root = Xell::from(TREE).be("json");
 
     // crate::pprint::pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/**#label")?;
@@ -409,7 +409,7 @@ fn search_double_kleene_labels_yaml() -> Res<()> {
         n: nval
     "#;
 
-    let root = Cell::from(TREE).be("yaml");
+    let root = Xell::from(TREE).be("yaml");
 
     // crate::pprint::pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/**#label")?;
@@ -435,7 +435,7 @@ fn search_double_kleene_repeat() -> Res<()> {
             n: nval
         "#;
     set_verbose(true);
-    let root = Cell::from(TREE).be("yaml");
+    let root = Xell::from(TREE).be("yaml");
 
     pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/**/b/b")?;
@@ -463,7 +463,7 @@ fn search_double_kleene_with_filter() -> Res<()> {
                     size: 3
         "#;
     set_verbose(true);
-    let root = Cell::from(TREE).be("yaml");
+    let root = Xell::from(TREE).be("yaml");
 
     pprint(&root, 0, 0);
     let eval = str_eval(root.clone(), "/dir1/**")?;
@@ -483,7 +483,7 @@ fn search_double_kleene_with_filter() -> Res<()> {
     Ok(())
 }
 
-pub fn str_eval(root: Cell, path: &str) -> Res<Vec<String>> {
+pub fn str_eval(root: Xell, path: &str) -> Res<Vec<String>> {
     root.all(path)?
         .into_iter()
         .map(|cell| -> Res<String> {

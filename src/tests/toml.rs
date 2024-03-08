@@ -26,7 +26,7 @@ role = "backend"
 
 #[test]
 fn toml_read() -> Res<()> {
-    let toml = Cell::from(TOML).be("toml");
+    let toml = Xell::from(TOML).be("toml");
     let value = toml.sub().get("database").sub().get("enabled");
     pprint(&value, 0, 0);
     assert_eq!(value.read().value()?, Value::Bool(true));
@@ -35,7 +35,7 @@ fn toml_read() -> Res<()> {
 
 #[test]
 fn toml_path() -> Res<()> {
-    let toml = Cell::from(TOML).be("toml").to("/database/data/[0]/[1]");
+    let toml = Xell::from(TOML).be("toml").to("/database/data/[0]/[1]");
     assert_eq!(
         toml.path()?,
         "`\\n# This is a TO...`^toml/database/data/[0]/[1]"
@@ -45,7 +45,7 @@ fn toml_path() -> Res<()> {
 
 #[test]
 fn toml_write_and_save() -> Res<()> {
-    let data = Cell::from("[number]\nx = 23.1415").policy(WritePolicy::NoAutoWrite);
+    let data = Xell::from("[number]\nx = 23.1415").policy(WritePolicy::NoAutoWrite);
     let toml = data.be("toml");
 
     let v = toml.to("/number/x");

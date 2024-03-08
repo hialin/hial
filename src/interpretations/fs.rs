@@ -12,7 +12,7 @@ use linkme::distributed_slice;
 
 use crate::{
     api::interpretation::*,
-    api::{Cell as XCell, *},
+    api::*,
     guard_ok, guard_some,
     utils::ownrc::{OwnRc, ReadRc, WriteRc},
 };
@@ -242,17 +242,17 @@ impl CellWriter {
 }
 
 impl Cell {
-    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: Xell, _: &str) -> Res<Xell> {
         let r = cell.read();
         let path = r.as_file_path()?;
         let file_cell = Self::make_file_cell(path)?;
-        Ok(new_cell(DynCell::from(file_cell), Some(cell)))
+        Ok(new_xell(DynCell::from(file_cell), Some(cell)))
     }
 
-    pub(crate) fn from_str_path(path: impl Borrow<str>) -> Res<XCell> {
+    pub(crate) fn from_str_path(path: impl Borrow<str>) -> Res<Xell> {
         let path = Path::new(path.borrow());
         let file_cell = Self::make_file_cell(path)?;
-        Ok(new_cell(DynCell::from(file_cell), None))
+        Ok(new_xell(DynCell::from(file_cell), None))
     }
 
     fn make_file_cell(path: &Path) -> Res<Cell> {

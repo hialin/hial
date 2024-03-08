@@ -13,14 +13,14 @@ const MAX_PATH_ITEMS: usize = 1000;
 
 #[repr(C)]
 #[derive(Clone)]
-pub struct Cell {
+pub struct Xell {
     dyn_cell: DynCell,
     // keep it in a rc to avoid other allocations
     domain: Rc<Domain>,
 }
 
-pub(crate) fn new_cell(dyn_cell: DynCell, origin: Option<Cell>) -> Cell {
-    Cell {
+pub(crate) fn new_xell(dyn_cell: DynCell, origin: Option<Xell>) -> Xell {
+    Xell {
         dyn_cell,
         domain: Rc::new(Domain {
             write_policy: cell::Cell::new(
@@ -37,7 +37,7 @@ pub(crate) fn new_cell(dyn_cell: DynCell, origin: Option<Cell>) -> Cell {
 
 pub struct Domain {
     write_policy: cell::Cell<WritePolicy>,
-    origin: Option<Cell>,
+    origin: Option<Xell>,
     dyn_root: OnceCell<DynCell>,
     dirty: cell::Cell<bool>,
 }
@@ -151,7 +151,7 @@ pub(crate) enum CellIteratorKind {
         dyn_cell: DynCellIterator,
         domain: Rc<Domain>,
     },
-    Elevation(Res<Cell>),
+    Elevation(Res<Xell>),
 }
 
 enumerated_dynamic_type! {
@@ -184,42 +184,42 @@ pub enum WritePolicy {
     WriteBackOnDrop,
 }
 
-impl From<OwnValue> for Cell {
+impl From<OwnValue> for Xell {
     fn from(ov: OwnValue) -> Self {
         ownvalue::Cell::from_value(ov).unwrap()
     }
 }
 
-impl From<Value<'_>> for Cell {
+impl From<Value<'_>> for Xell {
     fn from(v: Value) -> Self {
-        Cell::from(v.to_owned_value())
+        Xell::from(v.to_owned_value())
     }
 }
 
-impl From<&str> for Cell {
+impl From<&str> for Xell {
     fn from(s: &str) -> Self {
         ownvalue::Cell::from_str(s).unwrap()
     }
 }
 
-impl From<String> for Cell {
+impl From<String> for Xell {
     fn from(s: String) -> Self {
         ownvalue::Cell::from_string(s).unwrap()
     }
 }
 
-impl From<Res<Cell>> for Cell {
-    fn from(res: Res<Cell>) -> Self {
+impl From<Res<Xell>> for Xell {
+    fn from(res: Res<Xell>) -> Self {
         match res {
             Ok(cell) => cell,
-            Err(e) => Cell::from(e),
+            Err(e) => Xell::from(e),
         }
     }
 }
 
-impl From<HErr> for Cell {
+impl From<HErr> for Xell {
     fn from(herr: HErr) -> Self {
-        Cell {
+        Xell {
             dyn_cell: DynCell::from(herr),
             domain: Rc::new(Domain {
                 write_policy: cell::Cell::new(WritePolicy::ReadOnly),
@@ -302,8 +302,8 @@ impl CellWriter {
     }
 }
 
-impl Cell {
-    pub fn err(self) -> Res<Cell> {
+impl Xell {
+    pub fn err(self) -> Res<Xell> {
         if let DynCell::Error(ref error) = self.dyn_cell {
             return Err(error.clone());
         }
@@ -314,12 +314,12 @@ impl Cell {
         dispatch_dyn_cell!(&self.dyn_cell, |x| { x.interpretation() })
     }
 
-    pub fn origin(&self) -> Cell {
+    pub fn origin(&self) -> Xell {
         self.domain
             .origin
             .clone()
             .ok_or_else(|| noerr().with_path_res(self.path()))
-            .unwrap_or_else(Cell::from)
+            .unwrap_or_else(Xell::from)
     }
 
     pub fn read(&self) -> CellReader {
@@ -332,7 +332,7 @@ impl Cell {
         CellReader(reader)
     }
 
-    pub fn policy(&self, policy: WritePolicy) -> Cell {
+    pub fn policy(&self, policy: WritePolicy) -> Xell {
         self.domain.write_policy.set(policy);
         self.clone()
     }
@@ -427,16 +427,16 @@ impl Cell {
         }
     }
 
-    pub fn be(&self, interpretation: &str) -> Cell {
+    pub fn be(&self, interpretation: &str) -> Xell {
         self.elevate().get(Value::Str(interpretation))
     }
 
-    pub fn to(&self, path: &str) -> Cell {
+    pub fn to(&self, path: &str) -> Xell {
         if let DynCell::Error(err) = &self.dyn_cell {
             return self.clone();
         }
         let path = guard_ok!(crate::search::Path::parse(path), err =>
-            return Cell {
+            return Xell {
                 dyn_cell: DynCell::from(err),
                 domain: Rc::clone(&self.domain),
             }
@@ -444,7 +444,7 @@ impl Cell {
         let mut searcher = Searcher::new(self.clone(), path);
         match searcher.next() {
             Some(Ok(c)) => c,
-            Some(Err(e)) => Cell {
+            Some(Err(e)) => Xell {
                 dyn_cell: DynCell::from(e),
                 domain: Rc::clone(&self.domain),
             },
@@ -452,7 +452,7 @@ impl Cell {
                 let mut path = self.path().unwrap_or_default();
                 path += searcher.unmatched_path().as_str();
                 warning!("💥 path search failed: {}", path);
-                Cell {
+                Xell {
                     dyn_cell: DynCell::from(noerr().with_path(path)),
                     domain: Rc::clone(&self.domain),
                 }
@@ -468,11 +468,11 @@ impl Cell {
         Ok(Searcher::new(self.clone(), path))
     }
 
-    pub fn all(&self, path: &str) -> Res<Vec<Cell>> {
+    pub fn all(&self, path: &str) -> Res<Vec<Xell>> {
         self.search(path)?.collect()
     }
 
-    pub fn head(&self) -> Res<(Cell, Relation)> {
+    pub fn head(&self) -> Res<(Xell, Relation)> {
         if let DynCell::Error(err) = &self.dyn_cell {
             return Err(err.clone());
         }
@@ -482,7 +482,7 @@ impl Cell {
         dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match x.head() {
                 Ok((c, r)) => Ok((
-                    Cell {
+                    Xell {
                         dyn_cell: DynCell::from(c),
                         domain: Rc::clone(&self.domain),
                     },
@@ -659,7 +659,7 @@ impl Cell {
         s
     }
 
-    pub fn save(&self, target: &Cell) -> Res<()> {
+    pub fn save(&self, target: &Xell) -> Res<()> {
         if let DynCell::Error(err) = &self.dyn_cell {
             return Err(err.clone());
         }
@@ -669,7 +669,7 @@ impl Cell {
         Self::save_from_to(&self.dyn_cell, target)
     }
 
-    pub fn save_domain(&self, target: &Cell) -> Res<()> {
+    pub fn save_domain(&self, target: &Xell) -> Res<()> {
         if let DynCell::Error(err) = &target.dyn_cell {
             return Err(err.clone());
         }
@@ -679,13 +679,13 @@ impl Cell {
         Self::save_from_to(dyn_root, target)
     }
 
-    fn save_from_to(dyn_cell: &DynCell, target: &Cell) -> Res<()> {
+    fn save_from_to(dyn_cell: &DynCell, target: &Xell) -> Res<()> {
         let serial = dispatch_dyn_cell!(dyn_cell, |x| { x.read()?.serial()? });
         target.write().value(OwnValue::String(serial))
     }
 }
 
-impl fmt::Debug for Cell {
+impl fmt::Debug for Xell {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let orig = format!("{:?}", self.domain.origin).replace('\n', "\n\t");
         let root = format!("{:?}", self.domain.dyn_root).replace('\n', "\n\t");
@@ -731,7 +731,7 @@ impl Drop for Domain {
             return;
         });
 
-        if let Err(err) = Cell::save_from_to(dyn_root, target) {
+        if let Err(err) = Xell::save_from_to(dyn_root, target) {
             warning!("💥 while trying to auto-save domain: {:?}", err);
         }
     }
@@ -740,7 +740,7 @@ impl Drop for Domain {
 #[test]
 fn test_cell_domain_path() -> Res<()> {
     let tree = r#"{"a": {"x": "xa", "b": {"x": "xb", "c": {"x": "xc"}}}, "m": [1, 2, 3]}"#;
-    let root = Cell::from(tree).be("yaml");
+    let root = Xell::from(tree).be("yaml");
 
     assert_eq!(root.domain_path()?, r#""#);
     let leaf = root.to("/a/b/c/x");
@@ -776,11 +776,11 @@ impl Group {
         self.len().map_or(false, |l| l == 0)
     }
 
-    pub fn at(&self, index: usize) -> Cell {
+    pub fn at(&self, index: usize) -> Xell {
         match &self.group {
             GroupKind::Dyn { dyn_group, domain } => {
                 dispatch_dyn_group!(dyn_group, |x| {
-                    Cell {
+                    Xell {
                         dyn_cell: match x.at(index) {
                             Ok(c) => DynCell::from(c),
                             Err(e) => DynCell::from(e),
@@ -796,7 +796,7 @@ impl Group {
                     }
                     c
                 }
-                Err(e) => Cell {
+                Err(e) => Xell {
                     dyn_cell: DynCell::from(e),
                     domain: Rc::new(Domain {
                         write_policy: cell::Cell::new(WritePolicy::ReadOnly),
@@ -809,12 +809,12 @@ impl Group {
         }
     }
 
-    pub fn get<'a>(&self, key: impl Into<Value<'a>>) -> Cell {
+    pub fn get<'a>(&self, key: impl Into<Value<'a>>) -> Xell {
         let key = key.into();
         match &self.group {
             GroupKind::Dyn { dyn_group, domain } => {
                 dispatch_dyn_group!(dyn_group, |x| {
-                    Cell {
+                    Xell {
                         dyn_cell: match x.get_all(key) {
                             Ok(mut iter) => match iter.next() {
                                 Some(Ok(cell)) => DynCell::from(cell),
@@ -834,7 +834,7 @@ impl Group {
                     }
                     c
                 }
-                Err(e) => Cell {
+                Err(e) => Xell {
                     dyn_cell: DynCell::from(e),
                     domain: Rc::new(Domain {
                         write_policy: cell::Cell::new(WritePolicy::ReadOnly),
@@ -900,7 +900,7 @@ impl Group {
 }
 
 impl IntoIterator for Group {
-    type Item = Cell;
+    type Item = Xell;
     type IntoIter = GroupIter;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -911,7 +911,7 @@ impl IntoIterator for Group {
 #[derive(Debug)]
 pub struct GroupIter(Group, usize);
 impl Iterator for GroupIter {
-    type Item = Cell;
+    type Item = Xell;
     fn next(&mut self) -> Option<Self::Item> {
         if self.1 >= self.0.len().unwrap_or(0) {
             return None;
@@ -922,12 +922,12 @@ impl Iterator for GroupIter {
 }
 
 impl Iterator for CellIterator {
-    type Item = Cell;
+    type Item = Xell;
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.cell_iterator {
             CellIteratorKind::DynCellIterator { dyn_cell, domain } => {
                 dispatch_dyn_cell_iterator!(dyn_cell, |x| {
-                    x.next().map(|cell_res| Cell {
+                    x.next().map(|cell_res| Xell {
                         dyn_cell: match cell_res {
                             Ok(cell) => DynCell::from(cell),
                             Err(err) => DynCell::from(err),
@@ -946,7 +946,7 @@ impl Iterator for CellIterator {
                     if err.kind == HErrKind::None {
                         None
                     } else {
-                        Some(Cell {
+                        Some(Xell {
                             dyn_cell: DynCell::from(err.clone()),
                             domain: Rc::new(Domain {
                                 write_policy: cell::Cell::new(WritePolicy::ReadOnly),
@@ -967,7 +967,7 @@ impl DoubleEndedIterator for CellIterator {
         match &mut self.cell_iterator {
             CellIteratorKind::DynCellIterator { dyn_cell, domain } => {
                 dispatch_dyn_cell_iterator!(dyn_cell, |x| {
-                    x.next_back().map(|cell_res| Cell {
+                    x.next_back().map(|cell_res| Xell {
                         dyn_cell: match cell_res {
                             Ok(cell) => DynCell::from(cell),
                             Err(err) => DynCell::from(err),
@@ -986,7 +986,7 @@ impl DoubleEndedIterator for CellIterator {
                     if err.kind == HErrKind::None {
                         None
                     } else {
-                        Some(Cell {
+                        Some(Xell {
                             dyn_cell: DynCell::from(err.clone()),
                             domain: Rc::new(Domain {
                                 write_policy: cell::Cell::new(WritePolicy::ReadOnly),

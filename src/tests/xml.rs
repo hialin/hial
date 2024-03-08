@@ -15,7 +15,7 @@ fn test_xml() -> Res<()> {
                 </q>
             </doc>
         "#;
-    let xml = Cell::from(xml.to_string()).be("xml");
+    let xml = Xell::from(xml.to_string()).be("xml");
     pprint::pprint(&xml, 0, 0);
 
     let decl = xml.sub().at(0);
@@ -75,14 +75,14 @@ fn xml_path() -> Res<()> {
                 </q>
             </doc>
         "#;
-    let xml = Cell::from(xml.to_string()).to("^xml/doc/q/qq");
+    let xml = Xell::from(xml.to_string()).to("^xml/doc/q/qq");
     assert_eq!(xml.path()?, "`<?xml version=\"1...`^xml/doc/q/qq");
     Ok(())
 }
 
 #[test]
 fn xml_write_and_save() -> Res<()> {
-    let text = Cell::from(
+    let text = Xell::from(
         r#" <?xml version="1.0"?>
             <doc>
                 <first>1</first>

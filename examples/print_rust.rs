@@ -12,7 +12,7 @@ fn main() -> Res<()> {
 }
 
 fn test_rustapi() -> Res<()> {
-    let examples = Cell::from(".").be("fs").sub().get("examples");
+    let examples = Xell::from(".").be("fs").sub().get("examples");
     pprint(&examples, 0, 0);
     let folder = examples.sub();
     let stacks = folder
@@ -32,7 +32,7 @@ fn test_rustapi() -> Res<()> {
             .read()
             .value()?
             .to_owned_value();
-        let yaml = Cell::from(yaml).be("yaml");
+        let yaml = Xell::from(yaml).be("yaml");
         pprint(&yaml, 0, 0);
         let service_node = yaml.sub().get("services").sub().at(0);
         let mut filename = format!("{}.yaml", service_node.read().label()?);
@@ -48,7 +48,7 @@ fn test_rustapi() -> Res<()> {
 }
 
 fn test_rustapi_with_path() -> Res<()> {
-    let folder = Cell::from(".").to("^file/examples");
+    let folder = Xell::from(".").to("^file/examples");
     let stacks = folder.to("/productiondump.json^json/stacks");
     for stack in stacks.sub() {
         if stack.to("/system_stack").read().value()? == "true" {

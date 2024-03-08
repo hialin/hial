@@ -20,7 +20,7 @@ fn test_json() -> Res<()> {
                 }
             ]
         }"#;
-    let json = Cell::from(json).be("json");
+    let json = Xell::from(json).be("json");
     // pprint::pprint(&json, 0, 0);
     let hosts = json.sub().get("hosts").sub();
     assert_eq!(hosts.len()?, 2);
@@ -54,7 +54,7 @@ fn json_path() -> Res<()> {
         ]
 }"#
     .replace([' ', '\t', '\n'], "");
-    let json = Cell::from(treestring).be("json");
+    let json = Xell::from(treestring).be("json");
     let path = "/hosts/[1]/labels/power";
     let target = json.to(path).err()?;
     assert_eq!(
@@ -79,7 +79,7 @@ fn json_write() -> Res<()> {
         ]
     }"#
     .replace([' ', '\t', '\n'], "");
-    let flattree = Cell::from(treestring).policy(WritePolicy::NoAutoWrite);
+    let flattree = Xell::from(treestring).policy(WritePolicy::NoAutoWrite);
     let json = flattree.be("json");
     pprint(&json, 0, 0);
     {
@@ -127,7 +127,7 @@ fn json_write_and_save() -> Res<()> {
 }"#
     .replace([' ', '\t', '\n'], "");
     println!("{}", treestring);
-    let flattree = Cell::from(treestring).policy(WritePolicy::NoAutoWrite);
+    let flattree = Xell::from(treestring).policy(WritePolicy::NoAutoWrite);
     let json = flattree.be("json");
 
     // pprint::pprint(&json, 0, 0);

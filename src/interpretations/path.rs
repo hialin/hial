@@ -7,7 +7,7 @@ use linkme::distributed_slice;
 
 use crate::{
     api::interpretation::*,
-    api::{Cell as XCell, *},
+    api::*,
     utils::ownrc::{OwnRc, ReadRc, WriteRc},
 };
 
@@ -28,7 +28,7 @@ pub(crate) struct CellReader(ReadRc<PathBuf>, OnceCell<String>);
 pub(crate) struct CellWriter(WriteRc<PathBuf>);
 
 impl Cell {
-    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: Xell, _: &str) -> Res<Xell> {
         match cell.interpretation() {
             "value" => {
                 let r = cell.read();
@@ -50,9 +50,9 @@ impl Cell {
         }
     }
 
-    fn make_cell(path: PathBuf, string: String, origin: Option<XCell>) -> Res<XCell> {
+    fn make_cell(path: PathBuf, string: String, origin: Option<Xell>) -> Res<Xell> {
         let path_cell = Cell(OwnRc::new(path));
-        Ok(new_cell(DynCell::from(path_cell), origin))
+        Ok(new_xell(DynCell::from(path_cell), origin))
     }
 }
 

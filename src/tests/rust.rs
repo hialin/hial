@@ -4,7 +4,7 @@ use crate::{api::*, utils::log::set_verbose};
 fn test_rust() -> Res<()> {
     set_verbose(true);
 
-    let folder = Cell::from(".").be("path").be("fs").err().unwrap();
+    let folder = Xell::from(".").be("path").be("fs").err().unwrap();
     let root = folder.to("/src/tests/rust.rs^rust");
     assert_eq!(
         root.all("/*[#type=='function_item']/name")?
@@ -25,7 +25,7 @@ fn test_rust() -> Res<()> {
 #[test]
 fn rust_path() -> Res<()> {
     set_verbose(true);
-    let folder = Cell::from(".").be("path").be("fs").err().unwrap();
+    let folder = Xell::from(".").be("path").be("fs").err().unwrap();
     let root = folder.to("/src/tests/rust.rs^rust");
     // pprint(&root, 0, 0);
     let func = root.to("/*[#type=='function_item']/name");
@@ -37,7 +37,7 @@ fn rust_path() -> Res<()> {
 #[test]
 fn rust_write_and_save() -> Res<()> {
     set_verbose(true);
-    let file = Cell::from(".").to("^path^fs/src/tests/rust.rs");
+    let file = Xell::from(".").to("^path^fs/src/tests/rust.rs");
     let root = file.be("rust");
 
     assert_eq!(root.to("/[7]/[1]").read().value()?, "editable_rust_fn");

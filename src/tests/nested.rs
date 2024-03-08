@@ -6,10 +6,10 @@ fn test_nested_0() -> Res<()> {
 
     let yxj = r#"{"one": ["<?xml?><root>mytext: This is my yaml string</root>"]}"#;
 
-    let cell = Cell::from(yxj).to("^json/one/[0]^xml/root");
+    let cell = Xell::from(yxj).to("^json/one/[0]^xml/root");
     assert_eq!(cell.read().value()?, "mytext: This is my yaml string");
 
-    let cell = Cell::from(yxj).to("^json/one/[0]^xml/root^yaml/mytext");
+    let cell = Xell::from(yxj).to("^json/one/[0]^xml/root^yaml/mytext");
     assert_eq!(cell.read().value()?, "This is my yaml string");
 
     Ok(())
@@ -20,7 +20,7 @@ fn test_nested_mut() -> Res<()> {
     set_verbose(true);
 
     println!("1");
-    let text = Cell::from(r#"{"one": ["<?xml?><root><a>mytext: yaml string</a></root>"]}"#)
+    let text = Xell::from(r#"{"one": ["<?xml?><root><a>mytext: yaml string</a></root>"]}"#)
         .policy(WritePolicy::WriteBackOnDrop);
 
     println!("2");

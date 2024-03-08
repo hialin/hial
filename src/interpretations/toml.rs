@@ -6,7 +6,7 @@ use nom::AsBytes;
 use {toml, toml::Value as TomlValue};
 
 use crate::{
-    api::{interpretation::*, Cell as XCell, *},
+    api::{interpretation::*, *},
     utils::ownrc::{OwnRc, ReadRc, WriteRc},
 };
 
@@ -74,7 +74,7 @@ impl From<toml::de::Error> for HErr {
 }
 
 impl Cell {
-    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: Xell, _: &str) -> Res<Xell> {
         match cell.interpretation() {
             "value" => {
                 let r = cell.read();
@@ -97,7 +97,7 @@ impl Cell {
         }
     }
 
-    fn make_cell(source: &str, origin: Option<XCell>) -> Res<XCell> {
+    fn make_cell(source: &str, origin: Option<Xell>) -> Res<Xell> {
         let toml: TomlValue = toml::from_str(source)?;
         let root_node = node_from_toml(toml);
         let preroot = OwnRc::new(vec![root_node]);
@@ -108,7 +108,7 @@ impl Cell {
             },
             pos: 0,
         };
-        Ok(new_cell(DynCell::from(toml_cell), origin))
+        Ok(new_xell(DynCell::from(toml_cell), origin))
     }
 }
 

@@ -6,7 +6,7 @@ use linkme::distributed_slice;
 use yaml_rust::{ScanError, Yaml, YamlLoader};
 
 use crate::{
-    api::{interpretation::*, Cell as XCell, *},
+    api::{interpretation::*, *},
     utils::ownrc::{OwnRc, ReadRc, WriteRc},
 };
 
@@ -73,7 +73,7 @@ impl From<ScanError> for HErr {
 }
 
 impl Cell {
-    pub(crate) fn from_cell(cell: XCell, _: &str) -> Res<XCell> {
+    pub(crate) fn from_cell(cell: Xell, _: &str) -> Res<Xell> {
         match cell.interpretation() {
             "value" => {
                 let r = cell.read();
@@ -110,7 +110,7 @@ impl Cell {
         }
     }
 
-    fn make_cell(s: impl AsRef<str>, origin: Option<XCell>) -> Res<XCell> {
+    fn make_cell(s: impl AsRef<str>, origin: Option<Xell>) -> Res<Xell> {
         let yaml_docs = YamlLoader::load_from_str(s.as_ref())?;
         let root_group_res: Res<Vec<Node>> = yaml_docs.iter().map(node_from_yaml).collect();
         let yaml_cell = Cell {
@@ -120,7 +120,7 @@ impl Cell {
             },
             pos: 0,
         };
-        Ok(new_cell(DynCell::from(yaml_cell), origin))
+        Ok(new_xell(DynCell::from(yaml_cell), origin))
     }
 }
 

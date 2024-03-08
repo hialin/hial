@@ -3,7 +3,7 @@ use crate::{api::*, search::path::Path};
 #[test]
 fn test_files() -> Res<()> {
     crate::utils::log::set_verbose(true);
-    let examples = Cell::from(".").be("path").be("fs").sub().get("examples");
+    let examples = Xell::from(".").be("path").be("fs").sub().get("examples");
     assert_eq!(examples.read().label()?, "examples");
     assert_eq!(examples.read().value().unwrap_err().kind, HErrKind::None);
     Ok(())
@@ -12,7 +12,7 @@ fn test_files() -> Res<()> {
 #[test]
 fn test_fs() -> Res<()> {
     crate::utils::log::set_verbose(true);
-    let examples = Cell::from(".").be("path").be("fs").sub().get("examples");
+    let examples = Xell::from(".").be("path").be("fs").sub().get("examples");
     // assert_eq!(std::mem::size_of_val(&examples), 4 * 8); // TODO: file cell is too large
     assert_eq!(
         examples.read().label().unwrap_or(Value::None),
@@ -37,18 +37,18 @@ fn search_path_with_fs_starter() -> Res<()> {
 #[test]
 fn fs_write() -> Res<()> {
     let p = "^path^fs/examples/write.txt";
-    let c = Cell::from(".")
+    let c = Xell::from(".")
         .policy(WritePolicy::NoAutoWrite)
         .to(p)
         .err()?;
     c.write().value("Hi there".into())?;
     assert_eq!(
-        Cell::from(".").to(p).read().value()?,
+        Xell::from(".").to(p).read().value()?,
         Value::Bytes("Hi there".as_bytes())
     );
     c.write().value("-".into())?;
     assert_eq!(
-        Cell::from(".").to(p).read().value()?,
+        Xell::from(".").to(p).read().value()?,
         Value::Bytes("-".as_bytes())
     );
     Ok(())
@@ -56,7 +56,7 @@ fn fs_write() -> Res<()> {
 
 #[test]
 fn fs_path() -> Res<()> {
-    let c = Cell::from(".").be("path").be("fs").sub().get("examples");
+    let c = Xell::from(".").be("path").be("fs").sub().get("examples");
     assert_eq!(c.path()?, "`.`^path^fs/examples");
     Ok(())
 }

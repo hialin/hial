@@ -34,7 +34,7 @@ pub struct Searcher<'s> {
 #[derive(Clone, Debug)]
 pub struct MatchTest {
     // parent of cells to be matched against the path_index
-    parent: Cell,
+    parent: Xell,
     // path index to be tested
     path_index: usize,
 }
@@ -66,7 +66,7 @@ pub struct MatchTest {
 // ... (no more matches)
 
 impl<'s> Searcher<'s> {
-    pub(crate) fn new(start: Cell, path: Path<'s>) -> Searcher<'s> {
+    pub(crate) fn new(start: Xell, path: Path<'s>) -> Searcher<'s> {
         ifdebug!(println!(
             "\nnew Searcher, path: {:?}:",
             path.0
@@ -93,7 +93,7 @@ impl<'s> Searcher<'s> {
         }
     }
 
-    fn eval_next(&mut self) -> Option<Res<Cell>> {
+    fn eval_next(&mut self) -> Option<Res<Xell>> {
         while !self.stack.is_empty() {
             if let Some(cell) = self.pump_stack() {
                 Self::update_next_max_path_index(&self.stack, &mut self.next_max_path_index);
@@ -110,7 +110,7 @@ impl<'s> Searcher<'s> {
         None
     }
 
-    fn pump_stack(&mut self) -> Option<Res<Cell>> {
+    fn pump_stack(&mut self) -> Option<Res<Xell>> {
         ifdebug!(println!(
             "----\nstack:{}",
             self.stack
@@ -180,7 +180,7 @@ impl<'s> Searcher<'s> {
     fn process_group(
         stack: &mut Vec<MatchTest>,
         path: &[PathItem],
-        parent: &Cell,
+        parent: &Xell,
         group: Group,
         path_index: usize,
         next_max_path_index: &mut usize,
@@ -265,7 +265,7 @@ impl<'s> Searcher<'s> {
     fn process_cell(
         stack: &mut Vec<MatchTest>,
         path: &[PathItem],
-        cell: Cell,
+        cell: Xell,
         path_index: usize,
         advance_index: bool,
         next_max_path_index: &mut usize,
@@ -304,7 +304,7 @@ impl<'s> Searcher<'s> {
         Self::update_next_max_path_index(stack, next_max_path_index);
     }
 
-    fn eval_filters_match(subcell: &Cell, path_item: &PathItem) -> bool {
+    fn eval_filters_match(subcell: &Xell, path_item: &PathItem) -> bool {
         for filter in &path_item.filters {
             match Searcher::eval_bool_expression(subcell.clone(), &filter.expr) {
                 Err(e) => {
@@ -326,7 +326,7 @@ impl<'s> Searcher<'s> {
         true
     }
 
-    fn eval_bool_expression(cell: Cell, expr: &Expression<'s>) -> Res<bool> {
+    fn eval_bool_expression(cell: Xell, expr: &Expression<'s>) -> Res<bool> {
         ifdebug!(println!(
             "{{{{\neval_bool_expression cell `{}` for expr `{}`",
             cell.debug_string(),
@@ -396,8 +396,8 @@ impl<'s> Searcher<'s> {
 }
 
 impl<'s> Iterator for Searcher<'s> {
-    type Item = Res<Cell>;
-    fn next(&mut self) -> Option<Res<Cell>> {
+    type Item = Res<Xell>;
+    fn next(&mut self) -> Option<Res<Xell>> {
         self.eval_next()
     }
 }
