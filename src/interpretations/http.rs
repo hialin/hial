@@ -2,7 +2,11 @@ use indexmap::IndexMap;
 use linkme::distributed_slice;
 use reqwest::{blocking::Client, Error as ReqwestError};
 
-use crate::{api::interpretation::*, api::*, utils::ownrc::*};
+use crate::{
+    api::{interpretation::*, *},
+    utils::ownrc::*,
+    warning,
+};
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static URL_TO_HTTP: ElevationConstructor = ElevationConstructor {
@@ -56,7 +60,7 @@ pub(crate) struct Group {
 pub(crate) struct CellWriter {}
 
 impl Cell {
-    pub(crate) fn from_cell(cell: Xell, _: &str) -> Res<Xell> {
+    pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
         let reader = cell.read().err()?;
         let value = reader.value()?;
         let value_cow = value.as_cow_str();
@@ -84,7 +88,7 @@ impl Cell {
             .unwrap_or("")
             .to_string();
         if status >= 400 {
-            eprintln!("Error: http call failed: {} = {} {}", url, status, reason);
+            warning!("Error: http call failed: {} = {} {}", url, status, reason);
         }
         let response = OwnRc::new(Response {
             status,

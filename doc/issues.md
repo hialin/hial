@@ -8,13 +8,13 @@
 - /*[name|parameters|return_type] ??
 - set value on the command line: '/username = "newuser"'
 - https://raw.githubusercontent.com/rust-lang/rust/master/src/tools/rustfmt/src/lib.rs^http^rust does not work
+- '**[filter]' must be work as '**/*[filter]' (filter to be applied only on leaves)
+- support rust/ts write: `hial './src/tests/rust.rs^rust/*[:function_item].label = "modified_fn_name"'`
+- add http interpretation params: method=HEAD, accept=""
 - support zip, markdown
 - support 'copy source destination'
 - support ^json^tree^xml
 - support diff  ./file.json^json^tree  ./file.xml^xml^tree
-- '**[filter]' must be work as '**/*[filter]' (filter to be applied only on leaves)
-- support rust/ts write: `hial './src/tests/rust.rs^rust/*[:function_item].label = "modified_fn_name"'`
-- add http interpretation params: method=HEAD, accept=""
 - functions
 - should blobs/bytes be part of value? they are only useful by reinterpretation
 

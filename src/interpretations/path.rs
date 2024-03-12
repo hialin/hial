@@ -28,7 +28,7 @@ pub(crate) struct CellReader(ReadRc<PathBuf>, OnceCell<String>);
 pub(crate) struct CellWriter(WriteRc<PathBuf>);
 
 impl Cell {
-    pub(crate) fn from_cell(cell: Xell, _: &str) -> Res<Xell> {
+    pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
         match cell.interpretation() {
             "value" => {
                 let r = cell.read();

@@ -1,7 +1,7 @@
 use crate::{
     api::*,
     pprint::pprint,
-    search::path::{Expression, Filter, Path, PathItem},
+    search::path::{Expression, Filter, NormalPathItem, Path, PathItem},
     utils::log::set_verbose,
 };
 
@@ -10,23 +10,23 @@ fn path_simple_item() -> Res<()> {
     let path = Path::parse("/a[2]")?;
     assert_eq!(
         path.0.as_slice(),
-        &[PathItem {
+        &[PathItem::Normal(NormalPathItem {
             relation: Relation::Sub,
             selector: Some(Selector::Str("a")),
             index: Some(2),
             filters: vec![],
-        },]
+        })]
     );
 
     let path = Path::parse("/a[-2]")?;
     assert_eq!(
         path.0.as_slice(),
-        &[PathItem {
+        &[PathItem::Normal(NormalPathItem {
             relation: Relation::Sub,
             selector: Some(Selector::Str("a")),
             index: Some(-2),
             filters: vec![],
-        },]
+        }),]
     );
     Ok(())
 }
@@ -37,55 +37,55 @@ fn path_items() -> Res<()> {
     assert_eq!(
         path.0.as_slice(),
         &[
-            PathItem {
+            PathItem::Normal(NormalPathItem {
                 relation: Relation::Sub,
                 selector: Some("a".into()),
                 index: None,
                 filters: vec![],
-            },
-            PathItem {
+            }),
+            PathItem::Normal(NormalPathItem {
                 relation: Relation::Attr,
                 selector: Some("name".into()),
                 index: None,
                 filters: vec![],
-            },
-            PathItem {
+            }),
+            PathItem::Normal(NormalPathItem {
                 relation: Relation::Sub,
                 selector: None,
                 index: Some(2),
                 filters: vec![],
-            },
-            PathItem {
+            }),
+            PathItem::Normal(NormalPathItem {
                 relation: Relation::Sub,
                 selector: Some(Selector::Star),
                 index: None,
                 filters: vec![
                     Filter {
                         expr: Expression {
-                            left: Path(vec![PathItem {
+                            left: Path(vec![PathItem::Normal(NormalPathItem {
                                 relation: Relation::Field,
                                 selector: Some("value".into()),
                                 index: None,
                                 filters: vec![],
-                            },]),
+                            }),]),
                             op: Some("=="),
                             right: Some(Value::Str("3"))
                         }
                     },
                     Filter {
                         expr: Expression {
-                            left: Path(vec![PathItem {
+                            left: Path(vec![PathItem::Normal(NormalPathItem {
                                 relation: Relation::Sub,
                                 selector: Some("x".into()),
                                 index: None,
                                 filters: vec![],
-                            },]),
+                            }),]),
                             op: None,
                             right: None,
                         }
                     }
                 ],
-            }
+            })
         ]
     );
     Ok(())

@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::{
     api::*,
-    search::{parseurl::*, searcher::Searcher},
+    search::{searcher::Searcher, url::*},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -16,7 +16,25 @@ pub enum PathStart<'a> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct PathItem<'a> {
+pub(crate) enum PathItem<'a> {
+    Elevation(ElevationPathItem<'a>),
+    Normal(NormalPathItem<'a>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ElevationPathItem<'a> {
+    pub(crate) interpretation: Selector<'a>,
+    pub(crate) params: Vec<InterpretationParam<'a>>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct InterpretationParam<'a> {
+    pub(crate) name: &'a str,
+    pub(crate) value: Option<Value<'a>>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct NormalPathItem<'a> {
     pub(crate) relation: Relation,
     pub(crate) selector: Option<Selector<'a>>, // field name (string) or '*' or '**'
     pub(crate) index: Option<isize>,
@@ -24,12 +42,12 @@ pub struct PathItem<'a> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Filter<'a> {
+pub(crate) struct Filter<'a> {
     pub(crate) expr: Expression<'a>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Expression<'a> {
+pub(crate) struct Expression<'a> {
     pub(crate) left: Path<'a>,
     pub(crate) op: Option<&'a str>,
     pub(crate) right: Option<Value<'a>>,
@@ -45,6 +63,39 @@ impl Display for Path<'_> {
 impl Display for PathItem<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         fmt_path_item(self, f)?;
+        Ok(())
+    }
+}
+
+impl Display for ElevationPathItem<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "^{}", self.interpretation)?;
+        if !self.params.is_empty() {
+            write!(f, "[")?;
+            for (i, param) in self.params.iter().enumerate() {
+                write!(f, "{}", param)?;
+                if i < self.params.len() - 1 {
+                    write!(f, ",")?;
+                }
+            }
+            write!(f, "]")?;
+        }
+        Ok(())
+    }
+}
+
+impl Display for NormalPathItem<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.relation)?;
+        if let Some(sel) = self.selector {
+            write!(f, "{}", sel)?;
+        }
+        if let Some(idx) = self.index {
+            write!(f, "[{}]", idx)?;
+        }
+        for filter in &self.filters {
+            write!(f, "{}", filter)?;
+        }
         Ok(())
     }
 }
@@ -82,8 +133,18 @@ impl Display for Expression<'_> {
     }
 }
 
+impl Display for InterpretationParam<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(v) = self.value {
+            write!(f, "={}", v)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug)]
-pub struct DisplayRefPath<'a, 'b: 'a, 'c: 'b>(pub(crate) &'c Vec<&'b PathItem<'a>>);
+pub(crate) struct DisplayRefPath<'a, 'b: 'a, 'c: 'b>(pub(crate) &'c Vec<&'b PathItem<'a>>);
 impl<'a, 'b: 'a, 'c: 'b> Display for DisplayRefPath<'a, 'b, 'c> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for it in self.0 {
@@ -94,7 +155,7 @@ impl<'a, 'b: 'a, 'c: 'b> Display for DisplayRefPath<'a, 'b, 'c> {
 }
 
 #[derive(Clone, Debug)]
-pub struct DisplayPath<'a, 'b: 'a>(pub(crate) &'b Vec<PathItem<'a>>);
+pub(crate) struct DisplayPath<'a, 'b: 'a>(pub(crate) &'b Vec<PathItem<'a>>);
 impl<'a, 'b: 'a> Display for DisplayPath<'a, 'b> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for it in self.0 {
@@ -110,16 +171,15 @@ fn fmt_path_items(path_items: &Vec<PathItem>, f: &mut Formatter<'_>) -> std::fmt
     }
     Ok(())
 }
+
 fn fmt_path_item(path_item: &PathItem, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", path_item.relation)?;
-    if let Some(sel) = path_item.selector {
-        write!(f, "{}", sel)?;
-    }
-    if let Some(idx) = path_item.index {
-        write!(f, "[{}]", idx)?;
-    }
-    for filter in &path_item.filters {
-        write!(f, "{}", filter)?;
+    match path_item {
+        PathItem::Elevation(e) => {
+            write!(f, "{}", e)?;
+        }
+        PathItem::Normal(n) => {
+            write!(f, "{}", n)?;
+        }
     }
     Ok(())
 }

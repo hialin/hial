@@ -242,7 +242,7 @@ impl CellWriter {
 }
 
 impl Cell {
-    pub(crate) fn from_cell(cell: Xell, _: &str) -> Res<Xell> {
+    pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
         let r = cell.read();
         let path = r.as_file_path()?;
         let file_cell = Self::make_file_cell(path)?;

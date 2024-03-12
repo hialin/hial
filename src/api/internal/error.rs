@@ -1,5 +1,27 @@
 use crate::{api::interpretation::*, api::*};
 
+impl CellTrait for HErr {
+    type Group = HErr;
+    type CellReader = HErr;
+    type CellWriter = HErr;
+
+    fn interpretation(&self) -> &str {
+        "error"
+    }
+
+    fn read(&self) -> Res<Self::CellReader> {
+        Err(self.clone())
+    }
+
+    fn write(&self) -> Res<Self::CellWriter> {
+        Err(self.clone())
+    }
+
+    fn head(&self) -> Res<(Self, Relation)> {
+        nores()
+    }
+}
+
 impl CellReaderTrait for HErr {
     fn ty(&self) -> Res<&str> {
         Ok(match self.kind {
@@ -34,28 +56,6 @@ impl CellReaderTrait for HErr {
 impl CellWriterTrait for HErr {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
         Err(self.clone())
-    }
-}
-
-impl CellTrait for HErr {
-    type Group = HErr;
-    type CellReader = HErr;
-    type CellWriter = HErr;
-
-    fn interpretation(&self) -> &str {
-        "error"
-    }
-
-    fn read(&self) -> Res<Self::CellReader> {
-        Err(self.clone())
-    }
-
-    fn write(&self) -> Res<Self::CellWriter> {
-        Err(self.clone())
-    }
-
-    fn head(&self) -> Res<(Self, Relation)> {
-        nores()
     }
 }
 

@@ -71,9 +71,15 @@ pub trait GroupTrait: Clone + Debug {
     fn at(&self, index: usize) -> Res<Self::Cell>;
     fn get_all(&self, label: Value<'_>) -> Res<Self::CellIterator>;
 
-    fn add(&mut self) -> Res<()> {
+    fn add(&self, value: Option<OwnValue>) -> Res<()> {
         todo!() // TODO: remove this default implementation
     }
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct LabelType {
+    pub is_indexed: bool,
+    pub unique_labels: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -102,10 +108,4 @@ impl<C: CellTrait> GroupTrait for VoidGroup<C> {
     fn get_all(&self, label: Value) -> Res<Self::CellIterator> {
         nores()
     }
-}
-
-#[derive(Copy, Clone, Debug, Default)]
-pub struct LabelType {
-    pub is_indexed: bool,
-    pub unique_labels: bool,
 }

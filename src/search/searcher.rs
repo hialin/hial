@@ -15,6 +15,8 @@ use crate::{
     warning,
 };
 
+use super::path::{ElevationPathItem, NormalPathItem};
+
 macro_rules! ifdebug {
     ( $body:expr ) => {
         // $body
@@ -74,13 +76,6 @@ impl<'s> Searcher<'s> {
                 .map(|p| p.to_string())
                 .collect::<Vec<String>>()
         ));
-        let p = PathItem {
-            relation: Relation::Interpretation,
-            selector: None,
-            index: None,
-            filters: vec![],
-        };
-
         // start cell is the parent of cells to be matched against path index 0
         let start_match = MatchTest {
             parent: start,
@@ -135,45 +130,103 @@ impl<'s> Searcher<'s> {
             path_index
         ));
 
-        let group = match pi.relation {
-            Relation::Sub => parent.sub(),
-            Relation::Attr => parent.attr(),
-            Relation::Interpretation => parent.elevate(),
-            Relation::Field => parent.field(),
-        };
-        let group = match group.err() {
-            Ok(group) => Some(group),
-            Err(err) => {
-                if err.kind != HErrKind::None {
-                    return Some(Err(err));
-                }
-                None
+        match pi {
+            PathItem::Elevation(npi) => {
+                Self::process_elevation(
+                    &mut self.stack,
+                    npi,
+                    parent,
+                    path_index,
+                    &mut self.next_max_path_index,
+                );
             }
+            PathItem::Normal(npi) => {
+                let group = match npi.relation {
+                    Relation::Sub => parent.sub(),
+                    Relation::Attr => parent.attr(),
+                    Relation::Field => parent.field(),
+                    Relation::Interpretation => {
+                        return Some(fault("interpretation relation not expected here"));
+                    }
+                };
+                match group.err() {
+                    Err(e) => {
+                        if e.kind != HErrKind::None {
+                            return Some(Err(e));
+                        }
+                    }
+                    Ok(group) => {
+                        Self::process_group(
+                            &mut self.stack,
+                            &self.path,
+                            &parent,
+                            group,
+                            path_index,
+                            &mut self.next_max_path_index,
+                        );
+                    }
+                }
+
+                // test for doublestar matching nothing, i.e. the parent against the next path item
+                if npi.selector == Some(Selector::DoubleStar) {
+                    Self::process_cell(
+                        &mut self.stack,
+                        &self.path,
+                        parent,
+                        path_index,
+                        true,
+                        &mut self.next_max_path_index,
+                    )
+                }
+            }
+        }
+        None
+    }
+
+    fn process_elevation(
+        stack: &mut Vec<MatchTest>,
+        epi: &ElevationPathItem,
+        parent: Xell,
+        path_index: usize,
+        next_max_path_index: &mut usize,
+    ) -> Option<Res<()>> {
+        let group = parent.elevate();
+        let itp_cell = match epi.interpretation {
+            Selector::Top => group.at(0),
+            Selector::Str(itp) => group.get(itp),
+            _ => return Some(userres("bad interpretation selector")),
         };
-
-        if let Some(group) = group {
-            Self::process_group(
-                &mut self.stack,
-                &self.path,
-                &parent,
-                group,
-                path_index,
-                &mut self.next_max_path_index,
-            );
+        if !epi.params.is_empty() {
+            let attrs = guard_ok!(itp_cell.attr().err(), err => {
+                return Some(Err(err));
+            });
+            for param in &epi.params {
+                if attrs.get(param.name).err().is_err() {
+                    guard_ok!(attrs.add(Some(param.name.into())), err => {
+                        return Some(Err(err));
+                    });
+                }
+                if let Some(v) = param.value {
+                    guard_ok!(attrs.get(param.name).write().value(v.to_owned_value()), err => {
+                        return Some(Err(err));
+                    });
+                }
+            }
         }
+        let cell = guard_ok!(itp_cell.sub().at(0).err(), err => {
+            return Some(Err(err));
+        });
 
-        // test for doublestar matching nothing, i.e. the parent against the next path item
-        if pi.selector == Some(Selector::DoubleStar) {
-            Self::process_cell(
-                &mut self.stack,
-                &self.path,
-                parent,
-                path_index,
-                true,
-                &mut self.next_max_path_index,
-            )
-        }
-
+        ifdebug!(println!(
+            "match, push (elevation): `{}` : {:?}",
+            cell.debug_string(),
+            path_index + 1
+        ));
+        stack.push(MatchTest {
+            parent: cell.clone(),
+            path_index: path_index + 1,
+        });
+        Self::update_next_max_path_index(stack, next_max_path_index);
         None
     }
 
@@ -185,7 +238,10 @@ impl<'s> Searcher<'s> {
         path_index: usize,
         next_max_path_index: &mut usize,
     ) {
-        let pi = &path[path_index];
+        let pi = match &path[path_index] {
+            PathItem::Elevation(_) => panic!("elevation path item unexpected here"),
+            PathItem::Normal(npi) => npi,
+        };
         match (pi.selector, pi.index) {
             (Some(Selector::Star) | Some(Selector::DoubleStar), None) => {
                 ifdebug!(println!("iterating over all children"));
@@ -277,7 +333,10 @@ impl<'s> Searcher<'s> {
             return;
         });
 
-        let pi = &path[path_index];
+        let pi = match &path[path_index] {
+            PathItem::Elevation(_) => panic!("elevation path item not expected here"),
+            PathItem::Normal(npi) => npi,
+        };
 
         ifdebug!(println!("test: `{}` for {}", cell.debug_string(), pi));
 
@@ -304,7 +363,7 @@ impl<'s> Searcher<'s> {
         Self::update_next_max_path_index(stack, next_max_path_index);
     }
 
-    fn eval_filters_match(subcell: &Xell, path_item: &PathItem) -> bool {
+    fn eval_filters_match(subcell: &Xell, path_item: &NormalPathItem) -> bool {
         for filter in &path_item.filters {
             match Searcher::eval_bool_expression(subcell.clone(), &filter.expr) {
                 Err(e) => {

@@ -49,7 +49,7 @@ impl fmt::Debug for Cell {
 }
 
 impl Cell {
-    pub(crate) fn from_cell(cell: Xell, lang: &'static str) -> Res<Xell> {
+    pub(crate) fn from_cell(cell: Xell, lang: &'static str, params: &ElevateParams) -> Res<Xell> {
         match cell.interpretation() {
             "value" => {
                 let source = cell.read().value()?.as_cow_str().into_owned();

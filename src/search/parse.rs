@@ -1,4 +1,4 @@
-use crate::{api::*, guard_ok, search::parseurl::*, search::path::*};
+use crate::{api::*, guard_ok, search::path::*, search::url::*};
 use nom::character::complete::space0;
 use nom::error::VerboseErrorKind;
 use nom::{
@@ -81,39 +81,6 @@ fn path_start_string(input: &str) -> NomRes<&str, PathStart> {
         .map(|(next_input, res)| (next_input, PathStart::String(res)))
 }
 
-fn value(input: &str) -> NomRes<&str, Value> {
-    context("value", alt((value_string, value_uint)))(input)
-}
-
-fn value_string(input: &str) -> NomRes<&str, Value> {
-    context("value_string", string)(input).map(|(next_input, res)| (next_input, Value::Str(res)))
-}
-
-fn value_uint(input: &str) -> NomRes<&str, Value> {
-    context("value_uint", digit1)(input)
-        .and_then(|(next_input, res)| match res.parse::<u64>() {
-            Ok(n) => Ok((next_input, n)),
-            Err(_) => Err(nom::Err::Error(VerboseError { errors: vec![] })),
-        })
-        .map(|(next_input, num)| (next_input, Value::Int(Int::U64(num))))
-}
-
-fn string(input: &str) -> NomRes<&str, &str> {
-    context("string", alt((parse_quoted_single, parse_quoted_double)))(input)
-}
-
-fn parse_quoted_single(input: &str) -> NomRes<&str, &str> {
-    let esc = escaped(none_of("\\\'"), '\\', tag("'"));
-    let esc_or_empty = alt((esc, tag("")));
-    delimited(tag("'"), esc_or_empty, tag("'"))(input)
-}
-
-fn parse_quoted_double(input: &str) -> NomRes<&str, &str> {
-    let esc = escaped(none_of("\\\""), '\\', tag("\""));
-    let esc_or_empty = alt((esc, tag("")));
-    delimited(tag("\""), esc_or_empty, tag("\""))(input)
-}
-
 fn path_items(input: &str) -> NomRes<&str, Path> {
     context("path_items", many0(path_item))(input).map(|(next_input, res)| {
         let path_items = res.iter().map(|p| p.to_owned()).collect();
@@ -122,11 +89,38 @@ fn path_items(input: &str) -> NomRes<&str, Path> {
 }
 
 fn path_item(input: &str) -> NomRes<&str, PathItem> {
+    context("path_item", alt((elevation_path_item, normal_path_item)))(input)
+}
+
+fn elevation_path_item(input: &str) -> NomRes<&str, PathItem> {
     context(
-        "path_item",
+        "elevation path item",
         tuple((
             space0,
-            path_item_start,
+            tag("^"),
+            space0,
+            path_item_selector,
+            space0,
+            many0(filter),
+        )),
+    )(input)
+    .map(|(next_input, res)| {
+        (
+            next_input,
+            PathItem::Elevation(ElevationPathItem {
+                interpretation: res.3,
+                params: vec![],
+            }),
+        )
+    })
+}
+
+fn normal_path_item(input: &str) -> NomRes<&str, PathItem> {
+    context(
+        "normal path item",
+        tuple((
+            space0,
+            relation,
             space0,
             opt(path_item_selector),
             space0,
@@ -140,13 +134,13 @@ fn path_item(input: &str) -> NomRes<&str, PathItem> {
         if res.3.is_none() && res.5.is_none() {
             Err(nom::Err::Error(VerboseError { errors: vec![] }))
         } else {
-            let pi = PathItem {
+            let npi = NormalPathItem {
                 relation: Relation::try_from(res.1).unwrap_or_else(|_| panic!("bad relation")),
                 selector: res.3,
                 index: res.5,
                 filters: res.7,
             };
-            if pi.relation == Relation::Field && !pi.filters.is_empty() {
+            if npi.relation == Relation::Field && !npi.filters.is_empty() {
                 Err(nom::Err::Error(VerboseError {
                     errors: vec![(
                         next_input,
@@ -154,7 +148,7 @@ fn path_item(input: &str) -> NomRes<&str, PathItem> {
                     )],
                 }))
             } else {
-                Ok((next_input, pi))
+                Ok((next_input, PathItem::Normal(npi)))
             }
         }
     })
@@ -194,13 +188,34 @@ fn expression(input: &str) -> NomRes<&str, Expression> {
     })
 }
 
-fn expression_left(input: &str) -> NomRes<&str, Path> {
-    context("expression_left", path_items)(input)
+fn interpretation_param(input: &str) -> NomRes<&str, InterpretationParam> {
+    context(
+        "interpretation parameter",
+        delimited(
+            tag("["),
+            tuple((
+                space0,
+                identifier_code_points,
+                space0,
+                opt(tuple((tag("="), space0, value))),
+            )),
+            tag("]"),
+        ),
+    )(input)
+    .map(|(next_input, res)| {
+        (
+            next_input,
+            InterpretationParam {
+                name: res.1,
+                value: res.3.map(|x| x.2),
+            },
+        )
+    })
 }
 
-fn path_item_start(input: &str) -> NomRes<&str, char> {
+fn relation(input: &str) -> NomRes<&str, char> {
     context(
-        "path_item_start",
+        "relation",
         alt((
             tag(from_utf8(&[Relation::Attr as u8]).unwrap()),
             tag(from_utf8(&[Relation::Sub as u8]).unwrap()),
@@ -209,6 +224,39 @@ fn path_item_start(input: &str) -> NomRes<&str, char> {
         )),
     )(input)
     .map(|(next_input, res)| (next_input, res.chars().next().unwrap()))
+}
+
+fn value(input: &str) -> NomRes<&str, Value> {
+    context("value", alt((value_string, value_uint)))(input)
+}
+
+fn value_string(input: &str) -> NomRes<&str, Value> {
+    context("value_string", string)(input).map(|(next_input, res)| (next_input, Value::Str(res)))
+}
+
+fn value_uint(input: &str) -> NomRes<&str, Value> {
+    context("value_uint", digit1)(input)
+        .and_then(|(next_input, res)| match res.parse::<u64>() {
+            Ok(n) => Ok((next_input, n)),
+            Err(_) => Err(nom::Err::Error(VerboseError { errors: vec![] })),
+        })
+        .map(|(next_input, num)| (next_input, Value::Int(Int::U64(num))))
+}
+
+fn string(input: &str) -> NomRes<&str, &str> {
+    context("string", alt((parse_quoted_single, parse_quoted_double)))(input)
+}
+
+fn parse_quoted_single(input: &str) -> NomRes<&str, &str> {
+    let esc = escaped(none_of("\\\'"), '\\', tag("'"));
+    let esc_or_empty = alt((esc, tag("")));
+    delimited(tag("'"), esc_or_empty, tag("'"))(input)
+}
+
+fn parse_quoted_double(input: &str) -> NomRes<&str, &str> {
+    let esc = escaped(none_of("\\\""), '\\', tag("\""));
+    let esc_or_empty = alt((esc, tag("")));
+    delimited(tag("\""), esc_or_empty, tag("\""))(input)
 }
 
 fn number_usize(input: &str) -> NomRes<&str, usize> {

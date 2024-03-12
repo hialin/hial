@@ -74,7 +74,7 @@ pub(crate) enum WriteNodeGroup {
 }
 
 impl Cell {
-    pub(crate) fn from_cell(cell: Xell, _: &str) -> Res<Xell> {
+    pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
         let (serde_value, indent) = match cell.interpretation() {
             "value" => {
                 let s = cell.read().value()?.to_string();

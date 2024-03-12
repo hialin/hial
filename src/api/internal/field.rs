@@ -16,12 +16,12 @@ pub enum FieldType {
 }
 
 #[derive(Clone, Debug)]
-pub struct FieldGroup {
+pub struct Group {
     pub(crate) cell: Rc<Xell>,
 }
 
 #[derive(Clone, Debug)]
-pub struct FieldCell {
+pub struct Cell {
     pub(crate) cell: Rc<Xell>,
     pub(crate) ty: FieldType,
 }
@@ -56,8 +56,8 @@ impl TryFrom<usize> for FieldType {
     }
 }
 
-impl GroupTrait for FieldGroup {
-    type Cell = FieldCell;
+impl GroupTrait for Group {
+    type Cell = Cell;
     type CellIterator = std::iter::Once<Res<Self::Cell>>;
 
     fn label_type(&self) -> LabelType {
@@ -94,7 +94,7 @@ impl GroupTrait for FieldGroup {
         {
             return nores();
         }
-        Ok(FieldCell {
+        Ok(Cell {
             cell: self.cell.clone(),
             ty,
         })
@@ -117,8 +117,8 @@ impl GroupTrait for FieldGroup {
     }
 }
 
-impl CellTrait for FieldCell {
-    type Group = FieldGroup;
+impl CellTrait for Cell {
+    type Group = Group;
     type CellReader = FieldReader;
     type CellWriter = FieldWriter;
 
@@ -145,7 +145,7 @@ impl CellTrait for FieldCell {
 
     fn head(&self) -> Res<(Self, Relation)> {
         // This cannot be implemented, we should return a Xell here but the
-        // trait type does not allow us. This is fixed by extra::Cell which
+        // trait type does not allow us. This is fixed by Xell::head which
         // returns the correct head.
         unimplemented!()
     }
