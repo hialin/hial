@@ -66,9 +66,7 @@ fn yaml_write_and_save() -> Res<()> {
     )
     .policy(WritePolicy::NoAutoWrite);
     let yaml = text.be("yaml");
-    yaml.to("/hosts/[0]/labels/power")
-        .write()
-        .value("putty".into())?;
+    yaml.to("/hosts/[0]/labels/power").write().value("putty")?;
     assert_eq!(yaml.to("/hosts/[0]/labels/power").read().value()?, "putty");
 
     yaml.save(&yaml.origin())?;

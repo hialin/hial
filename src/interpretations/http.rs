@@ -4,6 +4,7 @@ use reqwest::{blocking::Client, Error as ReqwestError};
 
 use crate::{
     api::{interpretation::*, *},
+    implement_try_from_xell,
     utils::ownrc::*,
     warning,
 };
@@ -59,6 +60,8 @@ pub(crate) struct Group {
 #[derive(Debug)]
 pub(crate) struct CellWriter {}
 
+implement_try_from_xell!(Cell, Http);
+
 impl Cell {
     pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
         let reader = cell.read().err()?;
@@ -104,7 +107,7 @@ impl Cell {
             },
             pos: 0,
         };
-        Ok(new_xell(DynCell::from(http_cell), Some(cell)))
+        Ok(Xell::new_from(DynCell::from(http_cell), Some(cell)))
     }
 }
 

@@ -1,9 +1,54 @@
 use crate::{
     api::*,
     pprint::pprint,
-    search::path::{Expression, Filter, NormalPathItem, Path, PathItem},
+    search::path::{
+        ElevationPathItem, Expression, Filter, InterpretationParam, NormalPathItem, Path, PathItem,
+    },
     utils::log::set_verbose,
 };
+
+#[test]
+fn path_simple_elevation() -> Res<()> {
+    let path = Path::parse("^fs^fs.one[w]^fs.two[w=1]")?;
+    assert_eq!(
+        path.0.as_slice(),
+        &[
+            PathItem::Elevation(ElevationPathItem {
+                interpretation: Selector::Str("fs"),
+                params: vec![]
+            }),
+            PathItem::Elevation(ElevationPathItem {
+                interpretation: Selector::Str("fs.one"),
+                params: vec![InterpretationParam {
+                    name: "w",
+                    value: None
+                }]
+            }),
+            PathItem::Elevation(ElevationPathItem {
+                interpretation: Selector::Str("fs.two"),
+                params: vec![InterpretationParam {
+                    name: "w",
+                    value: Some(Value::Int(1.into())),
+                }]
+            })
+        ]
+    );
+    Ok(())
+}
+
+// TODO: top elevation
+// #[test]
+// fn path_top_elevation() -> Res<()> {
+//     let path = Path::parse("^[0]")?;
+//     assert_eq!(
+//         path.0.as_slice(),
+//         &[PathItem::Elevation(ElevationPathItem {
+//             interpretation: Selector::Str("fs"),
+//             params: vec![]
+//         }),]
+//     );
+//     Ok(())
+// }
 
 #[test]
 fn path_simple_item() -> Res<()> {

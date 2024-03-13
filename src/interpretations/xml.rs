@@ -7,7 +7,7 @@ use std::{fs::File, io::BufRead, rc::Rc};
 
 use crate::{
     api::{interpretation::*, *},
-    debug, guard_variant,
+    debug, guard_variant, implement_try_from_xell,
     utils::{
         indentation::{detect_file_indentation, detect_indentation},
         ownrc::{OwnRc, ReadRc, WriteRc},
@@ -94,6 +94,8 @@ pub(crate) enum Attribute {
     Error(String),
 }
 
+implement_try_from_xell!(Cell, Xml);
+
 impl Cell {
     pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
         match cell.interpretation() {
@@ -133,7 +135,7 @@ impl Cell {
             },
             pos: 0,
         };
-        Ok(new_xell(DynCell::from(xml_cell), origin))
+        Ok(Xell::new_from(DynCell::from(xml_cell), origin))
     }
 }
 

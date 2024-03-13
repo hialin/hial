@@ -1,4 +1,9 @@
-use crate::{api::interpretation::*, api::*};
+use crate::{
+    api::{interpretation::*, *},
+    implement_try_from_xell,
+};
+
+implement_try_from_xell!(HErr, Error);
 
 impl CellTrait for HErr {
     type Group = HErr;

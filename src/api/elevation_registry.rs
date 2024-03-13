@@ -6,7 +6,7 @@ use crate::{api::*, guard_ok, guard_some, warning};
 
 use linkme::distributed_slice;
 
-pub type ElevateParams = IndexMap<&'static str, OwnValue>;
+pub type ElevateParams = IndexMap<OwnValue, OwnValue>;
 pub type ElevateFn =
     fn(source: Xell, target_interpretation: &'static str, params: &ElevateParams) -> Res<Xell>;
 type TargetMap = IndexMap<&'static str, ElevateFn>;

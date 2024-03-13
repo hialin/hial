@@ -5,6 +5,7 @@ use indexmap::IndexMap;
 use linkme::distributed_slice;
 use yaml_rust::{ScanError, Yaml, YamlLoader};
 
+use crate::implement_try_from_xell;
 use crate::{
     api::{interpretation::*, *},
     utils::ownrc::{OwnRc, ReadRc, WriteRc},
@@ -66,6 +67,8 @@ pub(crate) enum Node {
     Object(OwnRc<IndexMap<Yaml, Node>>),
 }
 
+implement_try_from_xell!(Cell, Yaml);
+
 impl From<ScanError> for HErr {
     fn from(e: ScanError) -> HErr {
         caused(HErrKind::InvalidFormat, "yaml parse error", e)
@@ -120,7 +123,7 @@ impl Cell {
             },
             pos: 0,
         };
-        Ok(new_xell(DynCell::from(yaml_cell), origin))
+        Ok(Xell::new_from(DynCell::from(yaml_cell), origin))
     }
 }
 

@@ -7,6 +7,7 @@ use {toml, toml::Value as TomlValue};
 
 use crate::{
     api::{interpretation::*, *},
+    implement_try_from_xell,
     utils::ownrc::{OwnRc, ReadRc, WriteRc},
 };
 
@@ -67,6 +68,8 @@ pub(crate) enum Node {
     Table(OwnRc<IndexMap<String, Node>>),
 }
 
+implement_try_from_xell!(Cell, Toml);
+
 impl From<toml::de::Error> for HErr {
     fn from(e: toml::de::Error) -> HErr {
         caused(HErrKind::InvalidFormat, "bad toml", e)
@@ -108,7 +111,7 @@ impl Cell {
             },
             pos: 0,
         };
-        Ok(new_xell(DynCell::from(toml_cell), origin))
+        Ok(Xell::new_from(DynCell::from(toml_cell), origin))
     }
 }
 

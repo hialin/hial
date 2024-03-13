@@ -1,4 +1,5 @@
 use crate::api::{interpretation::*, *};
+use crate::implement_try_from_xell;
 use crate::utils::ownrc::{OwnRc, ReadRc, WriteRc};
 
 #[derive(Clone, Debug)]
@@ -9,6 +10,8 @@ pub(crate) struct CellReader(ReadRc<OwnValue>);
 
 #[derive(Debug)]
 pub(crate) struct CellWriter(WriteRc<OwnValue>);
+
+implement_try_from_xell!(Cell, OwnValue);
 
 impl Cell {
     pub(crate) fn from_str(s: &str) -> Res<Xell> {
@@ -21,7 +24,7 @@ impl Cell {
 
     pub(crate) fn from_value(ov: OwnValue) -> Res<Xell> {
         let cell = Cell(OwnRc::new(ov));
-        Ok(new_xell(DynCell::from(cell), None))
+        Ok(Xell::new_from(DynCell::from(cell), None))
     }
 }
 

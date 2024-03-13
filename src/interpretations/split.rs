@@ -27,6 +27,8 @@ pub(crate) struct CellReader(Rc<Data>);
 #[derive(Debug)]
 pub(crate) struct CellWriter {}
 
+implement_try_from_xell!(Cell, Split);
+
 impl Cell {
     pub(crate) fn from_cell(cell: Xell, _: &str, params: ElevationParams) -> Res<Xell> {
         match cell.interpretation() {

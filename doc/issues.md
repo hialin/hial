@@ -1,8 +1,6 @@
 # List of Todos and other Issues
 
-- ^fs[w] ??
-    - dyn elevate cell as interpretation
-    - remove special elevategroup
+- support ~
 - support type selector: `hial './src/tests/rust.rs^rust/*[:function_item]'`
 - add split(":") and regex interpretations
 - /*[name|parameters|return_type] ??

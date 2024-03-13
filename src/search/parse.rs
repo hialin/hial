@@ -101,7 +101,7 @@ fn elevation_path_item(input: &str) -> NomRes<&str, PathItem> {
             space0,
             path_item_selector,
             space0,
-            many0(filter),
+            many0(interpretation_param),
         )),
     )(input)
     .map(|(next_input, res)| {
@@ -109,7 +109,7 @@ fn elevation_path_item(input: &str) -> NomRes<&str, PathItem> {
             next_input,
             PathItem::Elevation(ElevationPathItem {
                 interpretation: res.3,
-                params: vec![],
+                params: res.5,
             }),
         )
     })

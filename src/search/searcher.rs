@@ -190,19 +190,31 @@ impl<'s> Searcher<'s> {
         path_index: usize,
         next_max_path_index: &mut usize,
     ) -> Option<Res<()>> {
+        ifdebug!(println!(
+            "process_elevation, parent: {}, epi: {:?}",
+            parent.debug_string(),
+            epi
+        ));
         let group = parent.elevate();
         let itp_cell = match epi.interpretation {
-            Selector::Top => group.at(0),
             Selector::Str(itp) => group.get(itp),
             _ => return Some(userres("bad interpretation selector")),
         };
+        let itp_cell = guard_ok!(itp_cell.err(), err => {
+            return Some(Err(err));
+        });
         if !epi.params.is_empty() {
             let attrs = guard_ok!(itp_cell.attr().err(), err => {
                 return Some(Err(err));
             });
             for param in &epi.params {
                 if attrs.get(param.name).err().is_err() {
-                    guard_ok!(attrs.add(Some(param.name.into())), err => {
+                    let label = Value::from(param.name).to_owned_value();
+                    let opt_value = param.value.map(|v| v.to_owned_value());
+                    let newcell = guard_ok!(attrs.create(Some(label), opt_value), err => {
+                        return Some(Err(err));
+                    });
+                    guard_ok!(attrs.add(None, newcell), err => {
                         return Some(Err(err));
                     });
                 }
@@ -311,9 +323,6 @@ impl<'s> Searcher<'s> {
             }
             (None, None) => {
                 warning!("missing both selector and index in search");
-            }
-            (Some(Selector::Top), _) => {
-                warning!("Selector::Top not supported in search");
             }
         }
     }

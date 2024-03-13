@@ -87,7 +87,7 @@ fn json_write() -> Res<()> {
         let newvalue = "insanely strong";
         let f1 = json.to(path);
         println!("{}", f1.path()?);
-        f1.write().value(newvalue.into())?;
+        f1.write().value(newvalue)?;
         pprint(&json, 0, 0);
         assert_eq!(json.to(path).read().value()?, newvalue);
     }
@@ -96,7 +96,7 @@ fn json_write() -> Res<()> {
         let path = "/hosts/[1]/labels/power";
         let newvalue = "intensity";
         let f1 = json.to(path);
-        f1.write().label(newvalue.into())?;
+        f1.write().label(newvalue)?;
         assert_eq!(f1.read().label()?, newvalue);
         pprint(&json, 0, 0);
         assert_eq!(
@@ -134,7 +134,7 @@ fn json_write_and_save() -> Res<()> {
 
     let path1 = "/hosts/[1]/labels/power";
     let newvalue = "weak as putty";
-    json.to(path1).write().value(newvalue.into())?;
+    json.to(path1).write().value(newvalue)?;
 
     let path2 = "/hosts/[0]/host_id";
     json.to(path2).write().value(OwnValue::None)?;

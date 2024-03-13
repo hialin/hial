@@ -1,24 +1,24 @@
 
 # Hial
 
-Hial is a general purpose data API and CLI tool. It is a programmatic interface to different types of data represented in an uniform manner (a general tree/graph structure). This makes the data easy to read, explore and modify using a small number of functions. Hial proposes a relatively simple mental model, suitable for most use cases, which improves the user comfort and speed.
+Hial is a general purpose data API and CLI tool. It is a programmatic interface to different types of data represented as uniform tree structures. This makes the data easy to read, explore and modify using a small number of functions. Hial proposes a relatively simple mental model, suitable for most use cases, which improves the user comfort and speed.
 
 The types of data that can be supported by this API are the file system, configuration files (json, yaml, toml), markup files (xml, html), programs written in various programming languages, operating system configurations and runtime parameters, database tables and records, etc.
 
-The API can be seen as an generalization of the concepts behind xpath, json path, file system path, and other similar path languages. It is a concise way to express data operations and transformations which are common in programming and system administration.
+The path API can be seen as an generalization of the concepts behind xpath, json path, file system path, and other similar path languages. It is a concise way to express data searches common in programming and system administration.
 
 :warning:  Hial is **currently under construction.** Some things don't work yet and some things will change.
 
 ### What can it do?
 
-##### 1. Select or search for precise pieces of data in a structured way.
+##### 1. Select or search for pieces of data in a structured way.
 
 Print a value embedded in a json file or from a url that returns json or xml data:
 
 ```bash
-hial './config.json^json/services/webapp'
-hial 'http://www.phonetik.uni-muenchen.de/cgi-bin/BASRepository/oaipmh/oai.pl^http^xml'
+hial './examples/productiondump.json^json/stacks/*/services'
 hial 'http://api.github.com^http^json/rate_limit_url^http^json/resources/core'
+hial 'http://www.phonetik.uni-muenchen.de/cgi-bin/BASRepository/oaipmh/oai.pl^http^xml'
 ```
 
 <!-- Print all questions that have no answer entities in a json file:
@@ -55,6 +55,7 @@ Print the structure of a rust file (struct, enum, type, functions) as a tree:
 ```bash
 hial './src/tests/rust.rs^rust/**[#type^split["_"]/[-1]=="item"]/*[name|parameters|return_type]'
 # 🚧 todo: search results as tree
+# 🚧 todo: boolean filter combinator
 ```
 
 ##### 2. Modify data selected as above.
@@ -63,7 +64,7 @@ Change the default mysql port systemwide:
 ```bash
 # shell
 hial '/etc/mysql/my.cnf^fs[w]^ini/mysqld/port = 3307'
-# 🚧 todo: rw parameter for fs interpretation
+# 🚧 todo: assign operator
 ```
 
 ```bash
@@ -129,6 +130,17 @@ Compare two files in different formats and print the resulting diff tree:
 hial 'diff  ./file.json^json^tree  ./file.xml^xml^tree'
 # 🚧 todo: support diff
 # 🚧 todo: support tree implementation and conversion
+```
+
+Diff two diff trees (e.g. check if two different commits make identical changes)
+
+```bash
+hial 'x = diff .^git/HEAD^fs .^git/HEAD~1^fs ;
+      y = diff .^git/branch1^fs .^git/branch1~1^fs ;
+      diff $x $y
+     '
+# 🚧 todo: support diff
+# 🚧 todo: support git interpretation
 ```
 
 ## Installation and usage

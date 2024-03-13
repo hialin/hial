@@ -3,7 +3,10 @@
 ///
 use std::{cell::OnceCell, rc::Rc};
 
-use crate::{api::interpretation::*, api::*};
+use crate::{
+    api::{interpretation::*, *},
+    implement_try_from_xell,
+};
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -40,6 +43,8 @@ pub struct FieldWriter {
     pub(crate) ty: FieldType,
     pub(crate) writer: Box<CellWriter>,
 }
+
+implement_try_from_xell!(Cell, Field);
 
 impl TryFrom<usize> for FieldType {
     type Error = HErr;

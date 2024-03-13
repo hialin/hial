@@ -6,8 +6,8 @@ use std::{
 use linkme::distributed_slice;
 
 use crate::{
-    api::interpretation::*,
-    api::*,
+    api::{interpretation::*, *},
+    implement_try_from_xell,
     utils::ownrc::{OwnRc, ReadRc, WriteRc},
 };
 
@@ -26,6 +26,8 @@ pub(crate) struct CellReader(ReadRc<PathBuf>, OnceCell<String>);
 
 #[derive(Debug)]
 pub(crate) struct CellWriter(WriteRc<PathBuf>);
+
+implement_try_from_xell!(Cell, Path);
 
 impl Cell {
     pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
@@ -52,7 +54,7 @@ impl Cell {
 
     fn make_cell(path: PathBuf, string: String, origin: Option<Xell>) -> Res<Xell> {
         let path_cell = Cell(OwnRc::new(path));
-        Ok(new_xell(DynCell::from(path_cell), origin))
+        Ok(Xell::new_from(DynCell::from(path_cell), origin))
     }
 }
 

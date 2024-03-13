@@ -11,15 +11,14 @@ use indexmap::{indexmap, IndexMap};
 use linkme::distributed_slice;
 
 use crate::{
-    api::interpretation::*,
-    api::*,
-    guard_ok, guard_some,
+    api::{interpretation::*, *},
+    guard_ok, guard_some, implement_try_from_xell,
     utils::ownrc::{OwnRc, ReadRc, WriteRc},
 };
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static PATH_TO_FILE: ElevationConstructor = ElevationConstructor {
-    source_interpretations: &["path"],
+    source_interpretations: &["path", "fs"],
     target_interpretations: &["fs"],
     constructor: Cell::from_cell,
 };
@@ -78,6 +77,8 @@ struct Metadata {
     is_dir: bool,
     is_link: bool,
 }
+
+implement_try_from_xell!(Cell, File);
 
 impl CellReaderTrait for CellReader {
     fn ty(&self) -> Res<&str> {
@@ -246,13 +247,13 @@ impl Cell {
         let r = cell.read();
         let path = r.as_file_path()?;
         let file_cell = Self::make_file_cell(path)?;
-        Ok(new_xell(DynCell::from(file_cell), Some(cell)))
+        Ok(Xell::new_from(DynCell::from(file_cell), Some(cell)))
     }
 
     pub(crate) fn from_str_path(path: impl Borrow<str>) -> Res<Xell> {
         let path = Path::new(path.borrow());
         let file_cell = Self::make_file_cell(path)?;
-        Ok(new_xell(DynCell::from(file_cell), None))
+        Ok(Xell::new_from(DynCell::from(file_cell), None))
     }
 
     fn make_file_cell(path: &Path) -> Res<Cell> {
@@ -518,7 +519,13 @@ fn read_file(path: &Path) -> Res<FileEntry> {
             is_dir: xmd.is_dir(),
             is_link: xmd.file_type().is_symlink(),
         })
-        .map_err(|e| caused(HErrKind::IO, "cannot query file metadata", e));
+        .map_err(|e| {
+            caused(
+                HErrKind::IO,
+                format!("cannot query file metadata of {}", path.to_string_lossy()),
+                e,
+            )
+        });
     Ok(FileEntry {
         path: path.to_path_buf(),
         metadata,

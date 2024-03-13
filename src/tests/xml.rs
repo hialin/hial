@@ -102,7 +102,7 @@ fn xml_write_and_save() -> Res<()> {
     pprint::pprint(&xml, 0, 0);
     assert_eq!(xml.to("/doc/q/qq").read().value()?, "4");
 
-    xml.to("/doc/q/qq").write().value("444".into())?;
+    xml.to("/doc/q/qq").write().value("444")?;
     assert_eq!(xml.to("/doc/q/qq").read().value()?, "444");
 
     xml.save(&xml.origin())?;

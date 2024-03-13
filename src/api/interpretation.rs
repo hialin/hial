@@ -54,8 +54,10 @@ pub trait CellWriterTrait: Debug {
         todo!() // TODO: remove this default implementation
     }
 
-    fn delete(&mut self) -> Res<()> {
-        todo!() // TODO: remove this default implementation
+    /// creates a "detached" cell, use "add" to add it to the group
+    /// or leave it detached to delete it
+    fn detach(&mut self) -> Res<()> {
+        nores() // interpretations do not support removing cells by default
     }
 }
 
@@ -71,8 +73,13 @@ pub trait GroupTrait: Clone + Debug {
     fn at(&self, index: usize) -> Res<Self::Cell>;
     fn get_all(&self, label: Value<'_>) -> Res<Self::CellIterator>;
 
-    fn add(&self, value: Option<OwnValue>) -> Res<()> {
-        todo!() // TODO: remove this default implementation
+    // creates a "detached" cell, use "add" to add it to the group
+    fn create(&self, label: Option<OwnValue>, value: Option<OwnValue>) -> Res<Self::Cell> {
+        nores() // interpretations do not support creating cells by default
+    }
+
+    fn add(&self, index: Option<usize>, cell: Self::Cell) -> Res<()> {
+        nores() // interpretations do not support adding cells by default
     }
 }
 
@@ -108,4 +115,25 @@ impl<C: CellTrait> GroupTrait for VoidGroup<C> {
     fn get_all(&self, label: Value) -> Res<Self::CellIterator> {
         nores()
     }
+}
+
+#[macro_export]
+macro_rules! implement_try_from_xell {
+    ($local_cell_type:ident, $xell_enum_type:ident) => {
+        impl TryFrom<Xell> for $local_cell_type {
+            type Error = HErr;
+
+            fn try_from(x: Xell) -> Res<Self> {
+                if let DynCell::$xell_enum_type(c) = x.dyn_cell {
+                    Ok(c)
+                } else {
+                    userres(format!(
+                        "cannot convert cell {} to {}",
+                        x.interpretation(),
+                        stringify!($xell_enum_type)
+                    ))
+                }
+            }
+        }
+    };
 }

@@ -5,7 +5,7 @@ use tree_sitter::{Parser, Tree, TreeCursor};
 
 use crate::{
     api::{interpretation::*, *},
-    guard_ok, guard_some,
+    guard_ok, guard_some, implement_try_from_xell,
 };
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
@@ -36,6 +36,8 @@ pub(crate) struct CellReader {
     cell: Cell,
     value: OnceCell<Option<String>>,
 }
+
+implement_try_from_xell!(Cell, TreeSitter);
 
 impl fmt::Debug for Cell {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -69,7 +71,7 @@ impl Cell {
 
     fn make_cell(source: String, language: String, origin: Option<Xell>) -> Res<Xell> {
         let ts_cell = sitter_from_source(source, language)?;
-        Ok(new_xell(DynCell::from(ts_cell), origin))
+        Ok(Xell::new_from(DynCell::from(ts_cell), origin))
     }
 
     fn is_leaf(&self) -> bool {

@@ -2,8 +2,9 @@ use indexmap::IndexMap;
 
 use crate::{
     api::{interpretation::*, *},
+    implement_try_from_xell,
     utils::{
-        ownrc::OwnRc,
+        ownrc::{OwnRc, ReadRc},
         ownrcutils::{read, write},
     },
 };
@@ -27,7 +28,7 @@ pub struct Group {
     kind: GroupKind,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum GroupKind {
     Root,
     Attr(usize),
@@ -40,15 +41,24 @@ pub struct Cell {
     kind: CellKind,
 }
 
+#[derive(Debug)]
+pub struct CellReader {
+    data: ReadRc<Data>,
+    kind: CellKind,
+}
+
 #[derive(Debug, Clone)]
 enum CellKind {
     Interpretation(usize),
     Param(usize, usize),
+    DetachedParam(Box<(OwnValue, OwnValue)>),
 }
+
+implement_try_from_xell!(Cell, Elevation);
 
 impl CellTrait for Cell {
     type Group = Group;
-    type CellReader = Cell;
+    type CellReader = CellReader;
     type CellWriter = Cell;
 
     fn interpretation(&self) -> &str {
@@ -56,7 +66,10 @@ impl CellTrait for Cell {
     }
 
     fn read(&self) -> Res<Self::CellReader> {
-        Ok(self.clone())
+        Ok(CellReader {
+            data: read(&self.data)?,
+            kind: self.kind.clone(),
+        })
     }
 
     fn write(&self) -> Res<Self::CellWriter> {
@@ -90,35 +103,49 @@ impl CellTrait for Cell {
     }
 }
 
-impl CellReaderTrait for Cell {
+impl CellReaderTrait for CellReader {
     fn ty(&self) -> Res<&str> {
         match self.kind {
             CellKind::Interpretation(_) => Ok("elevation"),
             CellKind::Param(_, _) => Ok("param"),
+            CellKind::DetachedParam { .. } => Ok("param"),
         }
     }
 
     fn value(&self) -> Res<Value> {
-        nores()
+        match &self.kind {
+            CellKind::Interpretation(_) => nores(),
+            CellKind::Param(ii, ip) => Ok(self
+                .data
+                .map
+                .get_index(*ii)
+                .ok_or_else(noerr)?
+                .1
+                 .1
+                .get_index(*ip)
+                .ok_or_else(noerr)?
+                .1
+                .as_value()),
+            CellKind::DetachedParam(b) => Ok(b.1.as_value()),
+        }
     }
 
     fn label(&self) -> Res<Value> {
-        match self.kind {
+        match &self.kind {
             CellKind::Interpretation(i) => {
-                let data = read(&self.data)?;
-                let entry = data.map.get_index(i).ok_or_else(noerr)?;
-                Ok(Value::Str(entry.0))
+                Ok(Value::Str(self.data.map.get_index(*i).ok_or_else(noerr)?.0))
             }
-            CellKind::Param(i, ip) => {
-                let data = read(&self.data)?;
-                let entry = data.map.get_index(i).ok_or_else(noerr)?;
-                entry
-                    .1
-                     .1
-                    .get_index(ip)
-                    .ok_or_else(noerr)
-                    .map(|x| Value::Str(x.0))
-            }
+            CellKind::Param(i, ip) => self
+                .data
+                .map
+                .get_index(*i)
+                .ok_or_else(noerr)?
+                .1
+                 .1
+                .get_index(*ip)
+                .ok_or_else(noerr)
+                .map(|x| x.0.as_value()),
+            CellKind::DetachedParam(b) => Ok(b.0.as_value()),
         }
     }
 
@@ -126,6 +153,7 @@ impl CellReaderTrait for Cell {
         match self.kind {
             CellKind::Interpretation(i) => Ok(i),
             CellKind::Param(_, ip) => Ok(ip),
+            CellKind::DetachedParam { .. } => nores(),
         }
     }
 
@@ -135,14 +163,27 @@ impl CellReaderTrait for Cell {
 }
 
 impl CellWriterTrait for Cell {
-    fn set_value(&mut self, value: OwnValue) -> Res<()> {
-        match self.kind {
+    fn set_label(&mut self, v: OwnValue) -> Res<()> {
+        userres("cannot set labels on elevation cells")
+    }
+
+    fn set_value(&mut self, v: OwnValue) -> Res<()> {
+        match &mut self.kind {
             CellKind::Interpretation(i) => userres("cannot set interpretation value"),
             CellKind::Param(i, ip) => {
-                let mut data = write(&self.data)?;
-                let entry = data.map.get_index_mut(i).ok_or_else(noerr)?;
-                let param = entry.1 .1.get_index_mut(ip).ok_or_else(noerr)?;
-                *param.1 = value;
+                *write(&self.data)?
+                    .map
+                    .get_index_mut(*i)
+                    .ok_or_else(noerr)?
+                    .1
+                     .1
+                    .get_index_mut(*ip)
+                    .ok_or_else(noerr)?
+                    .1 = v;
+                Ok(())
+            }
+            CellKind::DetachedParam(b) => {
+                b.1 = v;
                 Ok(())
             }
         }
@@ -189,6 +230,42 @@ impl GroupTrait for Group {
         // returns the correct type.
         unimplemented!()
     }
+
+    fn create(&self, label: Option<OwnValue>, value: Option<OwnValue>) -> Res<Self::Cell> {
+        if self.kind == GroupKind::Root {
+            return userres("cannot create new cells in interpretation root group");
+        }
+        if let GroupKind::Sub(_) = self.kind {
+            return userres("cannot create new cells in interpretation sub group");
+        }
+        if let Some(label) = label {
+            Ok(Cell {
+                data: self.data.clone(),
+                kind: CellKind::DetachedParam(Box::new((label, value.unwrap_or(OwnValue::None)))),
+            })
+        } else {
+            userres("cannot create new cells without a label")
+        }
+    }
+
+    fn add(&self, index: Option<usize>, cell: Self::Cell) -> Res<()> {
+        match self.kind {
+            GroupKind::Root => userres("cannot add cell to interpretaion root group"),
+            GroupKind::Sub(_) => userres("cannot add cell to interpretation sub group"),
+            GroupKind::Attr(i) => {
+                let mut data = write(&self.data)?;
+                let (target, (constructor, params)) =
+                    data.map.get_index_mut(i).ok_or_else(noerr)?;
+                if let CellKind::DetachedParam(b) = cell.kind {
+                    params.insert(b.0, b.1);
+                }
+                if let Some(index) = index {
+                    data.map.move_index(i, index);
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 impl Group {
@@ -231,7 +308,7 @@ impl Group {
                 }
             }
         }
-        // debug!(
+        // println!(
         //     "new elevate group for {} -> {:?}",
         //     origin.interpretation(),
         //     map
@@ -251,19 +328,31 @@ impl Group {
                     data: self.data.clone(),
                     kind: CellKind::Interpretation(index),
                 };
-                Ok(new_xell(DynCell::from(cell), Some(data.origin.clone())))
+                Ok(Xell::new_from(
+                    DynCell::from(cell),
+                    Some(data.origin.clone()),
+                ))
             }
             GroupKind::Attr(i) => {
                 let cell = Cell {
                     data: self.data.clone(),
                     kind: CellKind::Param(index, i),
                 };
-                Ok(new_xell(DynCell::from(cell), Some(data.origin.clone())))
+                Ok(Xell::new_from(
+                    DynCell::from(cell),
+                    Some(data.origin.clone()),
+                ))
             }
             GroupKind::Sub(i) => {
-                let (target, (func, params)) = data.map.get_index(i).ok_or_else(noerr)?;
-                let cell = func(data.origin.clone(), target, params)?;
+                let (target, (constructor, params)) = data.map.get_index(i).ok_or_else(noerr)?;
+                let cell = constructor(data.origin.clone(), target, params)?;
                 cell.set_self_as_domain_root();
+
+                if let Some(w) = params.get(&Value::Str("w")) {
+                    if w.as_value() == Value::Bool(true) || w.as_value() == Value::None {
+                        cell.policy(WritePolicy::WriteBackOnDrop);
+                    }
+                }
                 Ok(cell)
             }
         }
@@ -281,20 +370,26 @@ impl Group {
                     data: self.data.clone(),
                     kind: CellKind::Interpretation(entry.0),
                 };
-                Ok(new_xell(DynCell::from(cell), Some(data.origin.clone())))
+                Ok(Xell::new_from(
+                    DynCell::from(cell),
+                    Some(data.origin.clone()),
+                ))
             }
             GroupKind::Attr(i) => {
                 let Some(entry) = data.map.get_index(i) else {
                     return nores();
                 };
-                let Some(entry) = entry.1 .1.get_full(label.as_cow_str().as_ref()) else {
+                let Some(entry) = entry.1 .1.get_full(&label) else {
                     return nores();
                 };
                 let cell = Cell {
                     data: self.data.clone(),
                     kind: CellKind::Param(i, entry.0),
                 };
-                Ok(new_xell(DynCell::from(cell), Some(data.origin.clone())))
+                Ok(Xell::new_from(
+                    DynCell::from(cell),
+                    Some(data.origin.clone()),
+                ))
             }
             GroupKind::Sub(i) => {
                 userres("cannot use get to access interpretation root, use at instead")

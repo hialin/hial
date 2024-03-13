@@ -5,7 +5,6 @@ use std::borrow::Borrow;
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum Selector<'a> {
     Str(&'a str),
-    Top,
     Star,
     DoubleStar,
 }
@@ -35,7 +34,6 @@ where
     fn eq(&self, other: &T) -> bool {
         match self {
             Selector::Star | Selector::DoubleStar => true,
-            Selector::Top => false,
             Selector::Str(s) => s.eq(&other.borrow()),
         }
     }
@@ -59,7 +57,6 @@ impl PartialEq<Selector<'_>> for Value<'_> {
             Selector::Str(svalue) => self.eq(svalue),
             Selector::Star => true,
             Selector::DoubleStar => true,
-            Selector::Top => false,
         }
     }
 }
@@ -70,7 +67,6 @@ impl<'a> Display for Selector<'a> {
             Selector::DoubleStar => write!(buf, "**"),
             Selector::Star => write!(buf, "*"),
             Selector::Str(x) => write!(buf, "{}", x),
-            Selector::Top => write!(buf, "^"),
         }
     }
 }
@@ -81,7 +77,6 @@ impl PartialEq<Selector<'_>> for OwnValue {
             Selector::Str(svalue) => self.eq(svalue),
             Selector::Star => true,
             Selector::DoubleStar => true,
-            Selector::Top => false,
         }
     }
 }

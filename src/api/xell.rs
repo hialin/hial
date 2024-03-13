@@ -5,8 +5,11 @@ use std::{
 };
 
 use crate::{
-    api::internal::*, api::interpretation::*, api::*, enumerated_dynamic_type, guard_ok,
-    guard_some, interpretations::*, search::searcher::Searcher, warning,
+    api::{internal::*, interpretation::*, *},
+    enumerated_dynamic_type, guard_ok, guard_some,
+    interpretations::*,
+    search::{searcher::Searcher, Path},
+    warning,
 };
 
 const MAX_PATH_ITEMS: usize = 1000;
@@ -14,25 +17,9 @@ const MAX_PATH_ITEMS: usize = 1000;
 #[repr(C)]
 #[derive(Clone)]
 pub struct Xell {
-    dyn_cell: DynCell,
+    pub(crate) dyn_cell: DynCell,
     // keep it in a rc to avoid other allocations
     domain: Rc<Domain>,
-}
-
-pub(crate) fn new_xell(dyn_cell: DynCell, origin: Option<Xell>) -> Xell {
-    Xell {
-        dyn_cell,
-        domain: Rc::new(Domain {
-            write_policy: cell::Cell::new(
-                origin
-                    .as_ref()
-                    .map_or(WritePolicy::ReadOnly, |c| c.domain.write_policy.get()),
-            ),
-            origin,
-            dyn_root: OnceCell::new(),
-            dirty: cell::Cell::new(false),
-        }),
-    }
 }
 
 pub struct Domain {
@@ -65,7 +52,7 @@ enumerated_dynamic_type! {
     #[derive(Debug)]
     enum DynCellReader {
         Error(HErr),
-        Elevation(elevation::Cell),
+        Elevation(elevation::CellReader),
         Field(field::FieldReader),
         OwnValue(ownvalue::CellReader),
         File(fs::CellReader),
@@ -263,14 +250,16 @@ impl CellReader {
 }
 
 impl CellWriter {
-    pub fn label(&mut self, value: OwnValue) -> Res<()> {
+    pub fn label(&mut self, value: impl Into<OwnValue>) -> Res<()> {
+        let value = value.into();
         self.domain.dirty.set(true);
         dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.set_label(value) })
     }
 
-    pub fn value(&mut self, ov: OwnValue) -> Res<()> {
+    pub fn value(&mut self, value: impl Into<OwnValue>) -> Res<()> {
+        let value = value.into();
         self.domain.dirty.set(true);
-        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.set_value(ov) })
+        dispatch_dyn_cell_writer!(&mut self.dyn_cell_writer, |x| { x.set_value(value) })
     }
 
     pub fn index(&mut self, index: usize) -> Res<()> {
@@ -298,6 +287,40 @@ impl CellWriter {
 }
 
 impl Xell {
+    pub fn new(path_with_start: &str) -> Xell {
+        match Self::try_new(path_with_start) {
+            Ok(c) => c,
+            Err(e) => Xell::from(e),
+        }
+    }
+
+    pub fn try_new(path_with_start: &str) -> Res<Xell> {
+        let (start, path) = Path::parse_with_starter(path_with_start)?;
+        let root = start.eval()?;
+        let mut searcher = Searcher::new(root, path);
+        match searcher.next() {
+            Some(Ok(c)) => Ok(c),
+            Some(Err(e)) => Err(e),
+            None => nores(),
+        }
+    }
+
+    pub(crate) fn new_from(dyn_cell: DynCell, origin: Option<Xell>) -> Xell {
+        Xell {
+            dyn_cell,
+            domain: Rc::new(Domain {
+                write_policy: cell::Cell::new(
+                    origin
+                        .as_ref()
+                        .map_or(WritePolicy::ReadOnly, |c| c.domain.write_policy.get()),
+                ),
+                origin,
+                dyn_root: OnceCell::new(),
+                dirty: cell::Cell::new(false),
+            }),
+        }
+    }
+
     pub(super) fn set_self_as_domain_root(&self) {
         if let Err(x) = self.domain.dyn_root.set(self.dyn_cell.clone()) {
             warning!("overwriting domain root, old root was: {:?}", x);
@@ -327,7 +350,7 @@ impl Xell {
         let reader: DynCellReader = dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match x.read() {
                 Ok(r) => DynCellReader::from(r),
-                Err(e) => DynCellReader::from(e),
+                Err(e) => DynCellReader::from(e.with_path(self.path().unwrap_or_default())),
             }
         });
         CellReader(reader)
@@ -349,7 +372,7 @@ impl Xell {
         let writer: DynCellWriter = dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match x.write() {
                 Ok(r) => DynCellWriter::from(r),
-                Err(e) => DynCellWriter::from(e),
+                Err(e) => DynCellWriter::from(e.with_path(self.path().unwrap_or_default())),
             }
         });
         CellWriter {
@@ -375,7 +398,7 @@ impl Xell {
         let attr = dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match x.attr() {
                 Ok(r) => DynGroup::from(r),
-                Err(e) => DynGroup::from(e),
+                Err(e) => DynGroup::from(e.with_path(self.path().unwrap_or_default())),
             }
         });
         Group {
@@ -394,14 +417,14 @@ impl Xell {
     pub fn elevate(&self) -> Group {
         if let DynCell::Error(err) = &self.dyn_cell {
             return Group {
-                dyn_group: DynGroup::from(err.clone()),
+                dyn_group: DynGroup::from(err.clone().with_path(self.path().unwrap_or_default())),
                 domain: Rc::clone(&self.domain),
             };
         }
         let dyn_group = dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match elevation::Group::new(self.clone()) {
                 Ok(r) => DynGroup::from(r),
-                Err(e) => DynGroup::from(e),
+                Err(e) => DynGroup::from(e.with_path(self.path().unwrap_or_default())),
             }
         });
         Group {
@@ -413,7 +436,7 @@ impl Xell {
     pub fn field(&self) -> Group {
         if let DynCell::Error(err) = &self.dyn_cell {
             return Group {
-                dyn_group: DynGroup::from(err.clone()),
+                dyn_group: DynGroup::from(err.clone().with_path(self.path().unwrap_or_default())),
                 domain: Rc::clone(&self.domain),
             };
         }
@@ -442,10 +465,15 @@ impl Xell {
         let mut searcher = Searcher::new(self.clone(), path);
         match searcher.next() {
             Some(Ok(c)) => c,
-            Some(Err(e)) => Xell {
-                dyn_cell: DynCell::from(e),
-                domain: Rc::clone(&self.domain),
-            },
+            Some(Err(e)) => {
+                let mut path = self.path().unwrap_or_default();
+                path += searcher.unmatched_path().as_str();
+                warning!("💥 path search error, path={:?}; error= {:?}", path, e);
+                Xell {
+                    dyn_cell: DynCell::from(e.with_path(self.path().unwrap_or_default())),
+                    domain: Rc::clone(&self.domain),
+                }
+            }
             None => {
                 let mut path = self.path().unwrap_or_default();
                 path += searcher.unmatched_path().as_str();
@@ -836,8 +864,17 @@ impl Group {
         }
     }
 
-    pub fn add(&self, value: Option<OwnValue>) -> Res<()> {
-        dispatch_dyn_group!(&self.dyn_group, |x| { x.add(value) })
+    pub fn create(&self, label: Option<OwnValue>, value: Option<OwnValue>) -> Res<Xell> {
+        Ok(dispatch_dyn_group!(&self.dyn_group, |x| {
+            Xell {
+                dyn_cell: DynCell::from(x.create(label, value)?),
+                domain: Rc::clone(&self.domain),
+            }
+        }))
+    }
+
+    pub fn add(&self, index: Option<usize>, cell: Xell) -> Res<()> {
+        dispatch_dyn_group!(&self.dyn_group, |x| { x.add(index, cell.try_into()?) })
     }
 
     pub fn err(self) -> Res<Group> {

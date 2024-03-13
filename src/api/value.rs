@@ -8,6 +8,8 @@ use std::{
     fmt::Write,
 };
 
+use indexmap::Equivalent;
+
 pub const DISPLAY_VALUE_NONE: &str = "ø"; // ❍•⸰·
 pub const DISPLAY_BYTES_VALUE_LEN: usize = 72;
 
@@ -157,7 +159,7 @@ impl Display for StrFloat {
 
 // Value is a simple value, either null or a primitive or a string or bytes
 // It implements most of the traits that are useful for a simple value
-#[derive(Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Value<'a> {
     #[default]
     None,
@@ -167,6 +169,20 @@ pub enum Value<'a> {
     Str(&'a str),
     // OsStr(&'a OsStr),
     Bytes(&'a [u8]),
+}
+
+impl Hash for Value<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Value::None => DISPLAY_VALUE_NONE.hash(state),
+            Value::Bool(x) => x.hash(state),
+            Value::Int(x) => x.hash(state),
+            Value::Float(x) => x.hash(state),
+            Value::Str(x) => x.hash(state),
+            // Value::OsStr(x) => x.to_string_lossy().hash(state),
+            Value::Bytes(x) => x.hash(state),
+        }
+    }
 }
 
 impl<'a> Display for Value<'a> {
@@ -234,7 +250,7 @@ where
 ///////////////////////////////////////////////////////////////////////////////
 //  OwnValue
 
-#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
 pub enum OwnValue {
     #[default]
     None,
@@ -264,39 +280,14 @@ where
     }
 }
 
-impl From<&str> for OwnValue {
-    fn from(s: &str) -> Self {
-        OwnValue::String(s.to_owned())
+impl<'a, T: Into<Value<'a>>> From<T> for OwnValue {
+    fn from(x: T) -> Self {
+        x.into().to_owned_value()
     }
 }
-
 impl From<String> for OwnValue {
     fn from(s: String) -> Self {
         OwnValue::String(s)
-    }
-}
-
-impl From<f64> for OwnValue {
-    fn from(f: f64) -> Self {
-        OwnValue::Float(StrFloat(f))
-    }
-}
-impl From<f32> for OwnValue {
-    fn from(f: f32) -> Self {
-        OwnValue::Float(StrFloat(f as f64))
-    }
-}
-
-impl<'a> From<&'a OwnValue> for Value<'a> {
-    fn from(ov: &'a OwnValue) -> Self {
-        match ov {
-            OwnValue::None => Value::None,
-            OwnValue::Bool(x) => Value::Bool(*x),
-            OwnValue::Int(x) => Value::Int(*x),
-            OwnValue::Float(x) => Value::Float(*x),
-            OwnValue::String(x) => Value::Str(x.as_str()),
-            OwnValue::Bytes(x) => Value::Bytes(x.as_ref()),
-        }
     }
 }
 
@@ -310,6 +301,13 @@ impl OwnValue {
             OwnValue::String(x) => Value::Str(x.as_str()),
             OwnValue::Bytes(x) => Value::Bytes(x.as_ref()),
         }
+    }
+}
+
+impl Hash for OwnValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // same hash as Value
+        self.as_value().hash(state);
     }
 }
 
@@ -398,4 +396,34 @@ impl<'a> From<&'a str> for Value<'a> {
     fn from(s: &'a str) -> Self {
         Value::Str(s)
     }
+}
+impl<'a> From<&'a String> for Value<'a> {
+    fn from(s: &'a String) -> Self {
+        Value::Str(s.as_str())
+    }
+}
+
+impl Equivalent<OwnValue> for Value<'_> {
+    fn equivalent(&self, key: &OwnValue) -> bool {
+        match key {
+            OwnValue::None => matches!(self, Value::None),
+            OwnValue::Bool(x) => matches!(self, Value::Bool(y) if x == y),
+            OwnValue::Int(x) => matches!(self, Value::Int(y) if x == y),
+            OwnValue::Float(x) => matches!(self, Value::Float(y) if x == y),
+            OwnValue::String(x) => matches!(self, Value::Str(y) if x == y),
+            OwnValue::Bytes(x) => matches!(self, Value::Bytes(y) if x == y),
+        }
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn test_equivalence() {
+    let ov = OwnValue::from("hello");
+    let v = Value::from("hello");
+    assert!(v.equivalent(&ov));
+
+    let ov = Value::from(1).to_owned_value();
+    let v = Value::from(1);
+    assert!(v.equivalent(&ov));
 }

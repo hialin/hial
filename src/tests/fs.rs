@@ -35,22 +35,36 @@ fn search_path_with_fs_starter() -> Res<()> {
 }
 
 #[test]
-fn fs_write() -> Res<()> {
+fn fs_write_prog_policy() -> Res<()> {
     let p = "^path^fs/examples/write.txt";
     let c = Xell::from(".")
         .policy(WritePolicy::NoAutoWrite)
         .to(p)
         .err()?;
-    c.write().value("Hi there".into())?;
+    c.write().value("Hi there")?;
     assert_eq!(
         Xell::from(".").to(p).read().value()?,
         Value::Bytes("Hi there".as_bytes())
     );
-    c.write().value("-".into())?;
+    c.write().value("-")?;
     assert_eq!(
         Xell::from(".").to(p).read().value()?,
         Value::Bytes("-".as_bytes())
     );
+    Ok(())
+}
+
+#[test]
+fn fs_write_path_policy() -> Res<()> {
+    let p = ".^fs[w]/examples/write2.txt";
+    let c = Xell::new(p).err()?;
+    c.write().value("Hi there")?;
+    assert_eq!(
+        Xell::new(p).read().value()?,
+        Value::Bytes("Hi there".as_bytes())
+    );
+    c.write().value("-")?;
+    assert_eq!(Xell::new(p).read().value()?, Value::Bytes("-".as_bytes()));
     Ok(())
 }
 

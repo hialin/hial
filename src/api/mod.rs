@@ -1,6 +1,6 @@
 mod elevation_registry;
 mod error;
-mod internal;
+pub(crate) mod internal;
 pub mod interpretation;
 mod relation;
 mod selector;
