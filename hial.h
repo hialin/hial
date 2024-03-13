@@ -5,6 +5,8 @@
 
 #include <stdint.h>
 
+#define DISPLAY_BYTES_VALUE_LEN 72
+
 extern Language tree_sitter_javascript(void);
 
 extern Language tree_sitter_rust(void);

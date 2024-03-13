@@ -10,6 +10,14 @@ fn test_files() -> Res<()> {
 }
 
 #[test]
+fn test_file_path_tilde() -> Res<()> {
+    crate::utils::log::set_verbose(true);
+    let home = Xell::from("~").be("path").be("fs");
+    assert!(home.sub().len()? > 0);
+    Ok(())
+}
+
+#[test]
 fn test_fs() -> Res<()> {
     crate::utils::log::set_verbose(true);
     let examples = Xell::from(".").be("path").be("fs").sub().get("examples");

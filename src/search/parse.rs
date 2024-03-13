@@ -61,7 +61,7 @@ fn path_start_file(input: &str) -> NomRes<&str, PathStart> {
     context(
         "path_start_file",
         tuple((
-            alt((tag("/"), tag("."))),
+            alt((tag("/"), tag("."), tag("~"))),
             many0(terminated(path_code_points, tag("/"))),
             opt(path_code_points),
         )),

@@ -1,5 +1,5 @@
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, Cow},
     cell::OnceCell,
     cmp::Ordering,
     ffi::OsString,
@@ -246,14 +246,25 @@ impl Cell {
     pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
         let r = cell.read();
         let path = r.as_file_path()?;
-        let file_cell = Self::make_file_cell(path)?;
+        let path = Self::shell_tilde(path);
+        let file_cell = Self::make_file_cell(path.as_ref())?;
         Ok(Xell::new_from(DynCell::from(file_cell), Some(cell)))
     }
 
     pub(crate) fn from_str_path(path: impl Borrow<str>) -> Res<Xell> {
         let path = Path::new(path.borrow());
-        let file_cell = Self::make_file_cell(path)?;
+        let path = Self::shell_tilde(path);
+        let file_cell = Self::make_file_cell(path.as_ref())?;
         Ok(Xell::new_from(DynCell::from(file_cell), None))
+    }
+
+    fn shell_tilde(path: &Path) -> Cow<Path> {
+        if path.starts_with("~") {
+            let home = dirs::home_dir().unwrap_or_default();
+            home.join(path.strip_prefix("~").unwrap_or(path)).into()
+        } else {
+            path.to_path_buf().into()
+        }
     }
 
     fn make_file_cell(path: &Path) -> Res<Cell> {

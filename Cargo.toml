@@ -11,6 +11,7 @@ crate-type = ["lib", "cdylib"]
 [dependencies]
 anyhow = { version = "1", features = ["backtrace"] }
 clap = { version = "4.4", features = ["suggestions", "derive"] }
+dirs = "5.0"
 indexmap = "2.1"
 linkme = "0.3"
 nom = "7.1"
