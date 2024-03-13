@@ -69,11 +69,13 @@ impl Cell {
         let value_cow = value.as_cow_str();
         let url = value_cow.as_ref();
 
-        let response = Client::builder()
-            .user_agent("hial")
-            .build()?
-            .get(url)
-            .send()?;
+        let client = Client::builder().user_agent("hial").build()?;
+        let request = if params.contains_key(&Value::Str("HEAD")) {
+            client.head(url)
+        } else {
+            client.get(url)
+        };
+        let response = request.send()?;
 
         let mut headers = IndexMap::<String, Vec<String>>::new();
         for (k, v) in response.headers().iter() {

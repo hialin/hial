@@ -1,4 +1,5 @@
 mod fs;
+mod http;
 mod ideals;
 mod json;
 mod nested;

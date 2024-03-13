@@ -34,7 +34,6 @@ Print all services with inaccessible images in a Docker compose file:
 # shell
 hial './config.yaml^yaml/services/*[ /image^split[":"]/[0]^http[HEAD]@status/code>=400 ]'
 # 🚧 todo: split interpretation (regex[( ([^:]*): )*]
-# 🚧 todo: HEAD param for http
 ```
 
 ```rust
@@ -79,7 +78,6 @@ Change the user's docker configuration:
 ```bash
 # shell
 hial '~/.docker/config.json^json/auths/docker.io/username = "newuser"'
-# 🚧 todo: support ~
 ```
 ```rust
 // rust
