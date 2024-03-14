@@ -253,15 +253,12 @@ where
     T: InputTakeAtPosition,
     <T as InputTakeAtPosition>::Item: AsChar,
 {
+    let accept =
+        |c: char| c == '-' || c == '_' || c == '.' || c == ':' || c == '*' || c.is_alphanum();
     i.split_at_position1_complete(
         |item| {
             let char_item = item.as_char();
-            !(char_item == '-'
-                || char_item == '_'
-                || char_item == '.'
-                || char_item == ':'
-                || char_item == '*'
-                || char_item.is_alphanum())
+            !accept(char_item)
         },
         ErrorKind::AlphaNumeric,
     )
@@ -272,10 +269,11 @@ where
     T: InputTakeAtPosition,
     <T as InputTakeAtPosition>::Item: AsChar,
 {
+    let accept = |c: char| c == '-' || c == '.' || c.is_alphanum();
     i.split_at_position1_complete(
         |item| {
             let char_item = item.as_char();
-            !(char_item == '-' || char_item.is_alphanum() || char_item == '.')
+            !accept(char_item)
             // ... actual ascii code points and url encoding...: https://infra.spec.whatwg.org/#ascii-code-point
         },
         ErrorKind::AlphaNumeric,
@@ -287,10 +285,11 @@ where
     T: InputTakeAtPosition,
     <T as InputTakeAtPosition>::Item: AsChar,
 {
+    let accept = |c: char| c == '_' || c.is_alphanumeric();
     i.split_at_position1_complete(
         |item| {
             let char_item = item.as_char();
-            !(char_item.is_alphanum())
+            !accept(char_item)
         },
         ErrorKind::AlphaNumeric,
     )

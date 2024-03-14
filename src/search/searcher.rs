@@ -374,7 +374,7 @@ impl<'s> Searcher<'s> {
 
     fn eval_filters_match(subcell: &Xell, path_item: &NormalPathItem) -> bool {
         for filter in &path_item.filters {
-            match Searcher::eval_bool_expression(subcell.clone(), &filter.expr) {
+            match Searcher::eval_expression(subcell.clone(), &filter.expr) {
                 Err(e) => {
                     ifdebug!(println!("eval_bool_expression failed"));
                     debug_err!(e);
@@ -394,9 +394,31 @@ impl<'s> Searcher<'s> {
         true
     }
 
-    fn eval_bool_expression(cell: Xell, expr: &Expression<'s>) -> Res<bool> {
+    fn eval_expression(cell: Xell, expr: &Expression<'s>) -> Res<bool> {
+        match expr {
+            Expression::Ternary { left, op, right } => {
+                Self::eval_ternary_expression(cell, left.clone(), *op, *right)
+            }
+            Expression::Type { ty } => cell.read().ty().map(|t| t == *ty),
+            Expression::Or { expressions } => {
+                for expr in expressions {
+                    if Self::eval_expression(cell.clone(), expr)? {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            }
+        }
+    }
+
+    fn eval_ternary_expression(
+        cell: Xell,
+        left: Path<'s>,
+        op: Option<&'s str>,
+        right: Option<Value<'s>>,
+    ) -> Res<bool> {
         ifdebug!(println!(
-            "{{{{\neval_bool_expression cell `{}` for expr `{}`",
+            "{{{{\neval_ternary_expression cell `{}` for expr `{}`",
             cell.debug_string(),
             expr
         ));
@@ -412,14 +434,14 @@ impl<'s> Searcher<'s> {
             }
         }
 
-        let eval_iter_left = Self::new(cell, expr.left.clone());
+        let eval_iter_left = Self::new(cell, left);
         for cell in eval_iter_left {
             let cell = guard_ok!(cell, err => {
                 debug_err!(err);
                 continue;
             });
-            if let Some(op) = expr.op {
-                if let Some(right) = expr.right {
+            if let Some(op) = op {
+                if let Some(right) = right {
                     let reader = guard_ok!(cell.read().err(), err => {
                         debug_err!(err);
                         continue;

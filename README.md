@@ -9,6 +9,7 @@ The path API can be seen as an generalization of the concepts behind xpath, json
 
 :warning:  Hial is **currently under construction.** Some things don't work yet and some things will change.
 
+
 ### What can it do?
 
 ##### 1. Select or search for pieces of data in a structured way.
@@ -34,6 +35,7 @@ Print all services with inaccessible images in a Docker compose file:
 # shell
 hial './config.yaml^yaml/services/*[ /image^split[":"]/[0]^http[HEAD]@status/code>=400 ]'
 # 🚧 todo: split interpretation (regex[( ([^:]*): )*]
+# 🚧 todo: get from docker image to docker url
 ```
 
 ```rust
@@ -54,7 +56,7 @@ Print the structure of a rust file (struct, enum, type, functions) as a tree:
 ```bash
 hial './src/tests/rust.rs^rust/**[#type^split["_"]/[-1]=="item"]/*[name|parameters|return_type]'
 # 🚧 todo: search results as tree
-# 🚧 todo: boolean filter combinator
+# 🚧 todo: split interpretation
 ```
 
 ##### 2. Modify data selected as above.
@@ -78,6 +80,7 @@ Change the user's docker configuration:
 ```bash
 # shell
 hial '~/.docker/config.json^json/auths/docker.io/username = "newuser"'
+# 🚧 todo: assign operator
 ```
 ```rust
 // rust
@@ -93,7 +96,7 @@ Copy a string from some json object entry which is embedded in a zip file, into 
 
 ```bash
 # shell
-hial 'copy ./assets.zip^zip/data.json^json/meshes/sphere  ./src/assets/sphere.rs^rust/**[#type=="let_declaration"][/pattern=sphere]/value'
+hial 'copy ./assets.zip^zip/data.json^json/meshes/sphere  ./src/assets/sphere.rs^rust/**[:let_declaration][/pattern=sphere]/value'
 # 🚧 todo: support copy
 # 🚧 todo: support zip
 # 🚧 todo: /**[filter] should match leaves only
@@ -103,7 +106,7 @@ Split a markdown file into sections and put each in a separate file:
 
 ```bash
 # shell
-`hial 'copy  ./book.md^md/*[#type=="heading1"][as x]  ./{label(x)}.md'
+`hial 'copy  ./book.md^md/*[:heading1][as x]  ./{label(x)}.md'
 # 🚧 todo: support copy
 # 🚧 todo: support markdown
 # 🚧 todo: support interpolation in destination
@@ -225,7 +228,7 @@ Examples:
 - `./src/main.rs@size` is the size of this file (the `size` attribute of the file).
 
 - `./src/main.rs^rust` represents the rust AST tree.
-- `./src/main.rs^rust/*[#type=='function_item']` are all the top-level cells representing functions in the `main.rs` rust file.
+- `./src/main.rs^rust/*[:function_item]` are all the top-level cells representing functions in the `main.rs` rust file.
 
 - `http://api.github.com` is a url cell.
 - `http://api.github.com^http` is the http response of a GET request to this url.

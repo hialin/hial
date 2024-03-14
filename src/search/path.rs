@@ -47,22 +47,39 @@ pub(crate) struct Filter<'a> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Expression<'a> {
-    pub(crate) left: Path<'a>,
-    pub(crate) op: Option<&'a str>,
-    pub(crate) right: Option<Value<'a>>,
+pub(crate) enum Expression<'a> {
+    Ternary {
+        left: Path<'a>,
+        op: Option<&'a str>,
+        right: Option<Value<'a>>,
+    },
+    Type {
+        ty: &'a str,
+    },
+    Or {
+        expressions: Vec<Expression<'a>>,
+    },
 }
 
 impl Display for Path<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        fmt_path_items(&self.0, f)?;
+        for it in &self.0 {
+            write!(f, "{}", it)?;
+        }
         Ok(())
     }
 }
 
 impl Display for PathItem<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        fmt_path_item(self, f)?;
+        match self {
+            PathItem::Elevation(e) => {
+                write!(f, "{}", e)?;
+            }
+            PathItem::Normal(n) => {
+                write!(f, "{}", n)?;
+            }
+        }
         Ok(())
     }
 }
@@ -120,14 +137,27 @@ impl Display for Filter<'_> {
 
 impl Display for Expression<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        fmt_path_items(&self.left.0, f)?;
-        if let Some(op) = self.op {
-            write!(f, "{}", op)?;
-        }
-        match self.right {
-            Some(Value::Str(s)) => write!(f, "'{}'", s)?,
-            Some(v) => write!(f, "{}", v)?,
-            None => {}
+        match self {
+            Expression::Ternary { left, op, right } => {
+                write!(f, "{}", left)?;
+                if let Some(op) = op {
+                    write!(f, "{}", op)?;
+                }
+                if let Some(right) = right {
+                    write!(f, "{:?}", right)?;
+                }
+            }
+            Expression::Type { ty } => {
+                write!(f, ":{}", ty)?;
+            }
+            Expression::Or { expressions } => {
+                for (i, expr) in expressions.iter().enumerate() {
+                    write!(f, "{}", expr)?;
+                    if i < expressions.len() - 1 {
+                        write!(f, "|")?;
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -148,7 +178,7 @@ pub(crate) struct DisplayRefPath<'a, 'b: 'a, 'c: 'b>(pub(crate) &'c Vec<&'b Path
 impl<'a, 'b: 'a, 'c: 'b> Display for DisplayRefPath<'a, 'b, 'c> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for it in self.0 {
-            fmt_path_item(it, f)?
+            write!(f, "{}", it)?;
         }
         Ok(())
     }
@@ -159,29 +189,10 @@ pub(crate) struct DisplayPath<'a, 'b: 'a>(pub(crate) &'b Vec<PathItem<'a>>);
 impl<'a, 'b: 'a> Display for DisplayPath<'a, 'b> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for it in self.0 {
-            fmt_path_item(it, f)?
+            write!(f, "{}", it)?;
         }
         Ok(())
     }
-}
-
-fn fmt_path_items(path_items: &Vec<PathItem>, f: &mut Formatter<'_>) -> std::fmt::Result {
-    for it in path_items {
-        fmt_path_item(it, f)?
-    }
-    Ok(())
-}
-
-fn fmt_path_item(path_item: &PathItem, f: &mut Formatter<'_>) -> std::fmt::Result {
-    match path_item {
-        PathItem::Elevation(e) => {
-            write!(f, "{}", e)?;
-        }
-        PathItem::Normal(n) => {
-            write!(f, "{}", n)?;
-        }
-    }
-    Ok(())
 }
 
 impl<'a> PathStart<'a> {

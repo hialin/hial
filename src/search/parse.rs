@@ -1,6 +1,7 @@
 use crate::{api::*, guard_ok, search::path::*, search::url::*};
 use nom::character::complete::space0;
 use nom::error::VerboseErrorKind;
+use nom::multi::separated_list1;
 use nom::{
     branch::alt,
     bytes::complete::{escaped, tag},
@@ -174,18 +175,43 @@ fn filter(input: &str) -> NomRes<&str, Filter> {
 fn expression(input: &str) -> NomRes<&str, Expression> {
     context(
         "expression",
-        tuple((path_items, opt(tuple((operation, value))))),
+        tuple((
+            space0,
+            separated_list1(tag("|"), alt((type_expression, ternary_expression))),
+        )),
     )(input)
     .map(|(next_input, res)| {
         (
             next_input,
-            Expression {
-                left: res.0,
-                op: res.1.map(|x| x.0),
-                right: res.1.map(|x| x.1),
+            if res.1.len() == 1 {
+                res.1.into_iter().next().unwrap()
+            } else {
+                Expression::Or { expressions: res.1 }
             },
         )
     })
+}
+
+fn ternary_expression(input: &str) -> NomRes<&str, Expression> {
+    context(
+        "ternary expression",
+        tuple((path_items, space0, opt(tuple((operation, space0, rvalue))))),
+    )(input)
+    .map(|(next_input, res)| {
+        (
+            next_input,
+            Expression::Ternary {
+                left: res.0,
+                op: res.2.map(|x| x.0),
+                right: res.2.map(|x| x.2),
+            },
+        )
+    })
+}
+
+fn type_expression(input: &str) -> NomRes<&str, Expression> {
+    context("type expression", tuple((tag(":"), identifier_code_points)))(input)
+        .map(|(next_input, res)| (next_input, Expression::Type { ty: res.1 }))
 }
 
 fn interpretation_param(input: &str) -> NomRes<&str, InterpretationParam> {
@@ -197,7 +223,7 @@ fn interpretation_param(input: &str) -> NomRes<&str, InterpretationParam> {
                 space0,
                 identifier_code_points,
                 space0,
-                opt(tuple((tag("="), space0, value))),
+                opt(tuple((tag("="), space0, rvalue))),
             )),
             tag("]"),
         ),
@@ -226,8 +252,13 @@ fn relation(input: &str) -> NomRes<&str, char> {
     .map(|(next_input, res)| (next_input, res.chars().next().unwrap()))
 }
 
-fn value(input: &str) -> NomRes<&str, Value> {
-    context("value", alt((value_string, value_uint)))(input)
+fn rvalue(input: &str) -> NomRes<&str, Value> {
+    context("value", alt((value_ident, value_string, value_uint)))(input)
+}
+
+fn value_ident(input: &str) -> NomRes<&str, Value> {
+    context("value ident", identifier_code_points)(input)
+        .map(|(next_input, res)| (next_input, Value::Str(res)))
 }
 
 fn value_string(input: &str) -> NomRes<&str, Value> {

@@ -51,7 +51,7 @@ fn path_simple_elevation() -> Res<()> {
 // }
 
 #[test]
-fn path_simple_item() -> Res<()> {
+fn path_simple_selector() -> Res<()> {
     let path = Path::parse("/a[2]")?;
     assert_eq!(
         path.0.as_slice(),
@@ -72,6 +72,86 @@ fn path_simple_item() -> Res<()> {
             index: Some(-2),
             filters: vec![],
         }),]
+    );
+    Ok(())
+}
+
+#[test]
+fn path_simple_type_expr() -> Res<()> {
+    let path = Path::parse("/a[:fn_item0]")?;
+    assert_eq!(
+        path.0.as_slice(),
+        &[PathItem::Normal(NormalPathItem {
+            relation: Relation::Sub,
+            selector: Some(Selector::Str("a")),
+            index: None,
+            filters: vec![Filter {
+                expr: Expression::Type { ty: "fn_item0" }
+            }],
+        })]
+    );
+    Ok(())
+}
+
+#[test]
+fn path_ternary_expr() -> Res<()> {
+    let path = Path::parse("/a[@attr==1][/x]")?;
+    assert_eq!(
+        path.0.as_slice(),
+        &[PathItem::Normal(NormalPathItem {
+            relation: Relation::Sub,
+            selector: Some(Selector::Str("a")),
+            index: None,
+            filters: vec![
+                Filter {
+                    expr: Expression::Ternary {
+                        left: Path(vec![PathItem::Normal(NormalPathItem {
+                            relation: Relation::Attr,
+                            selector: Some(Selector::Str("attr")),
+                            index: None,
+                            filters: vec![],
+                        })]),
+                        op: Some("=="),
+                        right: Some(Value::Int(1.into()))
+                    }
+                },
+                Filter {
+                    expr: Expression::Ternary {
+                        left: Path(vec![PathItem::Normal(NormalPathItem {
+                            relation: Relation::Sub,
+                            selector: Some(Selector::Str("x")),
+                            index: None,
+                            filters: vec![],
+                        })]),
+                        op: None,
+                        right: None,
+                    }
+                }
+            ],
+        })]
+    );
+    Ok(())
+}
+
+#[test]
+fn path_simple_or_expr() -> Res<()> {
+    let path = Path::parse("/a[:x|:y|:z]")?;
+    assert_eq!(
+        path.0.as_slice(),
+        &[PathItem::Normal(NormalPathItem {
+            relation: Relation::Sub,
+            selector: Some(Selector::Str("a")),
+            index: None,
+            filters: vec![Filter {
+                expr: Expression::Or {
+                    expressions: vec![
+                        Expression::Type { ty: "x" },
+                        Expression::Type { ty: "y" },
+                        Expression::Type { ty: "z" }
+                    ]
+                }
+            }],
+        })]
     );
     Ok(())
 }
@@ -106,7 +186,7 @@ fn path_items() -> Res<()> {
                 index: None,
                 filters: vec![
                     Filter {
-                        expr: Expression {
+                        expr: Expression::Ternary {
                             left: Path(vec![PathItem::Normal(NormalPathItem {
                                 relation: Relation::Field,
                                 selector: Some("value".into()),
@@ -118,7 +198,7 @@ fn path_items() -> Res<()> {
                         }
                     },
                     Filter {
-                        expr: Expression {
+                        expr: Expression::Ternary {
                             left: Path(vec![PathItem::Normal(NormalPathItem {
                                 relation: Relation::Sub,
                                 selector: Some("x".into()),
