@@ -253,7 +253,7 @@ fn relation(input: &str) -> NomRes<&str, char> {
 }
 
 fn rvalue(input: &str) -> NomRes<&str, Value> {
-    context("value", alt((value_ident, value_string, value_uint)))(input)
+    context("value", alt((value_string, value_uint, value_ident)))(input)
 }
 
 fn value_ident(input: &str) -> NomRes<&str, Value> {

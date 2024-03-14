@@ -62,6 +62,12 @@ pub(crate) struct CellWriter {}
 
 implement_try_from_xell!(Cell, Http);
 
+const METHOD_PARAM_NAME: &str = "method";
+const HEAD_METHOD: &str = "HEAD";
+const GET_METHOD: &str = "GET";
+
+const ACCEPT_HEADER: &str = "accept";
+
 impl Cell {
     pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
         let reader = cell.read().err()?;
@@ -70,11 +76,29 @@ impl Cell {
         let url = value_cow.as_ref();
 
         let client = Client::builder().user_agent("hial").build()?;
-        let request = if params.contains_key(&Value::Str("HEAD")) {
+        let method = {
+            if params.contains_key(&Value::Str(HEAD_METHOD)) {
+                HEAD_METHOD
+            } else if let Some(method) = params.get(&Value::Str(METHOD_PARAM_NAME)) {
+                match method.as_cow_str().as_ref() {
+                    HEAD_METHOD => HEAD_METHOD,
+                    _ => GET_METHOD,
+                }
+            } else {
+                GET_METHOD
+            }
+        };
+        let request = if method == HEAD_METHOD {
             client.head(url)
         } else {
             client.get(url)
         };
+        let request = if let Some(accept) = params.get(&Value::Str(ACCEPT_HEADER)) {
+            request.header(ACCEPT_HEADER, accept.as_cow_str().as_ref())
+        } else {
+            request
+        };
+        println!("http call request {:?}", request);
         let response = request.send()?;
 
         let mut headers = IndexMap::<String, Vec<String>>::new();
@@ -95,6 +119,7 @@ impl Cell {
         if status >= 400 {
             warning!("Error: http call failed: {} = {} {}", url, status, reason);
         }
+        println!("http call response {:?}", response);
         let response = OwnRc::new(Response {
             status,
             reason,

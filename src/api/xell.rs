@@ -362,9 +362,14 @@ impl Xell {
     }
 
     pub fn write(&self) -> CellWriter {
-        if self.domain.write_policy.get() == WritePolicy::ReadOnly {
+        if self.domain.write_policy.get() == WritePolicy::ReadOnly
+            // allow writing elevation cells, to set elevation parameters
+            && !matches!(self.dyn_cell, DynCell::Elevation(_))
+        {
+            let err = usererr("cannot write, read-only domain")
+                .with_path(self.path().unwrap_or_default());
             return CellWriter {
-                dyn_cell_writer: DynCellWriter::from(usererr("cannot write, read-only domain")),
+                dyn_cell_writer: DynCellWriter::from(err),
                 domain: Rc::clone(&self.domain),
             };
         }

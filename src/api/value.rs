@@ -302,6 +302,13 @@ impl OwnValue {
             OwnValue::Bytes(x) => Value::Bytes(x.as_ref()),
         }
     }
+
+    pub fn as_cow_str(&self) -> Cow<str> {
+        match self {
+            OwnValue::String(x) => Cow::Borrowed(x),
+            _ => Cow::Owned(self.to_string()),
+        }
+    }
 }
 
 impl Hash for OwnValue {

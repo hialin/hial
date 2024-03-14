@@ -132,13 +132,16 @@ impl<'s> Searcher<'s> {
 
         match pi {
             PathItem::Elevation(npi) => {
-                Self::process_elevation(
+                let opt_res = Self::process_elevation(
                     &mut self.stack,
                     npi,
                     parent,
                     path_index,
                     &mut self.next_max_path_index,
                 );
+                if let Some(Err(e)) = opt_res {
+                    return Some(Err(e));
+                }
             }
             PathItem::Normal(npi) => {
                 let group = match npi.relation {
@@ -183,6 +186,7 @@ impl<'s> Searcher<'s> {
         None
     }
 
+    #[must_use]
     fn process_elevation(
         stack: &mut Vec<MatchTest>,
         epi: &ElevationPathItem,
@@ -201,6 +205,7 @@ impl<'s> Searcher<'s> {
             _ => return Some(userres("bad interpretation selector")),
         };
         let itp_cell = guard_ok!(itp_cell.err(), err => {
+            println!("Error while searching: cannot get interpretation cell: {:?}", err);
             return Some(Err(err));
         });
         if !epi.params.is_empty() {
