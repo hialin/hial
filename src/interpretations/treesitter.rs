@@ -51,21 +51,20 @@ impl fmt::Debug for Cell {
 }
 
 impl Cell {
-    pub(crate) fn from_cell(cell: Xell, lang: &'static str, params: &ElevateParams) -> Res<Xell> {
-        match cell.interpretation() {
-            "value" => {
-                let source = cell.read().value()?.as_cow_str().into_owned();
-                Self::make_cell(source, lang.to_owned(), Some(cell))
-            }
+    pub(crate) fn from_cell(origin: Xell, lang: &'static str, params: &ElevateParams) -> Res<Xell> {
+        match origin.interpretation() {
             "fs" => {
-                let r = cell.read();
+                let r = origin.read();
                 let path = r.as_file_path()?;
                 let source = std::fs::read_to_string(path).map_err(|e| {
                     caused(HErrKind::IO, format!("cannot read file: {:?}", path), e)
                 })?;
-                Self::make_cell(source, lang.to_owned(), Some(cell))
+                Self::make_cell(source, lang.to_owned(), Some(origin))
             }
-            _ => nores(),
+            _ => {
+                let source = origin.read().value()?.as_cow_str().into_owned();
+                Self::make_cell(source, lang.to_owned(), Some(origin))
+            }
         }
     }
 

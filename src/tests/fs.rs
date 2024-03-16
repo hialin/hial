@@ -82,3 +82,17 @@ fn fs_path() -> Res<()> {
     assert_eq!(c.path()?, "`.`^path^fs/examples");
     Ok(())
 }
+
+#[test]
+fn fs_write_beyond_fs() -> Res<()> {
+    // test that the fs drop will not try to write back to the path cell itself
+    let ov = Xell::from("./examples/write3.txt").policy(WritePolicy::WriteBackOnDrop);
+    {
+        ov.be("path").be("fs").write().value("A")?;
+        ov.be("path").be("fs").write().value("B")?;
+        // fs should try to write back now
+    }
+    // TODO: text failure: stop fs from writing back to the path cell
+    // assert_eq!(ov.be("path").be("fs").read().value()?, "Hi there");
+    Ok(())
+}

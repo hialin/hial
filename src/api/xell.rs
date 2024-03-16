@@ -45,6 +45,7 @@ enumerated_dynamic_type! {
         Path(path::Cell),
         Http(http::Cell),
         TreeSitter(treesitter::Cell),
+        Regex(regex::Cell),
     }
 }
 
@@ -64,6 +65,7 @@ enumerated_dynamic_type! {
         Path(path::CellReader),
         Http(http::CellReader),
         TreeSitter(treesitter::CellReader),
+        Regex(regex::CellReader),
     }
 }
 
@@ -86,6 +88,7 @@ enumerated_dynamic_type! {
         Path(path::CellWriter),
         Http(http::CellWriter),
         TreeSitter(treesitter::Cell),
+        Regex(regex::CellWriter),
     }
 }
 
@@ -112,6 +115,7 @@ enumerated_dynamic_type! {
         Path(VoidGroup<path::Cell>),
         Http(http::Group),
         TreeSitter(treesitter::Cell),
+        Regex(regex::Group),
     }
 }
 
@@ -151,8 +155,9 @@ enumerated_dynamic_type! {
         Path(std::iter::Empty<Res<path::Cell>>),
         Http(std::iter::Once<Res<http::Cell>>),
         TreeSitter(std::iter::Once<Res<treesitter::Cell>>),
-        // None is an addition to interpretation variants
-         None(std::iter::Empty<Res<HErr>>),
+        Regex(std::iter::Empty<Res<regex::Cell>>),
+        // None is in addition to interpretation variants, used when nothing else matches
+        None(std::iter::Empty<Res<HErr>>),
     }
 }
 

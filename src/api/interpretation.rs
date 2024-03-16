@@ -32,6 +32,8 @@ pub trait CellReaderTrait: Debug {
 
     fn value(&self) -> Res<Value>;
 
+    /// provide a serialization of the data from the cell and its descendants
+    /// to be used for saving the data to a data store
     fn serial(&self) -> Res<String>;
 }
 

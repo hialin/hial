@@ -75,15 +75,10 @@ pub(crate) enum WriteNodeGroup {
 implement_try_from_xell!(Cell, Json);
 
 impl Cell {
-    pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
-        let (serde_value, indent) = match cell.interpretation() {
-            "value" => {
-                let s = cell.read().value()?.to_string();
-                let indent = detect_indentation(&s);
-                (serde_json::from_str(s.as_ref())?, indent)
-            }
+    pub(crate) fn from_cell(origin: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
+        let (serde_value, indent) = match origin.interpretation() {
             "fs" => {
-                let r = cell.read();
+                let r = origin.read();
                 let path = r.as_file_path()?;
                 let indent = detect_file_indentation(path);
                 (
@@ -95,13 +90,17 @@ impl Cell {
                 )
             }
             "http" => {
-                let s = cell.read().value()?.to_string();
+                let s = origin.read().value()?.to_string();
                 let indent = detect_indentation(&s);
                 (serde_json::from_str(s.as_ref())?, indent)
             }
-            _ => return nores(),
+            _ => {
+                let s = origin.read().value()?.to_string();
+                let indent = detect_indentation(&s);
+                (serde_json::from_str(s.as_ref())?, indent)
+            }
         };
-        Self::from_serde_value(serde_value, Some(cell), indent)
+        Self::from_serde_value(serde_value, Some(origin), indent)
     }
 
     fn from_serde_value(json: SValue, origin: Option<Xell>, indent: String) -> Res<Xell> {

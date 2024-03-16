@@ -33,20 +33,15 @@ pub(crate) struct CellWriter {}
 implement_try_from_xell!(Cell, Url);
 
 impl Cell {
-    pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
-        match cell.interpretation() {
-            "value" => {
-                let r = cell.read();
-                let v = r.value()?;
-                let cow = v.as_cow_str();
-                let value = cow.as_ref();
-                let url_cell = Cell(Rc::new(Data {
-                    url: Url::parse(value)?,
-                }));
-                Ok(Xell::new_from(DynCell::from(url_cell), Some(cell)))
-            }
-            _ => nores(),
-        }
+    pub(crate) fn from_cell(origin: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
+        let r = origin.read();
+        let v = r.value()?;
+        let cow = v.as_cow_str();
+        let value = cow.as_ref();
+        let url_cell = Cell(Rc::new(Data {
+            url: Url::parse(value)?,
+        }));
+        Ok(Xell::new_from(DynCell::from(url_cell), Some(origin)))
     }
 
     pub(crate) fn from_str(s: &str) -> Res<Xell> {

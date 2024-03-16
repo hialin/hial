@@ -11,8 +11,8 @@ pub struct Path<'a>(pub(crate) Vec<PathItem<'a>>);
 #[derive(Clone, Debug)]
 pub enum PathStart<'a> {
     Url(Url<'a>),
-    File(&'a str),
-    String(&'a str),
+    File(String),
+    String(String),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -24,13 +24,13 @@ pub(crate) enum PathItem<'a> {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ElevationPathItem<'a> {
     pub(crate) interpretation: Selector<'a>,
-    pub(crate) params: Vec<InterpretationParam<'a>>,
+    pub(crate) params: Vec<InterpretationParam>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct InterpretationParam<'a> {
-    pub(crate) name: &'a str,
-    pub(crate) value: Option<Value<'a>>,
+pub(crate) struct InterpretationParam {
+    pub(crate) name: String,
+    pub(crate) value: Option<OwnValue>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -50,11 +50,10 @@ pub(crate) struct Filter<'a> {
 pub(crate) enum Expression<'a> {
     Ternary {
         left: Path<'a>,
-        op: Option<&'a str>,
-        right: Option<Value<'a>>,
+        op_right: Option<(&'a str, OwnValue)>,
     },
     Type {
-        ty: &'a str,
+        ty: String,
     },
     Or {
         expressions: Vec<Expression<'a>>,
@@ -138,13 +137,10 @@ impl Display for Filter<'_> {
 impl Display for Expression<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expression::Ternary { left, op, right } => {
+            Expression::Ternary { left, op_right } => {
                 write!(f, "{}", left)?;
-                if let Some(op) = op {
-                    write!(f, "{}", op)?;
-                }
-                if let Some(right) = right {
-                    write!(f, "{:?}", right)?;
+                if let Some(op_r) = op_right {
+                    write!(f, "{}{:?}", op_r.0, op_r.1)?;
                 }
             }
             Expression::Type { ty } => {
@@ -163,10 +159,10 @@ impl Display for Expression<'_> {
     }
 }
 
-impl Display for InterpretationParam<'_> {
+impl Display for InterpretationParam {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)?;
-        if let Some(v) = self.value {
+        if let Some(v) = &self.value {
             write!(f, "={}", v)?;
         }
         Ok(())
@@ -199,8 +195,8 @@ impl<'a> PathStart<'a> {
     pub fn eval(&self) -> Res<Xell> {
         match self {
             PathStart::Url(s) => Xell::from(s.to_string()).be("url").err(),
-            PathStart::File(s) => Xell::from(*s).be("path").be("fs").err(),
-            PathStart::String(s) => Xell::from(*s).err(),
+            PathStart::File(s) => Xell::from(s.as_str()).be("path").be("fs").err(),
+            PathStart::String(s) => Xell::from(s.as_str()).err(),
         }
     }
 }

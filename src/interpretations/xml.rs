@@ -97,10 +97,10 @@ pub(crate) enum Attribute {
 implement_try_from_xell!(Cell, Xml);
 
 impl Cell {
-    pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
-        match cell.interpretation() {
+    pub(crate) fn from_cell(origin: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
+        match origin.interpretation() {
             "fs" => {
-                let r = cell.read();
+                let r = origin.read();
                 let path = r.as_file_path()?;
                 let file = File::open(path).map_err(|e| {
                     caused(
@@ -112,16 +112,16 @@ impl Cell {
                 let indent = detect_file_indentation(path);
                 let mut reader = Reader::from_file(path).map_err(HErr::from)?;
                 let root = xml_to_node(&mut reader)?;
-                Self::from_root_node(root, Some(cell), indent)
+                Self::from_root_node(root, Some(origin), indent)
             }
             _ => {
-                let r = cell.read();
+                let r = origin.read();
                 let v = r.value()?;
                 let cow = v.as_cow_str();
                 let indent = detect_indentation(cow.as_ref());
                 let mut reader = Reader::from_str(cow.as_ref());
                 let root = xml_to_node(&mut reader)?;
-                Self::from_root_node(root, Some(cell), indent)
+                Self::from_root_node(root, Some(origin), indent)
             }
         }
     }

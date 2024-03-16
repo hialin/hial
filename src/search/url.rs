@@ -280,21 +280,6 @@ where
     )
 }
 
-pub fn identifier_code_points<T>(i: T) -> NomRes<T, T>
-where
-    T: InputTakeAtPosition,
-    <T as InputTakeAtPosition>::Item: AsChar,
-{
-    let accept = |c: char| c == '_' || c.is_alphanumeric();
-    i.split_at_position1_complete(
-        |item| {
-            let char_item = item.as_char();
-            !accept(char_item)
-        },
-        ErrorKind::AlphaNumeric,
-    )
-}
-
 fn n_to_m_digits<'a>(n: usize, m: usize) -> impl FnMut(&'a str) -> NomRes<&str, String> {
     move |input| {
         many_m_n(n, m, one_of("0123456789"))(input)

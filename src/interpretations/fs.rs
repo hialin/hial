@@ -1,5 +1,5 @@
 use std::{
-    borrow::{Borrow, Cow},
+    borrow::Cow,
     cell::OnceCell,
     cmp::Ordering,
     ffi::OsString,
@@ -243,19 +243,12 @@ impl CellWriter {
 }
 
 impl Cell {
-    pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
-        let r = cell.read();
+    pub(crate) fn from_cell(origin: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
+        let r = origin.read();
         let path = r.as_file_path()?;
         let path = Self::shell_tilde(path);
         let file_cell = Self::make_file_cell(path.as_ref())?;
-        Ok(Xell::new_from(DynCell::from(file_cell), Some(cell)))
-    }
-
-    pub(crate) fn from_str_path(path: impl Borrow<str>) -> Res<Xell> {
-        let path = Path::new(path.borrow());
-        let path = Self::shell_tilde(path);
-        let file_cell = Self::make_file_cell(path.as_ref())?;
-        Ok(Xell::new_from(DynCell::from(file_cell), None))
+        Ok(Xell::new_from(DynCell::from(file_cell), Some(origin)))
     }
 
     fn shell_tilde(path: &Path) -> Cow<Path> {

@@ -1,23 +1,23 @@
 # List of Todos and other Issues
 
-- add http interpretation params: method=HEAD, accept=""
-- add split(":") and regex interpretations
+ - add split(":") interpretation, read-write
 - set value on the command line: '/username = "newuser"'
-- https://raw.githubusercontent.com/rust-lang/rust/master/src/tools/rustfmt/src/lib.rs^http^rust does not work
 - '**[filter]' must be work as '**/*[filter]' (filter to be applied only on leaves)
 - support rust/ts write: `hial './src/tests/rust.rs^rust/*[:function_item].label = "modified_fn_name"'`
+- add interpretation params to Xell::be()
 - support zip, markdown
 - support 'copy source destination'
 - support ^json^tree^xml
 - support diff  ./file.json^json^tree  ./file.xml^xml^tree
+- basic profiling
 - functions
 - should blobs/bytes be part of value? they are only useful by reinterpretation
+- what to do with very large values? files which are 100MBs?
 
 - release first minimal version:
     - interpretations: path+fs, json+yaml+toml+xml, rust+js, url?+http
     - explicit and implicit write support (policy, include readonly)
     - fix tests, todo!() and TODO: in code
-
 
 - operations:
     - assign to variables;
@@ -49,7 +49,6 @@
 - todo: add regex operator and shortcuts for startswith, endswith, contains
 - todo: add <, >, <=, >= operators
 - todo: improve nom parsing errors, use context
-- todo: interpretations parameters
 - todo: custom tree datastructure?
 - todo: cell symlinks
 - todo: path bindings

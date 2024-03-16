@@ -20,15 +20,15 @@ fn path_simple_elevation() -> Res<()> {
             PathItem::Elevation(ElevationPathItem {
                 interpretation: Selector::Str("fs.one"),
                 params: vec![InterpretationParam {
-                    name: "w",
+                    name: "w".to_string(),
                     value: None
                 }]
             }),
             PathItem::Elevation(ElevationPathItem {
                 interpretation: Selector::Str("fs.two"),
                 params: vec![InterpretationParam {
-                    name: "w",
-                    value: Some(Value::Int(1.into())),
+                    name: "w".to_string(),
+                    value: Some(OwnValue::Int(1.into())),
                 }]
             })
         ]
@@ -86,7 +86,9 @@ fn path_simple_type_expr() -> Res<()> {
             selector: Some(Selector::Str("a")),
             index: None,
             filters: vec![Filter {
-                expr: Expression::Type { ty: "fn_item0" }
+                expr: Expression::Type {
+                    ty: "fn_item0".to_string()
+                }
             }],
         })]
     );
@@ -111,8 +113,7 @@ fn path_ternary_expr() -> Res<()> {
                             index: None,
                             filters: vec![],
                         })]),
-                        op: Some("=="),
-                        right: Some(Value::Int(1.into()))
+                        op_right: Some(("==", OwnValue::Int(1.into())))
                     }
                 },
                 Filter {
@@ -123,8 +124,7 @@ fn path_ternary_expr() -> Res<()> {
                             index: None,
                             filters: vec![],
                         })]),
-                        op: None,
-                        right: None,
+                        op_right: None,
                     }
                 }
             ],
@@ -145,9 +145,15 @@ fn path_simple_or_expr() -> Res<()> {
             filters: vec![Filter {
                 expr: Expression::Or {
                     expressions: vec![
-                        Expression::Type { ty: "x" },
-                        Expression::Type { ty: "y" },
-                        Expression::Type { ty: "z" }
+                        Expression::Type {
+                            ty: "x".to_string()
+                        },
+                        Expression::Type {
+                            ty: "y".to_string()
+                        },
+                        Expression::Type {
+                            ty: "z".to_string()
+                        }
                     ]
                 }
             }],
@@ -193,8 +199,7 @@ fn path_items() -> Res<()> {
                                 index: None,
                                 filters: vec![],
                             }),]),
-                            op: Some("=="),
-                            right: Some(Value::Str("3"))
+                            op_right: Some(("==", OwnValue::String("3".to_string())))
                         }
                     },
                     Filter {
@@ -205,8 +210,7 @@ fn path_items() -> Res<()> {
                                 index: None,
                                 filters: vec![],
                             }),]),
-                            op: None,
-                            right: None,
+                            op_right: None
                         }
                     }
                 ],

@@ -69,8 +69,8 @@ const GET_METHOD: &str = "GET";
 const ACCEPT_HEADER: &str = "accept";
 
 impl Cell {
-    pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
-        let reader = cell.read().err()?;
+    pub(crate) fn from_cell(origin: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
+        let reader = origin.read().err()?;
         let value = reader.value()?;
         let value_cow = value.as_cow_str();
         let url = value_cow.as_ref();
@@ -134,7 +134,7 @@ impl Cell {
             },
             pos: 0,
         };
-        Ok(Xell::new_from(DynCell::from(http_cell), Some(cell)))
+        Ok(Xell::new_from(DynCell::from(http_cell), Some(origin)))
     }
 }
 

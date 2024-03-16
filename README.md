@@ -1,18 +1,20 @@
 
 # Hial
 
-Hial is a general purpose data API and CLI tool. It is a programmatic interface to different types of data represented as uniform tree structures. This makes the data easy to read, explore and modify using a small number of functions. Hial proposes a relatively simple mental model, suitable for most use cases, which improves the user comfort and speed.
+Hial is a general purpose data API library and CLI tool. It is a programmatic CRUD-like interface to various types of data represented as uniform tree structures. Hial proposes a relatively simple mental model, suitable for most use cases, which eliminates the accidental complexity of having to handle separate APIs for different data types. The tree model makes the data easy to read, explore and modify using a small number of functions.
 
-The types of data that can be supported by this API are the file system, configuration files (json, yaml, toml), markup files (xml, html), programs written in various programming languages, operating system configurations and runtime parameters, database tables and records, etc.
+The types of data that can be supported by this API are the file system, configuration files (json, yaml, toml), markup files (xml, html), programs written in various programming languages, operating system configurations and runtime parameters, database tables and records, http requests, etc.
 
-The path API can be seen as an generalization of the concepts behind xpath, json path, file system path, and other similar path languages. It is a concise way to express data searches common in programming and system administration.
+Central to the Hial model is the idea of **interpretation**. Any piece of data has an implicit interpretation (i.e. "what the data means") which is sometimes difficult to grasp from context. In Hial the data is structured hierarchicaly, in a tree, each piece being connected to other pieces of data, and they all together form an interpretation of some underlying raw data. For example, a json data tree can be an interpretation of some raw bytes from the network, or a python AST data tree can be an interpretation of a file content. Any piece of data can be reinterpreted as something else (whenever it makes sense) which allows the user to operate on data at the right semantic level for the task at hand.
+
+The tree data model accepts a path API similar to xpath, json path, file system path, or other similar path languages. It is a concise way to express data searches common in programming and system administration.
 
 :warning:  Hial is **currently under construction.** Some things don't work yet and some things will change.
 
 
 ### What can it do?
 
-##### 1. Select or search for pieces of data in a structured way.
+##### 1. Search for pieces of data in a structured way.
 
 Print a value embedded in a json file or from a url that returns json or xml data:
 
@@ -40,7 +42,7 @@ hial './config.yaml^yaml/services/*[ /image^split[":"]/[0]^http[HEAD]@status/cod
 
 ```rust
 // rust (native)
-for service in Cell::from("./config.yaml").all("^yaml/services") {
+for service in Cell::new("./config.yaml").all("^yaml/services") {
     let image = service.to("/image");
     if image.to("^http[HEAD]@status/code") >= 400 {
         println!("service {} has an invalid image: {}",

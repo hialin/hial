@@ -30,25 +30,24 @@ pub(crate) struct CellWriter(WriteRc<PathBuf>);
 implement_try_from_xell!(Cell, Path);
 
 impl Cell {
-    pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
-        match cell.interpretation() {
-            "value" => {
-                let r = cell.read();
-                let v = r.value()?;
-                let cow = v.as_cow_str();
-                let value = cow.as_ref();
-                Self::make_cell(PathBuf::from(value), value.to_owned(), Some(cell))
-            }
+    pub(crate) fn from_cell(origin: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
+        match origin.interpretation() {
             "fs" => {
-                let r = cell.read();
+                let r = origin.read();
                 let path = r.as_file_path()?;
                 Self::make_cell(
                     path.to_owned(),
                     path.to_string_lossy().into_owned(),
-                    Some(cell),
+                    Some(origin),
                 )
             }
-            _ => nores(),
+            _ => {
+                let r = origin.read();
+                let v = r.value()?;
+                let cow = v.as_cow_str();
+                let value = cow.as_ref();
+                Self::make_cell(PathBuf::from(value), value.to_owned(), Some(origin))
+            }
         }
     }
 

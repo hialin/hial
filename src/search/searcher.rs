@@ -213,18 +213,17 @@ impl<'s> Searcher<'s> {
                 return Some(Err(err));
             });
             for param in &epi.params {
-                if attrs.get(param.name).err().is_err() {
-                    let label = Value::from(param.name).to_owned_value();
-                    let opt_value = param.value.map(|v| v.to_owned_value());
-                    let newcell = guard_ok!(attrs.create(Some(label), opt_value), err => {
+                if attrs.get(&param.name).err().is_err() {
+                    let label = OwnValue::from(param.name.clone());
+                    let newcell = guard_ok!(attrs.create(Some(label), param.value.clone()), err => {
                         return Some(Err(err));
                     });
                     guard_ok!(attrs.add(None, newcell), err => {
                         return Some(Err(err));
                     });
                 }
-                if let Some(v) = param.value {
-                    guard_ok!(attrs.get(param.name).write().value(v.to_owned_value()), err => {
+                if let Some(v) = &param.value {
+                    guard_ok!(attrs.get(&param.name).write().value(v.clone()), err => {
                         return Some(Err(err));
                     });
                 }
@@ -401,8 +400,8 @@ impl<'s> Searcher<'s> {
 
     fn eval_expression(cell: Xell, expr: &Expression<'s>) -> Res<bool> {
         match expr {
-            Expression::Ternary { left, op, right } => {
-                Self::eval_ternary_expression(cell, left.clone(), *op, *right)
+            Expression::Ternary { left, op_right } => {
+                Self::eval_ternary_expression(cell, left.clone(), op_right)
             }
             Expression::Type { ty } => cell.read().ty().map(|t| t == *ty),
             Expression::Or { expressions } => {
@@ -419,8 +418,7 @@ impl<'s> Searcher<'s> {
     fn eval_ternary_expression(
         cell: Xell,
         left: Path<'s>,
-        op: Option<&'s str>,
-        right: Option<Value<'s>>,
+        op_right: &Option<(&'s str, OwnValue)>,
     ) -> Res<bool> {
         ifdebug!(println!(
             "{{{{\neval_ternary_expression cell `{}` for expr `{}`",
@@ -428,13 +426,13 @@ impl<'s> Searcher<'s> {
             expr
         ));
 
-        fn eval_expr(op: &str, left: Value, right: Value) -> Res<bool> {
+        fn eval_expr(op: &str, left: Value, right: &OwnValue) -> Res<bool> {
             if !["==", "!="].contains(&op) {
                 return userres(format!("bad operand: {}", op));
             }
             match op {
-                "==" if left == right => Ok(true),
-                "!=" if left != right => Ok(true),
+                "==" if left == right.as_value() => Ok(true),
+                "!=" if left != right.as_value() => Ok(true),
                 _ => Ok(false),
             }
         }
@@ -445,21 +443,19 @@ impl<'s> Searcher<'s> {
                 debug_err!(err);
                 continue;
             });
-            if let Some(op) = op {
-                if let Some(right) = right {
-                    let reader = guard_ok!(cell.read().err(), err => {
-                        debug_err!(err);
-                        continue;
-                    });
+            if let Some((op, right)) = op_right {
+                let reader = guard_ok!(cell.read().err(), err => {
+                    debug_err!(err);
+                    continue;
+                });
 
-                    let lvalue = guard_ok!(reader.value(), err => {
-                        debug_err!(err);
-                        continue;
-                    });
-                    if eval_expr(op, lvalue, right)? {
-                        ifdebug!(println!("eval_bool_expression true\n}}}}"));
-                        return Ok(true);
-                    }
+                let lvalue = guard_ok!(reader.value(), err => {
+                    debug_err!(err);
+                    continue;
+                });
+                if eval_expr(op, lvalue, right)? {
+                    ifdebug!(println!("eval_bool_expression true\n}}}}"));
+                    return Ok(true);
                 }
             } else {
                 ifdebug!(println!("eval_bool_expression true\n}}}}"));

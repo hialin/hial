@@ -76,18 +76,11 @@ impl From<ScanError> for HErr {
 }
 
 impl Cell {
-    pub(crate) fn from_cell(cell: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
-        match cell.interpretation() {
-            "value" => {
-                let r = cell.read();
-                let v = r.value()?;
-                let cow = v.as_cow_str();
-                let value = cow.as_ref();
-                Cell::make_cell(value, Some(cell))
-            }
+    pub(crate) fn from_cell(origin: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
+        match origin.interpretation() {
             "fs" => {
                 let mut source = String::new();
-                let r = cell.read();
+                let r = origin.read();
                 let path = r.as_file_path()?;
                 File::open(path)
                     .map_err(|e| caused(HErrKind::IO, format!("cannot open file: {:?}", path), e))?
@@ -95,14 +88,14 @@ impl Cell {
                     .map_err(|e| {
                         caused(HErrKind::IO, format!("cannot read file: {:?}", path), e)
                     })?;
-                Cell::make_cell(source, Some(cell))
+                Cell::make_cell(source, Some(origin))
             }
             _ => {
-                let r = cell.read();
+                let r = origin.read();
                 let v = r.value()?;
                 let cow = v.as_cow_str();
                 let value = cow.as_ref();
-                Cell::make_cell(value, Some(cell)).map_err(|e| {
+                Cell::make_cell(value, Some(origin)).map_err(|e| {
                     if e.kind == HErrKind::InvalidFormat {
                         noerr()
                     } else {

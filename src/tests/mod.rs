@@ -5,6 +5,7 @@ mod json;
 mod nested;
 mod path;
 mod perf;
+mod regex;
 mod rust;
 mod search;
 mod toml;

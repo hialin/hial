@@ -1,5 +1,6 @@
 use crate::{api::*, guard_ok, search::path::*, search::url::*};
-use nom::character::complete::space0;
+use nom::bytes::complete::take_till;
+use nom::character::complete::{anychar, space0};
 use nom::error::VerboseErrorKind;
 use nom::multi::separated_list1;
 use nom::{
@@ -73,7 +74,7 @@ fn path_start_file(input: &str) -> NomRes<&str, PathStart> {
         if let Some(last) = res.2 {
             len += last.len();
         }
-        (next_input, PathStart::File(&input[0..len]))
+        (next_input, PathStart::File(input[0..len].to_string()))
     })
 }
 
@@ -197,20 +198,19 @@ fn ternary_expression(input: &str) -> NomRes<&str, Expression> {
         "ternary expression",
         tuple((path_items, space0, opt(tuple((operation, space0, rvalue))))),
     )(input)
-    .map(|(next_input, res)| {
+    .map(|(next_input, (left, _, opts))| {
         (
             next_input,
             Expression::Ternary {
-                left: res.0,
-                op: res.2.map(|x| x.0),
-                right: res.2.map(|x| x.2),
+                left,
+                op_right: opts.map(|(op, _, right)| (op, right)),
             },
         )
     })
 }
 
 fn type_expression(input: &str) -> NomRes<&str, Expression> {
-    context("type expression", tuple((tag(":"), identifier_code_points)))(input)
+    context("type expression", tuple((tag(":"), identifier)))(input)
         .map(|(next_input, res)| (next_input, Expression::Type { ty: res.1 }))
 }
 
@@ -221,7 +221,7 @@ fn interpretation_param(input: &str) -> NomRes<&str, InterpretationParam> {
             tag("["),
             tuple((
                 space0,
-                identifier_code_points,
+                alt((string, identifier)),
                 space0,
                 opt(tuple((tag("="), space0, rvalue))),
             )),
@@ -252,42 +252,84 @@ fn relation(input: &str) -> NomRes<&str, char> {
     .map(|(next_input, res)| (next_input, res.chars().next().unwrap()))
 }
 
-fn rvalue(input: &str) -> NomRes<&str, Value> {
+fn rvalue(input: &str) -> NomRes<&str, OwnValue> {
     context("value", alt((value_string, value_uint, value_ident)))(input)
 }
 
-fn value_ident(input: &str) -> NomRes<&str, Value> {
-    context("value ident", identifier_code_points)(input)
-        .map(|(next_input, res)| (next_input, Value::Str(res)))
+fn value_ident(input: &str) -> NomRes<&str, OwnValue> {
+    context("value ident", identifier)(input)
+        .map(|(next_input, res)| (next_input, OwnValue::String(res.to_string())))
 }
 
-fn value_string(input: &str) -> NomRes<&str, Value> {
-    context("value_string", string)(input).map(|(next_input, res)| (next_input, Value::Str(res)))
+fn value_string(input: &str) -> NomRes<&str, OwnValue> {
+    context("value_string", string)(input)
+        .map(|(next_input, res)| (next_input, OwnValue::String(res)))
 }
 
-fn value_uint(input: &str) -> NomRes<&str, Value> {
+fn value_uint(input: &str) -> NomRes<&str, OwnValue> {
     context("value_uint", digit1)(input)
         .and_then(|(next_input, res)| match res.parse::<u64>() {
             Ok(n) => Ok((next_input, n)),
             Err(_) => Err(nom::Err::Error(VerboseError { errors: vec![] })),
         })
-        .map(|(next_input, num)| (next_input, Value::Int(Int::U64(num))))
+        .map(|(next_input, num)| (next_input, OwnValue::Int(Int::U64(num))))
 }
 
-fn string(input: &str) -> NomRes<&str, &str> {
+fn identifier(input: &str) -> NomRes<&str, String> {
+    fn accept(c: char) -> bool {
+        c.is_alphanumeric() || c == '_'
+    }
+    context("identifier", take_till(|c| !accept(c)))(input)
+        .map(|(next_input, res)| (next_input, res.to_string()))
+}
+
+fn string(input: &str) -> NomRes<&str, String> {
     context("string", alt((parse_quoted_single, parse_quoted_double)))(input)
 }
 
-fn parse_quoted_single(input: &str) -> NomRes<&str, &str> {
-    let esc = escaped(none_of("\\\'"), '\\', tag("'"));
-    let esc_or_empty = alt((esc, tag("")));
-    delimited(tag("'"), esc_or_empty, tag("'"))(input)
+#[cfg(test)]
+#[test]
+fn test_parse_string() {
+    assert_eq!(string(r#""(\w+)""#).unwrap().1, r#"(\w+)"#);
+    assert_eq!(string(r#"'(\w+)'"#).unwrap().1, r#"(\w+)"#);
+    assert_eq!(string(r#""(\\w+)""#).unwrap().1, r#"(\w+)"#);
+    assert_eq!(
+        string(r#""(\w+.\w+)@(\w+)""#).unwrap().1,
+        r#"(\w+.\w+)@(\w+)"#
+    );
 }
 
-fn parse_quoted_double(input: &str) -> NomRes<&str, &str> {
-    let esc = escaped(none_of("\\\""), '\\', tag("\""));
+fn unescape_string(s: &str, special: char) -> String {
+    let mut r = String::new();
+    let mut chars = s.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            match chars.peek() {
+                Some(&c) if c == special || c == '\\' => {
+                    r.push(c);
+                    chars.next();
+                }
+                _ => r.push('\\'),
+            }
+        } else {
+            r.push(ch);
+        }
+    }
+    r
+}
+
+fn parse_quoted_single(input: &str) -> NomRes<&str, String> {
+    let esc = escaped(none_of("\'\\"), '\\', anychar);
+    let esc_or_empty = alt((esc, tag("")));
+    delimited(tag("'"), esc_or_empty, tag("'"))(input)
+        .map(|(next_input, res)| (next_input, unescape_string(res, '\'')))
+}
+
+fn parse_quoted_double(input: &str) -> NomRes<&str, String> {
+    let esc = escaped(none_of("\"\\"), '\\', anychar);
     let esc_or_empty = alt((esc, tag("")));
     delimited(tag("\""), esc_or_empty, tag("\""))(input)
+        .map(|(next_input, res)| (next_input, unescape_string(res, '"')))
 }
 
 fn number_usize(input: &str) -> NomRes<&str, usize> {
