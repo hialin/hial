@@ -1,49 +1,37 @@
-use crate::{api::*, guard_ok, search::path::*, search::url::*};
-use nom::bytes::complete::take_till;
-use nom::character::complete::{anychar, space0};
-use nom::error::VerboseErrorKind;
-use nom::multi::separated_list1;
+use super::{convert_error, NomRes};
+use crate::{
+    api::*,
+    guard_ok,
+    prog::{parse_url::*, path::*},
+};
 use nom::{
     branch::alt,
-    bytes::complete::{escaped, tag},
-    character::complete::{digit1, none_of, one_of},
+    bytes::complete::{escaped, tag, take_till},
+    character::complete::{anychar, digit1, none_of, one_of, space0},
     combinator::{all_consuming, opt, recognize},
+    error::VerboseErrorKind,
     error::{context, VerboseError},
+    multi::separated_list1,
     multi::{many0, many1},
     sequence::{delimited, terminated, tuple},
-    IResult,
 };
 use std::str::{from_utf8, FromStr};
 
-pub type NomRes<T, U> = IResult<T, U, VerboseError<T>>;
-
-impl<'a> Path<'a> {
-    pub fn parse(input: &str) -> Res<Path> {
-        let path_res = all_consuming(path_items)(input);
-        let path = guard_ok!(path_res, err => { return userres(convert_error(input, err))});
-        Ok(path.1)
-    }
-
-    pub fn parse_with_starter(input: &str) -> Res<(PathStart, Path)> {
-        let path_res = all_consuming(path_with_starter)(input);
-        let path = guard_ok!(path_res, err => { return userres(convert_error(input, err))});
-        Ok(path.1)
-    }
+pub fn parse_path(input: &str) -> Res<Path> {
+    let path_res = all_consuming(path_items)(input);
+    let path = guard_ok!(path_res, err => { return userres(convert_error(input, err))});
+    Ok(path.1)
 }
 
-fn convert_error(input: &str, err: nom::Err<VerboseError<&str>>) -> String {
-    match err {
-        nom::Err::Incomplete(needed) => {
-            format!("path parsing failed, more input needed {:?}", needed)
-        }
-        nom::Err::Error(e) => nom::error::convert_error(input, e),
-        nom::Err::Failure(e) => nom::error::convert_error(input, e),
-    }
+pub fn parse_path_with_starter(input: &str) -> Res<(PathStart, Path)> {
+    let path_res = all_consuming(path_with_starter)(input);
+    let path = guard_ok!(path_res, err => { return userres(convert_error(input, err))});
+    Ok(path.1)
 }
 
-fn path_with_starter(input: &str) -> NomRes<&str, (PathStart, Path)> {
-    context("path", tuple((path_start, path_items)))(input).map(|(next_input, res)| {
-        let (start, path) = res;
+pub fn path_with_starter(input: &str) -> NomRes<&str, (PathStart, Path)> {
+    context("path", tuple((space0, path_start, path_items)))(input).map(|(next_input, res)| {
+        let (_, start, path) = res;
         (next_input, (start, path))
     })
 }

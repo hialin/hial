@@ -384,6 +384,16 @@ impl From<u64> for Value<'_> {
         Value::Int(Int::U64(x))
     }
 }
+impl From<isize> for Value<'_> {
+    fn from(x: isize) -> Self {
+        Value::Int(Int::I64(x as i64))
+    }
+}
+impl From<usize> for Value<'_> {
+    fn from(x: usize) -> Self {
+        Value::Int(Int::U64(x as u64))
+    }
+}
 impl From<StrFloat> for Value<'_> {
     fn from(f: StrFloat) -> Self {
         Value::Float(f)

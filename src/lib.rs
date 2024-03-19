@@ -12,9 +12,10 @@ pub mod api;
 // pub mod c_api;
 mod interpretations;
 pub mod perftests;
-pub mod pprint;
-pub mod search;
+pub mod prog;
 pub mod utils;
+
+pub use utils::pprint::pprint;
 
 #[cfg(test)]
 mod tests;

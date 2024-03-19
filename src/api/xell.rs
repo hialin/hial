@@ -8,7 +8,7 @@ use crate::{
     api::{internal::*, interpretation::*, *},
     enumerated_dynamic_type, guard_ok, guard_some,
     interpretations::*,
-    search::{searcher::Searcher, Path},
+    prog::{searcher::Searcher, Path},
     warning,
 };
 
@@ -466,7 +466,7 @@ impl Xell {
         if let DynCell::Error(err) = &self.dyn_cell {
             return self.clone();
         }
-        let path = guard_ok!(crate::search::Path::parse(path), err =>
+        let path = guard_ok!(Path::parse(path), err =>
             return Xell {
                 dyn_cell: DynCell::from(err),
                 domain: Rc::clone(&self.domain),
@@ -500,7 +500,7 @@ impl Xell {
         if let DynCell::Error(err) = &self.dyn_cell {
             return Err(err.clone());
         }
-        let path = guard_ok!(crate::search::Path::parse(path), err => {return Err(err)});
+        let path = guard_ok!(crate::prog::Path::parse(path), err => {return Err(err)});
         Ok(Searcher::new(self.clone(), path))
     }
 

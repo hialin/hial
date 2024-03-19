@@ -1,4 +1,4 @@
-use crate::{api::*, pprint::pprint};
+use crate::{api::*, pprint};
 
 const TOML: &str = r#"
 # This is a TOML document

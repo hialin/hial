@@ -1,4 +1,4 @@
-use crate::{api::*, pprint::pprint, utils::log::set_verbose};
+use crate::{api::*, pprint, utils::log::set_verbose};
 
 #[test]
 fn test_http_basic() -> Res<()> {

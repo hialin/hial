@@ -1,4 +1,4 @@
-use crate::{api::*, search::path::Path};
+use crate::{api::*, prog::Path};
 
 #[test]
 fn test_files() -> Res<()> {

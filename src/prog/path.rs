@@ -2,13 +2,13 @@ use std::fmt::{Display, Formatter};
 
 use crate::{
     api::*,
-    search::{searcher::Searcher, url::*},
+    prog::{searcher::Searcher, url::*},
 };
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Path<'a>(pub(crate) Vec<PathItem<'a>>);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PathStart<'a> {
     Url(Url<'a>),
     File(String),
@@ -202,6 +202,14 @@ impl<'a> PathStart<'a> {
 }
 
 impl<'a> Path<'a> {
+    pub fn parse(input: &str) -> Res<Path> {
+        super::parse_path::parse_path(input)
+    }
+
+    pub fn parse_with_starter(input: &str) -> Res<(PathStart, Path)> {
+        super::parse_path::parse_path_with_starter(input)
+    }
+
     pub fn eval(self, cell: Xell) -> Searcher<'a> {
         Searcher::new(cell, self)
     }

@@ -9,19 +9,17 @@ publish = false
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-anyhow = { version = "1", features = ["backtrace"] }
-clap = { version = "4.4", features = ["suggestions", "derive"] }
 dirs = "5.0"
-indexmap = "2.1"
+indexmap = "2.2"
 linkme = "0.3"
 nom = "7.1"
 paste = "1.0"
 rand = "0.8"
-regex = "1.5"
+regex = "1.10"
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 serde = { version = "1.0" }
-tree-sitter = "0.20"
-url = "2.1"
+tree-sitter = "0.22"
+url = "2.5"
 quick-xml = { version = "0.31", features = ["encoding"] }
 yaml-rust = "0.4"
 

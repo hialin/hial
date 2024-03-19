@@ -1,7 +1,7 @@
 # List of Todos and other Issues
 
- - add split(":") interpretation, read-write
 - set value on the command line: '/username = "newuser"'
+- add split(":") interpretation, read-write
 - '**[filter]' must be work as '**/*[filter]' (filter to be applied only on leaves)
 - support rust/ts write: `hial './src/tests/rust.rs^rust/*[:function_item].label = "modified_fn_name"'`
 - add interpretation params to Xell::be()

@@ -1,4 +1,4 @@
-use crate::{api::*, pprint::pprint, utils::log::set_verbose};
+use crate::{api::*, pprint, utils::log::set_verbose};
 
 #[test]
 fn test_json() -> Res<()> {
@@ -21,7 +21,7 @@ fn test_json() -> Res<()> {
             ]
         }"#;
     let json = Xell::from(json).be("json");
-    // pprint::pprint(&json, 0, 0);
+    // pprint(&json, 0, 0);
     let hosts = json.sub().get("hosts").sub();
     assert_eq!(hosts.len()?, 2);
     let host1 = hosts.at(0);
@@ -130,7 +130,7 @@ fn json_write_and_save() -> Res<()> {
     let flattree = Xell::from(treestring).policy(WritePolicy::NoAutoWrite);
     let json = flattree.be("json");
 
-    // pprint::pprint(&json, 0, 0);
+    // pprint(&json, 0, 0);
 
     let path1 = "/hosts/[1]/labels/power";
     let newvalue = "weak as putty";
@@ -139,7 +139,7 @@ fn json_write_and_save() -> Res<()> {
     let path2 = "/hosts/[0]/host_id";
     json.to(path2).write().value(OwnValue::None)?;
 
-    // pprint::pprint(&json, 0, 0);
+    // pprint(&json, 0, 0);
 
     assert_eq!(json.to(path1).read().value()?, newvalue);
     assert_eq!(json.to(path2).read().value()?, Value::None);

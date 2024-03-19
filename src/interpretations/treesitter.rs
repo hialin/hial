@@ -127,7 +127,7 @@ fn sitter_from_source(source: String, language: String) -> Res<Cell> {
     // }
 
     let mut parser = Parser::new();
-    guard_ok!(parser.set_language(sitter_language), err => {
+    guard_ok!(parser.set_language(&sitter_language), err => {
         return Err(caused(HErrKind::Internal, format!("cannot set language {}", language), err));
     });
 
