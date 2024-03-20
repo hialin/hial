@@ -4,8 +4,8 @@ use crate::{
     prog::{parse_path::*, program::*, *},
 };
 use nom::{
-    character::complete::space0, combinator::all_consuming, error::context, multi::many0,
-    sequence::terminated,
+    branch::alt, bytes::complete::tag, character::complete::space0, combinator::all_consuming,
+    error::context, multi::separated_list0, sequence::tuple,
 };
 
 pub fn parse_program(input: &str) -> Res<Program> {
@@ -17,13 +17,29 @@ pub fn parse_program(input: &str) -> Res<Program> {
 }
 
 fn program(input: &str) -> NomRes<&str, Program> {
-    context("program", many0(statement))(input).map(|(next_input, res)| {
+    context(
+        "program",
+        separated_list0(tuple((space0, tag(";"), space0)), statement),
+    )(input)
+    .map(|(next_input, res)| {
         let statements = res.iter().map(|p| p.to_owned()).collect();
         (next_input, Program(statements))
     })
 }
 
 fn statement(input: &str) -> NomRes<&str, Statement> {
-    context("statement", terminated(path_with_starter, space0))(input)
-        .map(|(next_input, res)| (next_input, Statement::PathWithStart(res.0, res.1)))
+    context("statement", alt((statement_assignment, statement_path)))(input)
+}
+
+fn statement_path(input: &str) -> NomRes<&str, Statement> {
+    context("path", path_with_starter)(input)
+        .map(|(next_input, res)| (next_input, Statement::Path(res.0, res.1)))
+}
+
+fn statement_assignment(input: &str) -> NomRes<&str, Statement> {
+    context(
+        "assignment",
+        tuple((path_with_starter, space0, tag("="), space0, value_uint)),
+    )(input)
+    .map(|(next_input, res)| (next_input, Statement::Assignment(res.0 .0, res.0 .1, res.4)))
 }

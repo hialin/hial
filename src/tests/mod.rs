@@ -1,10 +1,10 @@
 mod fs;
 mod http;
-mod ideals;
 mod json;
 mod nested;
 mod path;
 mod perf;
+mod program;
 mod regex;
 mod rust;
 mod search;

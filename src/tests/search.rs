@@ -1,32 +1,15 @@
 use crate::{
     api::*,
     pprint,
-    prog::{
-        path::{
-            ElevationPathItem, Expression, Filter, InterpretationParam, NormalPathItem, Path,
-            PathItem,
-        },
-        program::Statement,
-        PathStart, Program,
+    prog::path::{
+        ElevationPathItem, Expression, Filter, InterpretationParam, NormalPathItem, Path, PathItem,
     },
     utils::log::set_verbose,
 };
 
 #[test]
-fn path_simple_program() -> Res<()> {
-    let prog = Program::parse(".^regex[a] ")?;
-    match &prog.0[0] {
-        Statement::PathWithStart(start, path) => {
-            assert_eq!(start, &PathStart::File(".".to_string()));
-            assert_eq!(path, &Path::parse("^regex[a]")?);
-        }
-    }
-    Ok(())
-}
-
-#[test]
 fn path_simple_elevation() -> Res<()> {
-    let path = Path::parse("^fs^fs.one[w]^fs.two[w=1] ")?;
+    let path = Path::parse(" ^fs^fs.one[w]^fs.two[w=1] ")?;
     assert_eq!(
         path.0.as_slice(),
         &[

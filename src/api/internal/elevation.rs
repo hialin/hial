@@ -364,7 +364,10 @@ impl Group {
         match self.kind {
             GroupKind::Root => {
                 let Some(entry) = data.map.get_full(label.as_cow_str().as_ref()) else {
-                    return nores();
+                    return noresm(format!(
+                        "no such interpretation `{}`",
+                        label.as_cow_str().as_ref()
+                    ));
                 };
                 let cell = Cell {
                     data: self.data.clone(),

@@ -14,7 +14,7 @@ macro_rules! ifdebug {
 #[derive(Clone, Debug)]
 pub struct Program<'a>(pub(crate) Vec<Statement<'a>>);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ProgramParams {
     pub print_depth: usize,
     pub print_breadth: usize,
@@ -22,7 +22,8 @@ pub struct ProgramParams {
 
 #[derive(Clone, Debug)]
 pub enum Statement<'a> {
-    PathWithStart(PathStart<'a>, Path<'a>),
+    Path(PathStart<'a>, Path<'a>),
+    Assignment(PathStart<'a>, Path<'a>, OwnValue),
 }
 
 #[derive(Clone, Debug)]
@@ -44,7 +45,10 @@ impl<'a> Display for Program<'a> {
 impl<'a> Display for Statement<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Statement::PathWithStart(start, path) => write!(f, "{}{}", start, path)?,
+            Statement::Path(start, path) => write!(f, "{}{}", start, path)?,
+            Statement::Assignment(start, path, value) => {
+                write!(f, "{}{} = {}", start, path, value)?
+            }
         }
         Ok(())
     }
@@ -52,6 +56,7 @@ impl<'a> Display for Statement<'a> {
 
 impl<'a> Program<'a> {
     pub fn parse(input: &str) -> Res<Program> {
+        let input = input.trim();
         super::parse_program::parse_program(input)
     }
 
@@ -59,21 +64,19 @@ impl<'a> Program<'a> {
         for statement in &self.0 {
             debug!("Running statement: {}", statement);
             match statement {
-                Statement::PathWithStart(start, path) => {
+                Statement::Assignment(start, path, value) => {
+                    ifdebug!(println!("-- Assignment: {}{} = {}", start, path, value));
+                    let searcher = Searcher::new(start.eval()?, path.clone());
+                    for cell in searcher {
+                        cell?.write().value(value.clone())?;
+                    }
+                }
+                Statement::Path(start, path) => {
                     ifdebug!(println!("-- PathWithStart: {} {}", start, path));
-                    let root = start.eval()?;
-                    let mut searcher = Searcher::new(root, path.clone());
-                    let Some(rescell) = searcher.next() else {
-                        continue;
-                    };
-                    match rescell {
-                        Ok(cell) => {
-                            pprint(&cell, params.print_depth, params.print_breadth);
-                        }
-                        Err(e) => {
-                            eprintln!("Error: {}", e);
-                        }
-                    };
+                    let searcher = Searcher::new(start.eval()?, path.clone());
+                    for cell in searcher {
+                        pprint(&cell?, params.print_depth, params.print_breadth);
+                    }
                 }
             }
         }

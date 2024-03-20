@@ -4,7 +4,7 @@ pub static VERBOSE: AtomicBool = AtomicBool::new(false);
 
 #[macro_export]
 macro_rules! warning {
-    ( $($arg:tt)* ) => ( eprintln!("‣ {}", format!($($arg)*)) );
+    ( $($arg:tt)* ) => ( eprintln!("⚠ {}", format!($($arg)*)) );
 }
 
 #[macro_export]

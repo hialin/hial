@@ -135,6 +135,15 @@ hial 'diff  ./file.json^json^tree  ./file.xml^xml^tree'
 # 🚧 todo: support tree implementation and conversion
 ```
 
+Diff the files listed in a rust `mod` file against the actual list of files
+
+```bash
+hial 'diff
+    ./src/tests/mod.rs^rust/**/*[:mod_item]/name#value
+    ./src/tests/*[:file]#label^regex["([^.]+).*"]/*/[0]'
+# 🚧 todo: support diff
+```
+
 Diff two diff trees (e.g. check if two different commits make identical changes)
 
 ```bash

@@ -59,11 +59,13 @@ impl HErr {
     pub(crate) fn with_path(self, path: impl Into<String>) -> Self {
         let path = path.into();
         if let Err(old_path) = self.data.cell_path.set(path.clone()) {
-            warning!(
-                "overwrote cell path to augment HErr: {} -> {}",
-                old_path,
-                path
-            );
+            if old_path != path && !old_path.is_empty() {
+                warning!(
+                    "overwrote cell path to augment HErr: {} -> {}",
+                    old_path,
+                    path
+                );
+            }
         }
         self
     }
@@ -95,20 +97,27 @@ impl<T> ResHErrAugmentation for Res<T> {
     }
 }
 
-pub fn noerr() -> HErr {
+pub fn noerrm(message: impl Into<String>) -> HErr {
     HErr {
         kind: HErrKind::None,
         data: Rc::new(HErrData {
-            msg: String::new(),
+            msg: message.into(),
             cell_path: OnceCell::new(),
             cause: None,
             backtrace: Some(capture_stack_trace()),
         }),
     }
 }
+pub fn noerr() -> HErr {
+    noerrm(String::new())
+}
 
 pub fn nores<T>() -> Res<T> {
     Err(noerr())
+}
+
+pub fn noresm<T>(message: impl Into<String>) -> Res<T> {
+    Err(noerrm(message))
 }
 
 pub fn usererr(reason: impl Into<String>) -> HErr {
@@ -196,7 +205,7 @@ impl std::fmt::Display for HErr {
         }
 
         if let Some(path) = self.data.cell_path.get() {
-            write!(f, " -- at cell path: {}", path)?;
+            write!(f, " -- cell path: {}", path)?;
         }
         if let Some(ref cause) = self.data.cause {
             write!(f, " -- caused by: {}", cause)?;

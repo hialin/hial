@@ -9,11 +9,9 @@ use nom::{
     bytes::complete::{escaped, tag, take_till},
     character::complete::{anychar, digit1, none_of, one_of, space0},
     combinator::{all_consuming, opt, recognize},
-    error::VerboseErrorKind,
-    error::{context, VerboseError},
-    multi::separated_list1,
-    multi::{many0, many1},
-    sequence::{delimited, terminated, tuple},
+    error::{context, VerboseError, VerboseErrorKind},
+    multi::{many0, many1, separated_list0, separated_list1},
+    sequence::{delimited, tuple},
 };
 use std::str::{from_utf8, FromStr};
 
@@ -30,10 +28,8 @@ pub fn parse_path_with_starter(input: &str) -> Res<(PathStart, Path)> {
 }
 
 pub fn path_with_starter(input: &str) -> NomRes<&str, (PathStart, Path)> {
-    context("path", tuple((space0, path_start, path_items)))(input).map(|(next_input, res)| {
-        let (_, start, path) = res;
-        (next_input, (start, path))
-    })
+    context("path", tuple((path_start, space0, path_items)))(input)
+        .map(|(next_input, res)| (next_input, (res.0, res.2)))
 }
 
 fn path_start(input: &str) -> NomRes<&str, PathStart> {
@@ -52,16 +48,12 @@ fn path_start_file(input: &str) -> NomRes<&str, PathStart> {
         "path_start_file",
         tuple((
             alt((tag("/"), tag("."), tag("~"))),
-            many0(terminated(path_code_points, tag("/"))),
-            opt(path_code_points),
+            separated_list0(tag("/"), path_code_points),
         )),
     )(input)
     .map(|(next_input, res)| {
         let mut len: usize = res.0.len();
         len += res.1.into_iter().map(|s| s.len() + 1).sum::<usize>();
-        if let Some(last) = res.2 {
-            len += last.len();
-        }
         (next_input, PathStart::File(input[0..len].to_string()))
     })
 }
@@ -240,7 +232,7 @@ fn relation(input: &str) -> NomRes<&str, char> {
     .map(|(next_input, res)| (next_input, res.chars().next().unwrap()))
 }
 
-fn rvalue(input: &str) -> NomRes<&str, OwnValue> {
+pub(super) fn rvalue(input: &str) -> NomRes<&str, OwnValue> {
     context("value", alt((value_string, value_uint, value_ident)))(input)
 }
 
@@ -254,7 +246,7 @@ fn value_string(input: &str) -> NomRes<&str, OwnValue> {
         .map(|(next_input, res)| (next_input, OwnValue::String(res)))
 }
 
-fn value_uint(input: &str) -> NomRes<&str, OwnValue> {
+pub(super) fn value_uint(input: &str) -> NomRes<&str, OwnValue> {
     context("value_uint", digit1)(input)
         .and_then(|(next_input, res)| match res.parse::<u64>() {
             Ok(n) => Ok((next_input, n)),

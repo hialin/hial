@@ -98,7 +98,6 @@ impl Cell {
         } else {
             request
         };
-        println!("http call request {:?}", request);
         let response = request.send()?;
 
         let mut headers = IndexMap::<String, Vec<String>>::new();
@@ -119,7 +118,6 @@ impl Cell {
         if status >= 400 {
             warning!("Error: http call failed: {} = {} {}", url, status, reason);
         }
-        println!("http call response {:?}", response);
         let response = OwnRc::new(Response {
             status,
             reason,

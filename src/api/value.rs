@@ -247,6 +247,15 @@ where
     }
 }
 
+impl PartialEq<Int> for Value<'_> {
+    fn eq(&self, other: &Int) -> bool {
+        match self {
+            Value::Int(i) => i.eq(other),
+            _ => false,
+        }
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //  OwnValue
 

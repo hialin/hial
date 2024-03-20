@@ -18,7 +18,7 @@ fn convert_error(input: &str, err: nom::Err<VerboseError<&str>>) -> String {
         nom::Err::Incomplete(needed) => {
             format!("path parsing failed, more input needed {:?}", needed)
         }
-        nom::Err::Error(e) => nom::error::convert_error(input, e),
-        nom::Err::Failure(e) => nom::error::convert_error(input, e),
+        nom::Err::Error(e) => format!("parse error: {}", nom::error::convert_error(input, e)),
+        nom::Err::Failure(e) => format!("parse error: {}", nom::error::convert_error(input, e)),
     }
 }

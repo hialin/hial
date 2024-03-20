@@ -10,6 +10,15 @@ fn test_files() -> Res<()> {
 }
 
 #[test]
+fn file_not_found() -> Res<()> {
+    crate::utils::log::set_verbose(true);
+    let examples = Xell::new("./src/tests/data/assignment.jso");
+    assert_eq!(examples.clone().err().unwrap_err().kind, HErrKind::None);
+    println!("{:?}", examples.read());
+    Ok(())
+}
+
+#[test]
 fn test_file_path_tilde() -> Res<()> {
     crate::utils::log::set_verbose(true);
     let home = Xell::from("~").be("path").be("fs");
@@ -44,7 +53,7 @@ fn search_path_with_fs_starter() -> Res<()> {
 
 #[test]
 fn fs_write_prog_policy() -> Res<()> {
-    let p = "^path^fs/examples/write.txt";
+    let p = "^path^fs/src/tests/data/write.txt";
     let c = Xell::from(".")
         .policy(WritePolicy::NoAutoWrite)
         .to(p)
@@ -64,7 +73,7 @@ fn fs_write_prog_policy() -> Res<()> {
 
 #[test]
 fn fs_write_path_policy() -> Res<()> {
-    let p = ".^fs[w]/examples/write2.txt";
+    let p = ".^fs[w]/src/tests/data/write2.txt";
     let c = Xell::new(p).err()?;
     c.write().value("Hi there")?;
     assert_eq!(
@@ -78,15 +87,23 @@ fn fs_write_path_policy() -> Res<()> {
 
 #[test]
 fn fs_path() -> Res<()> {
-    let c = Xell::from(".").be("path").be("fs").sub().get("examples");
-    assert_eq!(c.path()?, "`.`^path^fs/examples");
+    let c = Xell::from(".")
+        .be("path")
+        .be("fs")
+        .sub()
+        .get("src")
+        .sub()
+        .get("tests")
+        .sub()
+        .get("data");
+    assert_eq!(c.path()?, "`.`^path^fs/src/tests/data");
     Ok(())
 }
 
 #[test]
 fn fs_write_beyond_fs() -> Res<()> {
     // test that the fs drop will not try to write back to the path cell itself
-    let ov = Xell::from("./examples/write3.txt").policy(WritePolicy::WriteBackOnDrop);
+    let ov = Xell::from("./src/tests/data/write3.txt").policy(WritePolicy::WriteBackOnDrop);
     {
         ov.be("path").be("fs").write().value("A")?;
         ov.be("path").be("fs").write().value("B")?;

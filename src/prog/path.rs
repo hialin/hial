@@ -203,10 +203,12 @@ impl<'a> PathStart<'a> {
 
 impl<'a> Path<'a> {
     pub fn parse(input: &str) -> Res<Path> {
+        let input = input.trim();
         super::parse_path::parse_path(input)
     }
 
     pub fn parse_with_starter(input: &str) -> Res<(PathStart, Path)> {
+        let input = input.trim();
         super::parse_path::parse_path_with_starter(input)
     }
 

@@ -205,7 +205,7 @@ impl<'s> Searcher<'s> {
             _ => return Some(userres("bad interpretation selector")),
         };
         let itp_cell = guard_ok!(itp_cell.err(), err => {
-            println!("Error while searching: cannot get interpretation cell: {:?}", err);
+            ifdebug!(println!("no such interpretation: {:?}", err));
             return Some(Err(err));
         });
         if !epi.params.is_empty() {
