@@ -39,7 +39,7 @@ fn statement_path(input: &str) -> NomRes<&str, Statement> {
 fn statement_assignment(input: &str) -> NomRes<&str, Statement> {
     context(
         "assignment",
-        tuple((path_with_starter, space0, tag("="), space0, value_uint)),
+        tuple((path_with_starter, space0, tag("="), space0, rvalue)),
     )(input)
     .map(|(next_input, res)| (next_input, Statement::Assignment(res.0 .0, res.0 .1, res.4)))
 }

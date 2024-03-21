@@ -67,13 +67,11 @@ Change the default mysql port systemwide:
 ```bash
 # shell
 hial '/etc/mysql/my.cnf^fs[w]^ini/mysqld/port = 3307'
-# 🚧 todo: assign operator
 ```
 
 ```bash
 // rust
-Cell::from("/etc/mysql/my.cnf")
-    .to("^fs[w]^ini/mysqld/port")
+Cell::new("/etc/mysql/my.cnf^fs[w]^ini/mysqld/port")
     .write()
     .value(3307)?;
 ```
@@ -81,13 +79,12 @@ Cell::from("/etc/mysql/my.cnf")
 Change the user's docker configuration:
 ```bash
 # shell
-hial '~/.docker/config.json^json/auths/docker.io/username = "newuser"'
-# 🚧 todo: assign operator
+hial '~/.docker/config.json^fs[w]^json/auths/docker.io/username = "newuser"'
+# 🚧 todo: create new object entities on write
 ```
 ```rust
 // rust
-Cell::from("~/.docker/config.json")
-    .to("^fs[w]^json/auths/docker.io/username")
+Cell::new("~/.docker/config.json^fs[w]^json/auths/docker.io/username")
     .write()
     .value("newuser")?;
 ```
@@ -115,6 +112,7 @@ Split a markdown file into sections and put each in a separate file:
 ```
 
 ##### 4. Transform data from one format or shape into another.
+
 
 Transform a json file into an xml file with the same format and vice versa:
 

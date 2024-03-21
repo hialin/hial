@@ -104,12 +104,30 @@ fn fs_path() -> Res<()> {
 fn fs_write_beyond_fs() -> Res<()> {
     // test that the fs drop will not try to write back to the path cell itself
     let ov = Xell::from("./src/tests/data/write3.txt").policy(WritePolicy::WriteBackOnDrop);
+
+    // A is the initial value
+    assert_eq!(
+        ov.be("path").be("fs").read().value()?,
+        Value::Bytes("A".as_bytes())
+    );
+
+    // write B and drop, should write automatically
+    {
+        ov.be("path").be("fs").write().value("B")?;
+    }
+    assert_eq!(
+        ov.be("path").be("fs").read().value()?,
+        Value::Bytes("B".as_bytes())
+    );
+
+    // write A again to go back to the initial state
     {
         ov.be("path").be("fs").write().value("A")?;
-        ov.be("path").be("fs").write().value("B")?;
-        // fs should try to write back now
     }
-    // TODO: text failure: stop fs from writing back to the path cell
-    // assert_eq!(ov.be("path").be("fs").read().value()?, "Hi there");
+    assert_eq!(
+        ov.be("path").be("fs").read().value()?,
+        Value::Bytes("A".as_bytes())
+    );
+
     Ok(())
 }

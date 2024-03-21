@@ -730,7 +730,18 @@ impl Xell {
     }
 
     fn save_from_to(dyn_cell: &DynCell, target: &Xell) -> Res<()> {
-        let serial = dispatch_dyn_cell!(dyn_cell, |x| { x.read()?.serial()? });
+        let serial = dispatch_dyn_cell!(dyn_cell, |x| {
+            match x.read()?.serial() {
+                Ok(serial) => serial,
+                Err(e) => {
+                    if e.kind == HErrKind::None {
+                        return Ok(()); // no serial, nothing to save
+                    } else {
+                        return Err(e);
+                    }
+                }
+            }
+        });
         target.write().value(OwnValue::String(serial))
     }
 }
