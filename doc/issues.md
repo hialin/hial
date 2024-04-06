@@ -1,6 +1,5 @@
 # List of Todos and other Issues
 
-- stop fs from writing back to the path cell
 - add split(":") interpretation, read-write
 - '**[filter]' must work as '**/*[filter]' (filter to be applied only on leaves)
 - support rust/ts write: `hial './src/tests/rust.rs^rust/*[:function_item].label = "modified_fn_name"'`

@@ -46,6 +46,7 @@ enumerated_dynamic_type! {
         Http(http::Cell),
         TreeSitter(treesitter::Cell),
         Regex(regex::Cell),
+        Split(split::Cell),
     }
 }
 
@@ -66,6 +67,7 @@ enumerated_dynamic_type! {
         Http(http::CellReader),
         TreeSitter(treesitter::CellReader),
         Regex(regex::CellReader),
+        Split(split::CellReader),
     }
 }
 
@@ -89,6 +91,7 @@ enumerated_dynamic_type! {
         Http(http::CellWriter),
         TreeSitter(treesitter::Cell),
         Regex(regex::CellWriter),
+        Split(split::CellWriter),
     }
 }
 
@@ -116,6 +119,7 @@ enumerated_dynamic_type! {
         Http(http::Group),
         TreeSitter(treesitter::Cell),
         Regex(regex::Group),
+        Split(split::Group),
     }
 }
 
@@ -156,6 +160,7 @@ enumerated_dynamic_type! {
         Http(std::iter::Once<Res<http::Cell>>),
         TreeSitter(std::iter::Once<Res<treesitter::Cell>>),
         Regex(std::iter::Empty<Res<regex::Cell>>),
+        Split(std::iter::Empty<Res<split::Cell>>),
         // None is in addition to interpretation variants, used when nothing else matches
         None(std::iter::Empty<Res<HErr>>),
     }
