@@ -98,7 +98,11 @@ impl<'s> Searcher<'s> {
                 ));
                 match cell.and_then(|cell| cell.err()) {
                     Ok(cell) => return Some(Ok(cell)),
-                    Err(e) => warning!("search error: {}", e),
+                    Err(e) => {
+                        if e.kind != HErrKind::None {
+                            warning!("search error: {}", e)
+                        }
+                    }
                 }
             }
         }
@@ -212,18 +216,26 @@ impl<'s> Searcher<'s> {
             let attrs = guard_ok!(itp_cell.attr().err(), err => {
                 return Some(Err(err));
             });
-            for param in &epi.params {
-                if attrs.get(&param.name).err().is_err() {
-                    let label = OwnValue::from(param.name.clone());
-                    let newcell = guard_ok!(attrs.create(Some(label), param.value.clone()), err => {
+            for (i, param) in epi.params.iter().enumerate() {
+                if let Some(n) = &param.name {
+                    if attrs.get(n).err().is_err() {
+                        let label = OwnValue::from(n.clone());
+                        let newcell = guard_ok!(attrs.create(Some(label), Some(param.value.clone())), err => {
+                            return Some(Err(err));
+                        });
+                        guard_ok!(attrs.add(None, newcell), err => {
+                            return Some(Err(err));
+                        });
+                    } else {
+                        guard_ok!(attrs.get(n).write().value(param.value.clone()), err => {
+                            return Some(Err(err));
+                        });
+                    }
+                } else {
+                    let newcell = guard_ok!(attrs.create(Some(OwnValue::from(i)), Some(param.value.clone())), err => {
                         return Some(Err(err));
                     });
                     guard_ok!(attrs.add(None, newcell), err => {
-                        return Some(Err(err));
-                    });
-                }
-                if let Some(v) = &param.value {
-                    guard_ok!(attrs.get(&param.name).write().value(v.clone()), err => {
                         return Some(Err(err));
                     });
                 }

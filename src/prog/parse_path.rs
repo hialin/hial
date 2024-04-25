@@ -201,19 +201,47 @@ fn interpretation_param(input: &str) -> NomRes<&str, InterpretationParam> {
             tag("["),
             tuple((
                 space0,
-                alt((string, identifier)),
+                alt((
+                    interpretation_param_longform,
+                    interpretation_param_shortform,
+                )),
                 space0,
-                opt(tuple((tag("="), space0, rvalue))),
             )),
             tag("]"),
         ),
+    )(input)
+    .map(|(next_input, res)| (next_input, res.1))
+}
+
+fn interpretation_param_longform(input: &str) -> NomRes<&str, InterpretationParam> {
+    context(
+        "interpretation parameter longform",
+        tuple((identifier, space0, tag("="), space0, rvalue)),
     )(input)
     .map(|(next_input, res)| {
         (
             next_input,
             InterpretationParam {
-                name: res.1,
-                value: res.3.map(|x| x.2),
+                name: Some(res.0),
+                value: res.4,
+            },
+        )
+    })
+}
+
+fn interpretation_param_shortform(input: &str) -> NomRes<&str, InterpretationParam> {
+    context(
+        "interpretation parameter shortform",
+        alt((rvalue, |input| {
+            identifier(input).map(|(next_input, res)| (next_input, OwnValue::String(res)))
+        })),
+    )(input)
+    .map(|(next_input, res)| {
+        (
+            next_input,
+            InterpretationParam {
+                name: None,
+                value: res,
             },
         )
     })
@@ -233,7 +261,7 @@ fn relation(input: &str) -> NomRes<&str, char> {
 }
 
 pub(super) fn rvalue(input: &str) -> NomRes<&str, OwnValue> {
-    context("value", alt((value_string, value_uint, value_ident)))(input)
+    context("value", alt((value_string, value_int, value_ident)))(input)
 }
 
 fn value_ident(input: &str) -> NomRes<&str, OwnValue> {
@@ -246,13 +274,9 @@ fn value_string(input: &str) -> NomRes<&str, OwnValue> {
         .map(|(next_input, res)| (next_input, OwnValue::String(res)))
 }
 
-pub(super) fn value_uint(input: &str) -> NomRes<&str, OwnValue> {
-    context("value_uint", digit1)(input)
-        .and_then(|(next_input, res)| match res.parse::<u64>() {
-            Ok(n) => Ok((next_input, n)),
-            Err(_) => Err(nom::Err::Error(VerboseError { errors: vec![] })),
-        })
-        .map(|(next_input, num)| (next_input, OwnValue::Int(Int::U64(num))))
+pub(super) fn value_int(input: &str) -> NomRes<&str, OwnValue> {
+    context("value_int", number_isize)(input)
+        .map(|(next_input, num)| (next_input, OwnValue::from(num as i64)))
 }
 
 fn identifier(input: &str) -> NomRes<&str, String> {
@@ -312,19 +336,10 @@ fn parse_quoted_double(input: &str) -> NomRes<&str, String> {
         .map(|(next_input, res)| (next_input, unescape_string(res, '"')))
 }
 
-fn number_usize(input: &str) -> NomRes<&str, usize> {
-    context("positive number", recognize(many1(one_of("0123456789"))))(input).map(
-        |(next_input, res)| {
-            let n = usize::from_str(res).unwrap_or_else(|_| panic!("parse error, logic error"));
-            (next_input, n)
-        },
-    )
-}
-
 fn number_isize(input: &str) -> NomRes<&str, isize> {
     context(
         "number",
-        recognize(tuple((opt(one_of("+-")), many1(one_of("0123456789"))))),
+        recognize(tuple((opt(one_of("+-")), many1(digit1)))),
     )(input)
     .map(|(next_input, res)| {
         let n = isize::from_str(res).unwrap_or_else(|_| panic!("parse error, logic error"));

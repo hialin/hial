@@ -20,15 +20,15 @@ fn path_simple_elevation() -> Res<()> {
             PathItem::Elevation(ElevationPathItem {
                 interpretation: Selector::Str("fs.one"),
                 params: vec![InterpretationParam {
-                    name: "w".to_string(),
-                    value: None
+                    name: None,
+                    value: "w".into(),
                 }]
             }),
             PathItem::Elevation(ElevationPathItem {
                 interpretation: Selector::Str("fs.two"),
                 params: vec![InterpretationParam {
-                    name: "w".to_string(),
-                    value: Some(OwnValue::Int(1.into())),
+                    name: Some("w".to_string()),
+                    value: OwnValue::Int(1.into()),
                 }]
             })
         ]

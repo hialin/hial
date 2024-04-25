@@ -29,8 +29,8 @@ pub(crate) struct ElevationPathItem<'a> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct InterpretationParam {
-    pub(crate) name: String,
-    pub(crate) value: Option<OwnValue>,
+    pub(crate) name: Option<String>,
+    pub(crate) value: OwnValue,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -161,9 +161,10 @@ impl Display for Expression<'_> {
 
 impl Display for InterpretationParam {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)?;
-        if let Some(v) = &self.value {
-            write!(f, "={}", v)?;
+        if let Some(n) = &self.name {
+            write!(f, "{}={}", n, self.value)?;
+        } else {
+            write!(f, "{}", self.value)?;
         }
         Ok(())
     }

@@ -69,57 +69,127 @@ impl Cell {
         let v = r.value()?;
         let text: String = v.as_cow_str().to_string();
 
-        let Some((pattern_arg, _)) = params.iter().next() else {
-            return userres("split requires a parameter");
+        let Some(pattern_arg) = params.get(&Value::from(0)) else {
+            return userres("regex requires a parameter");
         };
+
+        let split_index = {
+            if let Some(i) = params.get(&Value::from(1)) {
+                if let OwnValue::Int(i) = i {
+                    i.as_i128() as isize
+                } else {
+                    return userres("split index must be an integer");
+                }
+            } else {
+                0
+            }
+        };
+
         let pattern_cow = pattern_arg.as_cow_str();
         let pattern = pattern_cow.as_ref();
 
-        let spans = Self::do_split(&text, pattern)?;
+        let spans = Self::do_split(&text, pattern, split_index)?;
 
         let root = Cell {
             data: OwnRc::new(Data {
                 text: text.clone(),
                 pattern: pattern.to_owned(),
-                spans: Self::do_split(&text, pattern)?,
+                spans,
             }),
             kind: Kind::Root,
         };
         Ok(Xell::new_from(DynCell::from(root), Some(origin)))
     }
 
-    fn do_split(text: &str, pattern: &str) -> Res<Vec<Span>> {
-        let mut spans: Vec<Span> = vec![];
+    fn do_split(text: &str, pattern: &str, max_splits: isize) -> Res<Vec<Span>> {
+        #[derive(Debug)]
+        enum SpanEnum {
+            Text(String),
+            Delimiters(usize),
+        }
+
+        let mut spans: Vec<SpanEnum> = vec![];
         // Iterate over each match of the pattern
-        let mut last_index = 0;
-        for (start, t) in text.match_indices(pattern) {
-            if start == last_index {
-                if let Some(span) = spans.last_mut() {
-                    span.delimiters_after += 1;
+        if max_splits >= 0 {
+            let mut prev_index = 0;
+            let mut split_count = 0;
+            for (start, t) in text.match_indices(pattern) {
+                if start == prev_index {
+                    if let Some(SpanEnum::Delimiters(x)) = spans.last_mut() {
+                        *x += 1;
+                    } else {
+                        spans.push(SpanEnum::Delimiters(1));
+                    }
                 } else {
-                    spans.push(Span {
-                        text: String::new(),
-                        delimiters_after: 1,
+                    let t = &text[prev_index..start];
+                    spans.push(SpanEnum::Text(t.to_owned()));
+                    spans.push(SpanEnum::Delimiters(1));
+                }
+                prev_index = start + t.len();
+                split_count += 1;
+                if split_count == max_splits {
+                    break;
+                }
+            }
+
+            if prev_index < text.len() {
+                spans.push(SpanEnum::Text(text[prev_index..].to_owned()));
+            }
+        } else {
+            let mut prev_index = text.len();
+            let mut split_count = 0;
+            for (start, t) in text.rmatch_indices(pattern) {
+                if start + t.len() == prev_index {
+                    if let Some(SpanEnum::Delimiters(x)) = spans.last_mut() {
+                        *x += 1;
+                    } else {
+                        spans.push(SpanEnum::Delimiters(1));
+                    }
+                } else {
+                    let t = &text[start + t.len()..prev_index];
+                    spans.push(SpanEnum::Text(t.to_owned()));
+                    spans.push(SpanEnum::Delimiters(1));
+                }
+                prev_index = start;
+                split_count -= 1;
+                if split_count == max_splits {
+                    break;
+                }
+            }
+
+            if prev_index > 0 {
+                spans.push(SpanEnum::Text(text[..prev_index].to_owned()));
+            }
+            spans.reverse();
+        }
+
+        // println!("pattern: {:?}", pattern);
+        // println!("max_splits: {:?}", max_splits);
+        // println!("spans: {:?}", spans);
+
+        let mut ret = vec![];
+        for s in &spans {
+            match s {
+                SpanEnum::Text(t) => {
+                    ret.push(Span {
+                        text: t.clone(),
+                        delimiters_after: 0,
                     });
                 }
-            } else {
-                let t = &text[last_index..start];
-                spans.push(Span {
-                    text: t.to_owned(),
-                    delimiters_after: 0,
-                });
+                SpanEnum::Delimiters(d) => {
+                    if let Some(ret) = ret.last_mut() {
+                        ret.delimiters_after = *d;
+                    } else {
+                        ret.push(Span {
+                            text: "".to_owned(),
+                            delimiters_after: *d,
+                        });
+                    }
+                }
             }
-            last_index = start + t.len();
         }
 
-        if last_index < text.len() {
-            spans.push(Span {
-                text: text[last_index..].to_owned(),
-                delimiters_after: 0,
-            });
-        }
-
-        Ok(spans)
+        Ok(ret)
     }
 }
 
@@ -286,7 +356,7 @@ impl GroupTrait for Group {
 fn test_split_do_span() {
     let text = "1, 2, 3";
     let pattern = ",";
-    let spans = Cell::do_split(text, pattern).unwrap();
+    let spans = Cell::do_split(text, pattern, 0).unwrap();
     assert_eq!(
         spans,
         vec![

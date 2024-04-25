@@ -77,11 +77,11 @@ impl Cell {
         let v = r.value()?;
         let text = v.as_cow_str().to_string();
 
-        let Some(arg) = params.iter().next() else {
+        let Some(pattern) = params.get(&Value::from(0)) else {
             return userres("regex requires a parameter");
         };
 
-        let re = Regex::new(arg.0.as_cow_str().as_ref())
+        let re = Regex::new(pattern.as_cow_str().as_ref())
             .map_err(|e| caused(HErrKind::User, "bad regex", e))?;
 
         let mut data = Data { matches: vec![] };

@@ -346,7 +346,7 @@ fn to_value<'a>(node: &'a Node, cache: &'a OnceCell<String>) -> Res<Value<'a>> {
         Node::Scalar(TomlValue::Boolean(b)) => Ok(Value::Bool(*b)),
         Node::Scalar(TomlValue::Datetime(d)) => Ok(Value::Str(cache.get_or_init(|| d.to_string()))),
         Node::Scalar(TomlValue::Float(f)) => Ok(Value::Float(StrFloat(*f))),
-        Node::Scalar(TomlValue::Integer(i)) => Ok(Value::Int(Int::I64(*i))),
+        Node::Scalar(TomlValue::Integer(i)) => Ok(Value::from(*i)),
         Node::Scalar(TomlValue::String(s)) => Ok(Value::Str(s.as_str())),
         _ => nores(),
     }
@@ -357,10 +357,10 @@ fn to_toml(value: OwnValue) -> Res<TomlValue> {
         OwnValue::None => Ok(TomlValue::String("".to_string())),
         OwnValue::Bool(b) => Ok(TomlValue::Boolean(b)),
         OwnValue::Float(StrFloat(f)) => Ok(TomlValue::Float(f)),
-        OwnValue::Int(Int::I64(i)) => Ok(TomlValue::Integer(i)),
-        OwnValue::Int(Int::I32(i)) => Ok(TomlValue::Integer(i as i64)),
-        OwnValue::Int(Int::U64(i)) => Ok(TomlValue::Integer(i as i64)),
-        OwnValue::Int(Int::U32(i)) => Ok(TomlValue::Integer(i as i64)),
+        OwnValue::Int(Int{n,..}) => Ok(TomlValue::Integer(match n {
+            IntData::Signed(i) => i,
+            IntData::Unsigned(u) => u as i64,
+        })),
         OwnValue::String(s) => Ok(TomlValue::String(s)),
         OwnValue::Bytes(s) => Ok(TomlValue::String(
             String::from_utf8_lossy(s.as_bytes()).into(),

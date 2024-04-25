@@ -16,6 +16,8 @@ use crate::{
 //                                        --@-> attr group --[]-> interp2_param1
 //                                                         --[]-> ...
 
+const STD_ITP_PARAM_WRITE_BACK_ON_DROP: &str = "w";
+
 #[derive(Debug, Clone)]
 struct Data {
     origin: Xell,
@@ -257,6 +259,12 @@ impl GroupTrait for Group {
                 let (target, (constructor, params)) =
                     data.map.get_index_mut(i).ok_or_else(noerr)?;
                 if let CellKind::DetachedParam(b) = cell.kind {
+                    if params.contains_key(&b.0.as_value()) {
+                        return userres(format!(
+                            "cannot add elevation param with label `{}` twice",
+                            b.0
+                        ));
+                    }
                     params.insert(b.0, b.1);
                 }
                 if let Some(index) = index {
@@ -345,11 +353,14 @@ impl Group {
             }
             GroupKind::Sub(i) => {
                 let (target, (constructor, params)) = data.map.get_index(i).ok_or_else(noerr)?;
+                // println!("construct elevation {} {:?}", target, params);
                 let cell = constructor(data.origin.clone(), target, params)?;
                 cell.set_self_as_domain_root();
 
-                if let Some(w) = params.get(&Value::Str("w")) {
-                    if w.as_value() == Value::Bool(true) || w.as_value() == Value::None {
+                for (k, v) in params.iter() {
+                    if matches!(k, OwnValue::Int(_))
+                        && v.as_value() == Value::Str(STD_ITP_PARAM_WRITE_BACK_ON_DROP)
+                    {
                         cell.policy(WritePolicy::WriteBackOnDrop);
                     }
                 }

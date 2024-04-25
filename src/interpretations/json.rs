@@ -445,10 +445,10 @@ fn ownvalue_to_serde(v: OwnValue) -> SValue {
     match v {
         OwnValue::None => SValue::Null,
         OwnValue::Bool(b) => SValue::Bool(b),
-        OwnValue::Int(Int::I32(i)) => SValue::Number(i.into()),
-        OwnValue::Int(Int::U32(i)) => SValue::Number(i.into()),
-        OwnValue::Int(Int::I64(i)) => SValue::Number(i.into()),
-        OwnValue::Int(Int::U64(i)) => SValue::Number(i.into()),
+        OwnValue::Int(Int{n,..}) => match n {
+            IntData::Signed(i) => SValue::Number(i.into()),
+            IntData::Unsigned(u) => SValue::Number(u.into()),
+        },
         OwnValue::Float(StrFloat(f)) => {
             SValue::Number(serde_json::Number::from_f64(f).unwrap_or(serde_json::Number::from(0)))
         }

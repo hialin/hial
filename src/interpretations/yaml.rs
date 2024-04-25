@@ -299,7 +299,7 @@ fn get_ty(node: &Node) -> &'static str {
 fn yaml_to_value(s: &Yaml) -> Res<Value> {
     Ok(match s {
         Yaml::Boolean(b) => Value::Bool(*b),
-        Yaml::Integer(i) => Value::Int(Int::I64(*i)),
+        Yaml::Integer(i) => Value::from(*i),
         Yaml::Real(r) => {
             let f = r
                 .parse()
@@ -316,11 +316,9 @@ fn yaml_to_value(s: &Yaml) -> Res<Value> {
 fn ownvalue_to_yaml(v: OwnValue) -> Res<Yaml> {
     Ok(match v {
         OwnValue::Bool(b) => Yaml::Boolean(b),
-        OwnValue::Int(i) => match i {
-            Int::I64(i) => Yaml::Integer(i),
-            Int::U64(i) => Yaml::Integer(i as i64),
-            Int::I32(i) => Yaml::Integer(i as i64),
-            Int::U32(i) => Yaml::Integer(i as i64),
+        OwnValue::Int(Int{n,..}) => match n {
+            IntData::Signed(i) => Yaml::Integer(i),
+            IntData::Unsigned(u) => Yaml::Integer(u as i64),
         },
         OwnValue::Float(StrFloat(f)) => Yaml::Real(f.to_string()),
         OwnValue::String(s) => Yaml::String(s),

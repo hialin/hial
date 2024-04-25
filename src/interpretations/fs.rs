@@ -143,7 +143,7 @@ impl CellReaderTrait for CellReader {
                 if self.pos != 0 {
                     return fault("invalid attribute index");
                 }
-                Ok(Value::Int(Int::U64(md.filesize)))
+                Ok(Value::from(md.filesize))
             }
         }
     }

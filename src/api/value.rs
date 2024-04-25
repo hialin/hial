@@ -13,28 +13,35 @@ use indexmap::Equivalent;
 pub const DISPLAY_VALUE_NONE: &str = "ø"; // ❍•⸰·
 pub const DISPLAY_BYTES_VALUE_LEN: usize = 72;
 
+#[derive(Copy, Clone)]
+pub struct Int {
+    pub n: IntData,
+    pub sz: IntKind,
+}
 #[derive(Copy, Clone, Debug)]
-pub enum Int {
-    I64(i64),
-    U64(u64),
-    I32(i32),
-    U32(u32),
+pub enum IntData {
+    Signed(i64),
+    Unsigned(u64),
+}
+#[derive(Copy, Clone, Debug)]
+pub enum IntKind {
+    I64,
+    U64,
+    I32,
+    U32,
 }
 
 impl Int {
     pub fn as_i128(&self) -> i128 {
-        match self {
-            Int::I64(x) => *x as i128,
-            Int::U64(x) => *x as i128,
-            Int::I32(x) => *x as i128,
-            Int::U32(x) => *x as i128,
+        match self.n {
+            IntData::Signed(x) => x as i128,
+            IntData::Unsigned(x) => x as i128,
         }
     }
 }
 
 impl Hash for Int {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        core::mem::discriminant(self).hash(state);
         self.as_i128().hash(state);
     }
 }
@@ -61,39 +68,59 @@ impl Ord for Int {
 
 impl Default for Int {
     fn default() -> Self {
-        Int::I64(0)
+        Int{sz: IntKind::I64, n: IntData::Signed(0)}
     }
 }
 
 impl Display for Int {
     fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Int::I32(x) => write!(buf, "{}", x),
-            Int::U32(x) => write!(buf, "{}", x),
-            Int::I64(x) => write!(buf, "{}", x),
-            Int::U64(x) => write!(buf, "{}", x),
+            Int { n: IntData::Signed(x), .. } => write!(buf, "{}", x),
+            Int {  n: IntData::Unsigned(x), .. } => write!(buf, "{}", x),
+        }
+    }
+}
+
+impl fmt::Debug for Int {
+    fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
+        write!(buf, "{}", self)?;
+        match self.sz {
+            IntKind::I32 => write!(buf, "i32"),
+            IntKind::U32 => write!(buf, "u32"),
+            IntKind::I64 => write!(buf, "i64"),
+            IntKind::U64 => write!(buf, "u64"),
         }
     }
 }
 
 impl From<i32> for Int {
     fn from(x: i32) -> Self {
-        Int::I32(x)
+        Int{sz: IntKind::I32, n: IntData::Signed(x as i64)}
     }
 }
 impl From<u32> for Int {
     fn from(x: u32) -> Self {
-        Int::U32(x)
+        Int{sz: IntKind::U32, n: IntData::Unsigned(x as u64)}
     }
 }
 impl From<i64> for Int {
     fn from(x: i64) -> Self {
-        Int::I64(x)
+        Int{sz: IntKind::I64, n: IntData::Signed(x)}
     }
 }
 impl From<u64> for Int {
     fn from(x: u64) -> Self {
-        Int::U64(x)
+        Int{sz: IntKind::U64, n: IntData::Unsigned(x)}
+    }
+}
+impl From<isize> for Int {
+    fn from(x: isize) -> Self {
+        Int{sz: IntKind::I64, n: IntData::Signed(x as i64)}
+    }
+}
+impl From<usize> for Int {
+    fn from(x: usize) -> Self {
+        Int{sz: IntKind::U64, n: IntData::Unsigned(x as u64)}
     }
 }
 
@@ -375,32 +402,32 @@ impl From<Int> for Value<'_> {
 }
 impl From<i32> for Value<'_> {
     fn from(x: i32) -> Self {
-        Value::Int(Int::I32(x))
+        Value::Int(Int::from(x))
     }
 }
 impl From<u32> for Value<'_> {
     fn from(x: u32) -> Self {
-        Value::Int(Int::U32(x))
+        Value::Int(Int::from(x))
     }
 }
 impl From<i64> for Value<'_> {
     fn from(x: i64) -> Self {
-        Value::Int(Int::I64(x))
+        Value::Int(Int::from(x))
     }
 }
 impl From<u64> for Value<'_> {
     fn from(x: u64) -> Self {
-        Value::Int(Int::U64(x))
+        Value::Int(Int::from(x))
     }
 }
 impl From<isize> for Value<'_> {
     fn from(x: isize) -> Self {
-        Value::Int(Int::I64(x as i64))
+        Value::Int(Int::from(x))
     }
 }
 impl From<usize> for Value<'_> {
     fn from(x: usize) -> Self {
-        Value::Int(Int::U64(x as u64))
+        Value::Int(Int::from(x))
     }
 }
 impl From<StrFloat> for Value<'_> {

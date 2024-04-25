@@ -77,16 +77,17 @@ impl Cell {
 
         let client = Client::builder().user_agent("hial").build()?;
         let method = {
-            if params.contains_key(&Value::Str(HEAD_METHOD)) {
-                HEAD_METHOD
-            } else if let Some(method) = params.get(&Value::Str(METHOD_PARAM_NAME)) {
-                match method.as_cow_str().as_ref() {
-                    HEAD_METHOD => HEAD_METHOD,
-                    _ => GET_METHOD,
+            let mut m = GET_METHOD;
+            if let Some(method) = params.get(&Value::Str(METHOD_PARAM_NAME)) {
+                if method.as_cow_str().as_ref() == HEAD_METHOD {
+                    m = HEAD_METHOD
                 }
-            } else {
-                GET_METHOD
-            }
+            } else if let Some(method) = params.get(&Value::from(0)) {
+                if method.as_value() == Value::Str(HEAD_METHOD) {
+                    m = HEAD_METHOD
+                }
+            };
+            m
         };
         let request = if method == HEAD_METHOD {
             client.head(url)
@@ -253,7 +254,7 @@ impl CellReaderTrait for CellReader {
             (GroupKind::Root, 0) => Ok(Value::Bytes(&self.response.body)),
             (GroupKind::Attr, 0) => nores(),
             (GroupKind::Attr, 1) => nores(),
-            (GroupKind::Status, 0) => Ok(Value::Int(Int::I32(self.response.status as i32))),
+            (GroupKind::Status, 0) => Ok(Value::from(self.response.status as i32)),
             (GroupKind::Status, 1) => Ok(Value::Str(&self.response.reason)),
             (GroupKind::Headers, _) => {
                 let header_values = if let Some(hv) = self.response.headers.get_index(self.pos) {
