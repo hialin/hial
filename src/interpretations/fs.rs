@@ -101,7 +101,7 @@ impl CellReaderTrait for CellReader {
         Ok(self.pos as usize)
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         match self.ty {
             GroupType::Folder => {
                 let fe = self.fileentry()?;
@@ -117,7 +117,7 @@ impl CellReaderTrait for CellReader {
         }
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         let fe = self.fileentry()?;
         let md = fe.metadata.as_ref().map_err(|e| e.clone())?;
 
@@ -251,7 +251,7 @@ impl Cell {
         Ok(Xell::new_from(DynCell::from(file_cell), Some(origin)))
     }
 
-    fn shell_tilde(path: &Path) -> Cow<Path> {
+    fn shell_tilde(path: &Path) -> Cow<'_, Path> {
         if path.starts_with("~") {
             let home = dirs::home_dir().unwrap_or_default();
             home.join(path.strip_prefix("~").unwrap_or(path)).into()

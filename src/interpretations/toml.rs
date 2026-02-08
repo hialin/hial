@@ -132,7 +132,7 @@ impl CellReaderTrait for CellReader {
         Ok(self.pos)
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         match self.nodes {
             ReadNodeGroup::Array(ref a) => nores(),
             ReadNodeGroup::Table(ref t) => match t.get_index(self.pos) {
@@ -142,7 +142,7 @@ impl CellReaderTrait for CellReader {
         }
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         match self.nodes {
             ReadNodeGroup::Array(ref a) => match a.get(self.pos) {
                 Some(x) => to_value(x, &self.value),

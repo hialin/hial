@@ -57,11 +57,11 @@ impl CellReaderTrait for CellReader {
         Ok("url")
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         Ok(Value::Str(self.0.url.as_str()))
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         nores()
     }
 

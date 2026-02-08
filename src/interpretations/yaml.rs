@@ -138,7 +138,7 @@ impl CellReaderTrait for CellReader {
         Ok(self.pos)
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         match self.nodes {
             ReadNodeGroup::Array(ref a) => nores(),
             ReadNodeGroup::Object(ref o) => match o.get_index(self.pos) {
@@ -148,7 +148,7 @@ impl CellReaderTrait for CellReader {
         }
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         match self.nodes {
             ReadNodeGroup::Array(ref a) => match a.get(self.pos) {
                 Some(x) => to_value(x),
@@ -296,7 +296,7 @@ fn get_ty(node: &Node) -> &'static str {
     }
 }
 
-fn yaml_to_value(s: &Yaml) -> Res<Value> {
+fn yaml_to_value(s: &Yaml) -> Res<Value<'_>> {
     Ok(match s {
         Yaml::Boolean(b) => Value::Bool(*b),
         Yaml::Integer(i) => Value::from(*i),
@@ -327,7 +327,7 @@ fn ownvalue_to_yaml(v: OwnValue) -> Res<Yaml> {
     })
 }
 
-fn to_value(node: &Node) -> Res<Value> {
+fn to_value(node: &Node) -> Res<Value<'_>> {
     match node {
         Node::Scalar(y) => yaml_to_value(y),
         _ => nores(),

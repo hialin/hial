@@ -163,7 +163,7 @@ impl CellReaderTrait for CellReader {
         Ok(self.cell.position)
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         self.cell
             .cursor
             .field_name()
@@ -171,7 +171,7 @@ impl CellReaderTrait for CellReader {
             .map(Value::Str)
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         if self.value.get().is_none() {
             let mut opt_value = None;
             let node = self.cell.cursor.node();

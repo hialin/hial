@@ -41,11 +41,11 @@ impl CellReaderTrait for HErr {
         })
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         Err(self.clone())
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         Err(self.clone())
     }
 

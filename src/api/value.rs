@@ -328,7 +328,7 @@ impl From<String> for OwnValue {
 }
 
 impl OwnValue {
-    pub fn as_value(&self) -> Value {
+    pub fn as_value(&self) -> Value<'_> {
         match self {
             OwnValue::None => Value::None,
             OwnValue::Bool(x) => Value::Bool(*x),
@@ -339,7 +339,7 @@ impl OwnValue {
         }
     }
 
-    pub fn as_cow_str(&self) -> Cow<str> {
+    pub fn as_cow_str(&self) -> Cow<'_, str> {
         match self {
             OwnValue::String(x) => Cow::Borrowed(x),
             _ => Cow::Owned(self.to_string()),
@@ -373,7 +373,7 @@ impl Value<'_> {
         }
     }
 
-    pub fn as_cow_str(&self) -> Cow<str> {
+    pub fn as_cow_str(&self) -> Cow<'_, str> {
         match self {
             Value::Str(x) => Cow::Borrowed(x),
             _ => Cow::Owned(self.to_string()),

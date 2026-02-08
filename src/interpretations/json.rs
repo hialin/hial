@@ -226,7 +226,7 @@ impl CellReaderTrait for CellReader {
         Ok(self.pos)
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         if let ReadNodeGroup::Object(ref o) = self.nodes {
             if let Some(x) = o.get_index(self.pos) {
                 return Ok(Value::Str(x.0));
@@ -237,8 +237,8 @@ impl CellReaderTrait for CellReader {
         nores()
     }
 
-    fn value(&self) -> Res<Value> {
-        fn get_value(node: &Node) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
+        fn get_value(node: &Node) -> Res<Value<'_>> {
             match node {
                 Node::Scalar(sv) => Ok(serde_to_value(sv)),
                 _ => nores(),

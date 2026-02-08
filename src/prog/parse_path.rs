@@ -15,35 +15,35 @@ use nom::{
 };
 use std::str::{from_utf8, FromStr};
 
-pub fn parse_path(input: &str) -> Res<Path> {
+pub fn parse_path(input: &str) -> Res<Path<'_>> {
     let path_res = all_consuming(path_items)(input);
     let path = guard_ok!(path_res, err => { return userres(convert_error(input, err))});
     Ok(path.1)
 }
 
-pub fn parse_path_with_starter(input: &str) -> Res<(PathStart, Path)> {
+pub fn parse_path_with_starter(input: &str) -> Res<(PathStart<'_>, Path<'_>)> {
     let path_res = all_consuming(path_with_starter)(input);
     let path = guard_ok!(path_res, err => { return userres(convert_error(input, err))});
     Ok(path.1)
 }
 
-pub fn path_with_starter(input: &str) -> NomRes<&str, (PathStart, Path)> {
+pub fn path_with_starter(input: &str) -> NomRes<&str, (PathStart<'_>, Path<'_>)> {
     context("path", tuple((path_start, space0, path_items)))(input)
         .map(|(next_input, res)| (next_input, (res.0, res.2)))
 }
 
-fn path_start(input: &str) -> NomRes<&str, PathStart> {
+fn path_start(input: &str) -> NomRes<&str, PathStart<'_>> {
     context(
         "path_start",
         alt((path_start_url, path_start_file, path_start_string)),
     )(input)
 }
 
-fn path_start_url(input: &str) -> NomRes<&str, PathStart> {
+fn path_start_url(input: &str) -> NomRes<&str, PathStart<'_>> {
     context("path_start_url", url)(input).map(|(next_input, res)| (next_input, PathStart::Url(res)))
 }
 
-fn path_start_file(input: &str) -> NomRes<&str, PathStart> {
+fn path_start_file(input: &str) -> NomRes<&str, PathStart<'_>> {
     context(
         "path_start_file",
         tuple((
@@ -58,23 +58,23 @@ fn path_start_file(input: &str) -> NomRes<&str, PathStart> {
     })
 }
 
-fn path_start_string(input: &str) -> NomRes<&str, PathStart> {
+fn path_start_string(input: &str) -> NomRes<&str, PathStart<'_>> {
     context("path_start_string", string)(input)
         .map(|(next_input, res)| (next_input, PathStart::String(res)))
 }
 
-fn path_items(input: &str) -> NomRes<&str, Path> {
+fn path_items(input: &str) -> NomRes<&str, Path<'_>> {
     context("path_items", many0(path_item))(input).map(|(next_input, res)| {
         let path_items = res.iter().map(|p| p.to_owned()).collect();
         (next_input, Path(path_items))
     })
 }
 
-fn path_item(input: &str) -> NomRes<&str, PathItem> {
+fn path_item(input: &str) -> NomRes<&str, PathItem<'_>> {
     context("path_item", alt((elevation_path_item, normal_path_item)))(input)
 }
 
-fn elevation_path_item(input: &str) -> NomRes<&str, PathItem> {
+fn elevation_path_item(input: &str) -> NomRes<&str, PathItem<'_>> {
     context(
         "elevation path item",
         tuple((
@@ -97,7 +97,7 @@ fn elevation_path_item(input: &str) -> NomRes<&str, PathItem> {
     })
 }
 
-fn normal_path_item(input: &str) -> NomRes<&str, PathItem> {
+fn normal_path_item(input: &str) -> NomRes<&str, PathItem<'_>> {
     context(
         "normal path item",
         tuple((
@@ -136,7 +136,7 @@ fn normal_path_item(input: &str) -> NomRes<&str, PathItem> {
     })
 }
 
-fn path_item_selector(input: &str) -> NomRes<&str, Selector> {
+fn path_item_selector(input: &str) -> NomRes<&str, Selector<'_>> {
     context("path_item_selector", path_code_points)(input)
         .map(|(next_input, res)| (next_input, Selector::from(res)))
 }
@@ -148,12 +148,12 @@ fn path_item_index(input: &str) -> NomRes<&str, isize> {
     )(input)
 }
 
-fn filter(input: &str) -> NomRes<&str, Filter> {
+fn filter(input: &str) -> NomRes<&str, Filter<'_>> {
     context("filter", delimited(tag("["), expression, tag("]")))(input)
         .map(|(next_input, res)| (next_input, Filter { expr: res }))
 }
 
-fn expression(input: &str) -> NomRes<&str, Expression> {
+fn expression(input: &str) -> NomRes<&str, Expression<'_>> {
     context(
         "expression",
         tuple((
@@ -173,7 +173,7 @@ fn expression(input: &str) -> NomRes<&str, Expression> {
     })
 }
 
-fn ternary_expression(input: &str) -> NomRes<&str, Expression> {
+fn ternary_expression(input: &str) -> NomRes<&str, Expression<'_>> {
     context(
         "ternary expression",
         tuple((path_items, space0, opt(tuple((operation, space0, rvalue))))),
@@ -189,7 +189,7 @@ fn ternary_expression(input: &str) -> NomRes<&str, Expression> {
     })
 }
 
-fn type_expression(input: &str) -> NomRes<&str, Expression> {
+fn type_expression(input: &str) -> NomRes<&str, Expression<'_>> {
     context("type expression", tuple((tag(":"), identifier)))(input)
         .map(|(next_input, res)| (next_input, Expression::Type { ty: res.1 }))
 }

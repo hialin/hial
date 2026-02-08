@@ -303,7 +303,7 @@ impl CellReaderTrait for CellReader {
         }
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         match self {
             CellReader::Node { nodes, pos, .. } => match &nodes[*pos] {
                 Node::Element((x, _, _, _)) => Ok(Value::Str(x.as_str())),
@@ -318,7 +318,7 @@ impl CellReaderTrait for CellReader {
         }
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         match self {
             CellReader::Node { nodes, pos, .. } => match &nodes[*pos] {
                 Node::Document(_) => nores(),

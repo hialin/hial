@@ -62,14 +62,14 @@ impl CellReaderTrait for CellReader {
         Ok("path")
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         let s = self
             .1
             .get_or_init(|| self.0.as_os_str().to_string_lossy().to_string());
         Ok(Value::Str(s))
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         nores()
     }
 

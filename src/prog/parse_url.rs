@@ -12,7 +12,7 @@ use nom::{
     AsChar, Err as NomErr, InputTakeAtPosition,
 };
 
-pub fn url(input: &str) -> NomRes<&str, Url> {
+pub fn url(input: &str) -> NomRes<&str, Url<'_>> {
     context(
         "url",
         tuple((
@@ -133,7 +133,7 @@ fn url_path(input: &str) -> NomRes<&str, Vec<&str>> {
     })
 }
 
-fn query_params(input: &str) -> NomRes<&str, QueryParams> {
+fn query_params(input: &str) -> NomRes<&str, QueryParams<'_>> {
     context(
         "query params",
         tuple((

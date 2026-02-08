@@ -55,7 +55,7 @@ impl<'a> Display for Statement<'a> {
 }
 
 impl<'a> Program<'a> {
-    pub fn parse(input: &str) -> Res<Program> {
+    pub fn parse(input: &str) -> Res<Program<'_>> {
         let input = input.trim();
         super::parse_program::parse_program(input)
     }

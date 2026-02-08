@@ -235,10 +235,10 @@ impl CellReader {
     pub fn index(&self) -> Res<usize> {
         dispatch_dyn_cell_reader!(&self.0, |x| { x.index() })
     }
-    pub fn label(&self) -> Res<Value> {
+    pub fn label(&self) -> Res<Value<'_>> {
         dispatch_dyn_cell_reader!(&self.0, |x| { x.label() })
     }
-    pub fn value(&self) -> Res<Value> {
+    pub fn value(&self) -> Res<Value<'_>> {
         dispatch_dyn_cell_reader!(&self.0, |x| { x.value() })
     }
     pub fn serial(&self) -> Res<String> {

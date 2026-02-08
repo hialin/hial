@@ -33,11 +33,11 @@ impl CellReaderTrait for CellReader {
         Ok("value")
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         Ok(self.0.as_value())
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         nores()
     }
 

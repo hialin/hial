@@ -201,7 +201,7 @@ impl CellReaderTrait for CellReader {
         }
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         match self.kind {
             Kind::Root => nores(),
             Kind::Span(i) => {
@@ -213,7 +213,7 @@ impl CellReaderTrait for CellReader {
         }
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         nores()
     }
 

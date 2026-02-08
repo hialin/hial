@@ -161,7 +161,7 @@ impl CellReaderTrait for FieldReader {
         Ok("field")
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         match self.ty {
             FieldType::Value => self.reader.value(),
             FieldType::Label => self.reader.label(),
@@ -180,7 +180,7 @@ impl CellReaderTrait for FieldReader {
         Ok(self.ty as usize)
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         nores()
     }
 

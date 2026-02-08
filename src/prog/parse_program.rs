@@ -8,7 +8,7 @@ use nom::{
     error::context, multi::separated_list0, sequence::tuple,
 };
 
-pub fn parse_program(input: &str) -> Res<Program> {
+pub fn parse_program(input: &str) -> Res<Program<'_>> {
     let statements_res = all_consuming(program)(input);
     let statements = guard_ok!(statements_res, err => {
         return userres(convert_error(input, err))
@@ -16,7 +16,7 @@ pub fn parse_program(input: &str) -> Res<Program> {
     Ok(statements.1)
 }
 
-fn program(input: &str) -> NomRes<&str, Program> {
+fn program(input: &str) -> NomRes<&str, Program<'_>> {
     context(
         "program",
         separated_list0(tuple((space0, tag(";"), space0)), statement),
@@ -27,16 +27,16 @@ fn program(input: &str) -> NomRes<&str, Program> {
     })
 }
 
-fn statement(input: &str) -> NomRes<&str, Statement> {
+fn statement(input: &str) -> NomRes<&str, Statement<'_>> {
     context("statement", alt((statement_assignment, statement_path)))(input)
 }
 
-fn statement_path(input: &str) -> NomRes<&str, Statement> {
+fn statement_path(input: &str) -> NomRes<&str, Statement<'_>> {
     context("path", path_with_starter)(input)
         .map(|(next_input, res)| (next_input, Statement::Path(res.0, res.1)))
 }
 
-fn statement_assignment(input: &str) -> NomRes<&str, Statement> {
+fn statement_assignment(input: &str) -> NomRes<&str, Statement<'_>> {
     context(
         "assignment",
         tuple((path_with_starter, space0, tag("="), space0, rvalue)),

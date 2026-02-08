@@ -291,7 +291,7 @@ fn bson_to_sub_group(bson: &Bson, parent: &Cell) -> Res<Group> {
     }
 }
 
-fn bson_to_value(bson: &Bson) -> Res<Value> {
+fn bson_to_value(bson: &Bson) -> Res<Value<'_>> {
     match bson {
         Bson::Null => Ok(Value::None),
         Bson::Boolean(b) => Ok(Value::Bool(*b)),
@@ -346,7 +346,7 @@ impl CellReaderTrait for CellReader {
         Ok(self.pos)
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         match &self.data {
             ReadNodeData::Server(db_names) => {
                 let name = db_names.get(self.pos).ok_or_else(|| faulterr("bad pos"))?;
@@ -369,7 +369,7 @@ impl CellReaderTrait for CellReader {
         }
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         match &self.data {
             ReadNodeData::Server(_) | ReadNodeData::Database(_) | ReadNodeData::Collection(_) => {
                 nores()

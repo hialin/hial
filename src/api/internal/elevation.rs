@@ -114,7 +114,7 @@ impl CellReaderTrait for CellReader {
         }
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         match &self.kind {
             CellKind::Interpretation(_) => nores(),
             CellKind::Param(ii, ip) => Ok(self
@@ -132,7 +132,7 @@ impl CellReaderTrait for CellReader {
         }
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         match &self.kind {
             CellKind::Interpretation(i) => {
                 Ok(Value::Str(self.data.map.get_index(*i).ok_or_else(noerr)?.0))

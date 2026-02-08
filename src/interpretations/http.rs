@@ -232,7 +232,7 @@ impl CellReaderTrait for CellReader {
         Ok(self.pos)
     }
 
-    fn label(&self) -> Res<Value> {
+    fn label(&self) -> Res<Value<'_>> {
         match (&self.kind, self.pos) {
             (GroupKind::Root, _) => nores(),
             (GroupKind::Attr, 0) => Ok(Value::Str("status")),
@@ -249,7 +249,7 @@ impl CellReaderTrait for CellReader {
         }
     }
 
-    fn value(&self) -> Res<Value> {
+    fn value(&self) -> Res<Value<'_>> {
         match (&self.kind, self.pos) {
             (GroupKind::Root, 0) => Ok(Value::Bytes(&self.response.body)),
             (GroupKind::Attr, 0) => nores(),
