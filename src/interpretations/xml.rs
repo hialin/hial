@@ -140,8 +140,8 @@ impl Cell {
 }
 
 fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
-    reader.trim_text(true);
-    reader.expand_empty_elements(true);
+    reader.config_mut().trim_text(true);
+    reader.config_mut().expand_empty_elements = true;
 
     #[derive(Debug, Default)]
     struct Counts {
@@ -177,28 +177,34 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 counts.count_decl += 1;
                 let mut attrs = vec![];
                 let rawversion = e.version()?;
-                let version = decoder.decode(rawversion.as_ref())?;
+                let version = decoder
+                    .decode(rawversion.as_ref())
+                    .map_err(|e| deformed(e.to_string()))?;
                 attrs.push(Attribute::Attribute("version".into(), version.into()));
                 if let Some(encoding) = e.encoding() {
-                    let rawencoding = encoding?;
-                    let encoding = decoder.decode(rawencoding.as_ref())?;
+                    let rawencoding = encoding.map_err(|e| deformed(e.to_string()))?;
+                    let encoding = decoder
+                        .decode(rawencoding.as_ref())
+                        .map_err(|e| deformed(e.to_string()))?;
                     attrs.push(Attribute::Attribute("encoding".into(), encoding.into()));
                 }
                 if let Some(standalone) = e.standalone() {
-                    let rawstandalone = standalone?;
-                    let standalone = decoder.decode(rawstandalone.as_ref())?;
+                    let rawstandalone = standalone.map_err(|e| deformed(e.to_string()))?;
+                    let standalone = decoder
+                        .decode(rawstandalone.as_ref())
+                        .map_err(|e| deformed(e.to_string()))?;
                     attrs.push(Attribute::Attribute("standalone".into(), standalone.into()));
                 }
                 last(&mut stack)?.push(Node::Decl(OwnRc::new(attrs)));
             }
             Ok(Event::DocType(ref e)) => {
                 counts.count_doc_type += 1;
-                let doctype = e.unescape()?;
+                let doctype = decoder.decode(e.as_ref()).map_err(|e| deformed(e.to_string()))?;
                 last(&mut stack)?.push(Node::DocType(doctype.into()));
             }
             Ok(Event::PI(ref e)) => {
                 counts.count_pi += 1;
-                let text = decoder.decode(e)?;
+                let text = decoder.decode(e).map_err(|e| deformed(e.to_string()))?;
                 last(&mut stack)?.push(Node::PI(text.into()));
             }
             Ok(Event::Start(ref e)) => {
@@ -206,8 +212,8 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 for resa in e.attributes().with_checks(false) {
                     match resa {
                         Ok(a) => {
-                            let key = decoder.decode(a.key.0)?;
-                            let value = decoder.decode(&a.value)?;
+                            let key = decoder.decode(a.key.0).map_err(|e| deformed(e.to_string()))?;
+                            let value = decoder.decode(&a.value).map_err(|e| deformed(e.to_string()))?;
                             attrs.push(Attribute::Attribute(key.into(), value.into()))
                         }
                         Err(err) => attrs.push(Attribute::Error(format!("{}", err))),
@@ -219,12 +225,12 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
             }
             Ok(Event::Text(e)) => {
                 counts.count_text += 1;
-                let text = decoder.decode(e.as_ref())?;
+                let text = decoder.decode(e.as_ref()).map_err(|e| deformed(e.to_string()))?;
                 last(&mut stack)?.push(Node::Text(text.into()));
             }
             Ok(Event::Comment(e)) => {
                 counts.count_comment += 1;
-                let text = decoder.decode(e.as_ref())?;
+                let text = decoder.decode(e.as_ref()).map_err(|e| deformed(e.to_string()))?;
                 last(&mut stack)?.push(Node::Comment(text.into()));
             }
             Ok(Event::CData(e)) => {
@@ -242,7 +248,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                     .ok_or_else(|| faulterr("no element in attr stack"))?;
                 a.shrink_to_fit();
                 counts.count_attributes += a.len();
-                let name = decoder.decode(e.name().0)?;
+                let name = decoder.decode(e.name().0).map_err(|e| deformed(e.to_string()))?;
                 let mut text = String::new();
                 if let Some(Node::Text(t)) = v.first() {
                     if !t.trim().is_empty() {
@@ -262,7 +268,7 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
             }
 
             Ok(Event::Eof) => break,
-            // _ => (), // There are several other `Event`s we do not consider here
+            _ => (), // ignore other events like GeneralRef
         }
 
         // if we don't keep a borrow elsewhere, we can clear the buffer to keep memory usage low
@@ -342,7 +348,7 @@ impl CellReaderTrait for CellReader {
 
     fn serial(&self) -> Res<String> {
         use quick_xml::{
-            events::{BytesCData, BytesText},
+            events::{BytesCData, BytesPI, BytesText},
             writer::Writer,
         };
         use std::io::Cursor;
@@ -427,7 +433,7 @@ impl CellReaderTrait for CellReader {
                     .write_event(Event::Comment(BytesText::new(&format!("ERROR: {}", s))))
                     .map_err(write_err)?,
                 Node::PI(s) => writer
-                    .write_event(Event::PI(BytesText::new(s.as_str())))
+                    .write_event(Event::PI(BytesPI::new(s.as_str())))
                     .map_err(write_err)?,
                 Node::Text(s) => writer
                     .write_event(Event::Text(BytesText::new(s)))

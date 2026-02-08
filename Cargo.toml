@@ -14,31 +14,31 @@ repository = "https://github.com/emanueldima/hial"
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-dirs = "5.0"
-indexmap = "2.2"
+dirs = "6.0"
+indexmap = "2"
 linkme = "0.3"
-nom = "7.1"
+nom = "7"
 paste = "1.0"
-rand = "0.8"
-regex = "1.10"
-reqwest = { version = "0.12", features = ["blocking", "json"] }
-serde = { version = "1.0" }
-tree-sitter = "0.22"
+rand = "0.10"
+regex = "1"
+reqwest = { version = "0.13", features = ["blocking", "json"] }
+serde = { version = "1" }
+tree-sitter = "0.26"
 url = "2.5"
-quick-xml = { version = "0.31", features = ["encoding"] }
+quick-xml = { version = "0.39", features = ["encoding"] }
 yaml-rust = "0.4"
 mongodb = "3"
 pollster = "0.4"
 futures-util = "0.3"
 
 [dependencies.serde_json]
-version = "1.0"
+version = "1"
 features = ["preserve_order"]
 
 [dependencies.toml]
-version = "0.8"
+version = "0.9"
 features = ["preserve_order"]
 
 [build-dependencies]
 cc = "1.0"
-cbindgen = "0.26"
+cbindgen = "0.29"

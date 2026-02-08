@@ -11,4 +11,4 @@ extern Language tree_sitter_javascript(void);
 
 extern Language tree_sitter_rust(void);
 
-#endif /* __hial_h */
+#endif  /* __hial_h */
