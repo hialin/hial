@@ -26,15 +26,21 @@ Update a python module version in a requirements.txt file:
 hial './requirements.txt^python.reqs/*[/[0]=="requests"] = "1.2.3"'
 
 # increment the minor version of the requests module
-hial 'x = ./requirements.txt^python.requirements/*[/[0]=="requests"]; $x/[2]^version/:minor += 1'
+hial 'x = ./requirements.txt^python.requirements/*[/[0]=="requests"]'
+hial '$x/[2]^version/:minor += 1'
 ```
+### Move some data from excel to go tests
 
+```
+./file.xls^excel/[0]/rows/[1-]/{B,J,A} ->
+./file.go^go/'fn Describe("{J}")'/'it("{B}","{A}")'
+```
 
 ### Search with results structured into a tree
 
 Unclear: what is the accepted language?
 ```
-x = './**/*[.name=='config.yaml'] (as composefile)]^yaml/services/*/image[^string^http@status/code!=200]
+x = './**/*[.name=='config.yaml'] (as composefile)^yaml/services/*/image[^string^http@status/code!=200]
 tree 'result' / [composefile] / image
 ```
 

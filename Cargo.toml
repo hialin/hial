@@ -1,9 +1,14 @@
 [package]
+build = "build.rs"
 name = "hiallib"
 version = "0.1.0"
 authors = ["Emanuel Dima <emanueldima@gmail.com>"]
 edition = "2021"
 publish = false
+description = "Hial library"
+license = "LGPL-2.1-only"
+readme = "README.md"
+repository = "https://github.com/emanueldima/hial"
 
 [lib]
 crate-type = ["lib", "cdylib"]
@@ -16,12 +21,15 @@ nom = "7.1"
 paste = "1.0"
 rand = "0.8"
 regex = "1.10"
-reqwest = { version = "0.11", features = ["blocking", "json"] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
 serde = { version = "1.0" }
 tree-sitter = "0.22"
 url = "2.5"
 quick-xml = { version = "0.31", features = ["encoding"] }
 yaml-rust = "0.4"
+mongodb = "3"
+pollster = "0.4"
+futures-util = "0.3"
 
 [dependencies.serde_json]
 version = "1.0"

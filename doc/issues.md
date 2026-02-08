@@ -10,7 +10,7 @@
 - support diff  ./file.json^json^tree  ./file.xml^xml^tree
 - basic profiling
 - functions
-- should blobs/bytes be part of value? they are only useful by reinterpretation
+- should blobs/bytes be part of value? they are only useful via reinterpretation
 - what to do with very large values? files which are 100MBs?
 
 - release first minimal version:
