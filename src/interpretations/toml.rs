@@ -2,7 +2,6 @@ use std::{cell::OnceCell, rc::Rc};
 
 use indexmap::IndexMap;
 use linkme::distributed_slice;
-use nom::AsBytes;
 use {toml, toml::Value as TomlValue};
 
 use crate::{
@@ -357,14 +356,12 @@ fn to_toml(value: OwnValue) -> Res<TomlValue> {
         OwnValue::None => Ok(TomlValue::String("".to_string())),
         OwnValue::Bool(b) => Ok(TomlValue::Boolean(b)),
         OwnValue::Float(StrFloat(f)) => Ok(TomlValue::Float(f)),
-        OwnValue::Int(Int{n,..}) => Ok(TomlValue::Integer(match n {
+        OwnValue::Int(Int { n, .. }) => Ok(TomlValue::Integer(match n {
             IntData::Signed(i) => i,
             IntData::Unsigned(u) => u as i64,
         })),
         OwnValue::String(s) => Ok(TomlValue::String(s)),
-        OwnValue::Bytes(s) => Ok(TomlValue::String(
-            String::from_utf8_lossy(s.as_bytes()).into(),
-        )),
+        OwnValue::Bytes(s) => Ok(TomlValue::String(String::from_utf8_lossy(&s).into())),
     }
 }
 

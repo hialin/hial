@@ -1,45 +1,36 @@
 use crate::{
     api::*,
-    guard_ok,
     prog::{parse_path::*, program::*, *},
 };
-use nom::{
-    branch::alt, bytes::complete::tag, character::complete::space0, combinator::all_consuming,
-    error::context, multi::separated_list0, sequence::tuple,
-};
+use chumsky::prelude::*;
 
 pub fn parse_program(input: &str) -> Res<Program<'_>> {
-    let statements_res = all_consuming(program)(input);
-    let statements = guard_ok!(statements_res, err => {
-        return userres(convert_error(input, err))
-    });
-    Ok(statements.1)
+    let parser = program_parser().then_ignore(end());
+    parser
+        .parse(input)
+        .map_err(|err| usererr(convert_error(input, err)))
 }
 
-fn program(input: &str) -> NomRes<&str, Program<'_>> {
-    context(
-        "program",
-        separated_list0(tuple((space0, tag(";"), space0)), statement),
-    )(input)
-    .map(|(next_input, res)| {
-        let statements = res.iter().map(|p| p.to_owned()).collect();
-        (next_input, Program(statements))
-    })
+fn program_parser<'a>() -> impl Parser<char, Program<'a>, Error = ParseError> + Clone {
+    statement_parser()
+        .separated_by(ws().ignore_then(just(';')).then_ignore(ws()))
+        .allow_trailing()
+        .map(Program)
+        .labelled("program")
 }
 
-fn statement(input: &str) -> NomRes<&str, Statement<'_>> {
-    context("statement", alt((statement_assignment, statement_path)))(input)
+fn statement_parser<'a>() -> impl Parser<char, Statement<'a>, Error = ParseError> + Clone {
+    let assignment = path_with_starter_parser()
+        .then_ignore(ws())
+        .then_ignore(just('='))
+        .then_ignore(ws())
+        .then(rvalue_parser())
+        .map(|((start, path), value)| Statement::Assignment(start, path, value));
+
+    let path_stmt = path_with_starter_parser().map(|(start, path)| Statement::Path(start, path));
+    choice((assignment, path_stmt)).labelled("statement")
 }
 
-fn statement_path(input: &str) -> NomRes<&str, Statement<'_>> {
-    context("path", path_with_starter)(input)
-        .map(|(next_input, res)| (next_input, Statement::Path(res.0, res.1)))
-}
-
-fn statement_assignment(input: &str) -> NomRes<&str, Statement<'_>> {
-    context(
-        "assignment",
-        tuple((path_with_starter, space0, tag("="), space0, rvalue)),
-    )(input)
-    .map(|(next_input, res)| (next_input, Statement::Assignment(res.0 .0, res.0 .1, res.4)))
+fn ws() -> impl Parser<char, (), Error = ParseError> + Clone {
+    filter(|c: &char| c.is_whitespace()).repeated().ignored()
 }

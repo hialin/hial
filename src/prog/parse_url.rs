@@ -1,35 +1,174 @@
 use crate::prog::url::*;
 
-use super::NomRes;
-use nom::{
-    branch::alt,
-    bytes::complete::{tag, take},
-    character::complete::{alpha1, alphanumeric1, one_of},
-    combinator::opt,
-    error::{context, ErrorKind, VerboseError},
-    multi::{count, many0, many1, many_m_n},
-    sequence::{preceded, separated_pair, terminated, tuple},
-    AsChar, Err as NomErr, InputTakeAtPosition,
-};
+use super::ParseError;
+use chumsky::prelude::*;
 
-pub fn url(input: &str) -> NomRes<&str, Url<'_>> {
-    context(
-        "url",
-        tuple((
-            scheme,
-            opt(authority),
-            ip_or_host,
-            opt(port),
-            opt(url_path),
-            opt(query_params),
-            opt(fragment),
-        )),
-    )(input)
-    .map(|(next_input, res)| {
-        let (scheme, authority, host, port, path, query, fragment) = res;
-        (
-            next_input,
-            Url {
+fn leak_str(s: String) -> &'static str {
+    Box::leak(s.into_boxed_str())
+}
+
+fn ascii_alpha(c: &char) -> bool {
+    c.is_ascii_alphabetic()
+}
+
+fn ascii_alnum(c: &char) -> bool {
+    c.is_ascii_alphanumeric()
+}
+
+fn ascii_alnum_or_hyphen(c: &char) -> bool {
+    *c == '-' || c.is_ascii_alphanumeric()
+}
+
+fn digits_between(min: usize, max: usize) -> impl Parser<char, String, Error = ParseError> + Clone {
+    filter(|c: &char| c.is_ascii_digit())
+        .repeated()
+        .at_least(min)
+        .at_most(max)
+        .collect::<String>()
+}
+
+fn alpha1() -> impl Parser<char, String, Error = ParseError> + Clone {
+    filter(ascii_alpha)
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
+}
+
+fn alphanumeric1() -> impl Parser<char, String, Error = ParseError> + Clone {
+    filter(ascii_alnum)
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
+}
+
+fn alphanumerichyphen1() -> impl Parser<char, String, Error = ParseError> + Clone {
+    filter(ascii_alnum_or_hyphen)
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
+}
+
+fn scheme() -> impl Parser<char, Scheme, Error = ParseError> + Clone {
+    url_code_points()
+        .then_ignore(just("://"))
+        .map(|s| Scheme::from(s.as_str()))
+        .labelled("scheme")
+}
+
+fn authority<'a>() -> impl Parser<char, Authority<'a>, Error = ParseError> + Clone {
+    alphanumeric1()
+        .then(just(':').ignore_then(alphanumeric1()).or_not())
+        .map(|(u, p)| (leak_str(u), p.map(leak_str)))
+        .then_ignore(just('@'))
+        .labelled("authority")
+}
+
+fn host<'a>() -> impl Parser<char, Host, Error = ParseError> + Clone {
+    let dotted = alphanumerichyphen1()
+        .then_ignore(just('.'))
+        .repeated()
+        .at_least(1)
+        .then(alpha1())
+        .map(|(mut head, tail)| {
+            head.push(tail);
+            Host::Host(head.join("."))
+        });
+
+    let single = alphanumerichyphen1().map(Host::Host);
+    choice((dotted, single)).labelled("host")
+}
+
+fn ip_num() -> impl Parser<char, u8, Error = ParseError> + Clone {
+    digits_between(1, 3)
+        .try_map(|result: String, span| match result.parse::<u8>() {
+            Ok(n) => Ok(n),
+            Err(_) => Err(Simple::custom(span, "invalid ip number")),
+        })
+        .labelled("ip number")
+}
+
+fn ip() -> impl Parser<char, Host, Error = ParseError> + Clone {
+    ip_num()
+        .then_ignore(just('.'))
+        .repeated()
+        .exactly(3)
+        .then(ip_num())
+        .map(|(head, tail)| {
+            let mut result: [u8; 4] = [0, 0, 0, 0];
+            head.into_iter()
+                .enumerate()
+                .for_each(|(i, v)| result[i] = v);
+            result[3] = tail;
+            Host::IP(result)
+        })
+        .labelled("ip")
+}
+
+fn ip_or_host<'a>() -> impl Parser<char, Host, Error = ParseError> + Clone {
+    choice((ip(), host())).labelled("ip or host")
+}
+
+fn port() -> impl Parser<char, u16, Error = ParseError> + Clone {
+    just(':')
+        .ignore_then(digits_between(2, 4))
+        .try_map(|res: String, span| match res.parse::<u16>() {
+            Ok(n) => Ok(n),
+            Err(_) => Err(Simple::custom(span, "invalid port")),
+        })
+        .labelled("port")
+}
+
+fn url_path<'a>() -> impl Parser<char, Vec<&'a str>, Error = ParseError> + Clone {
+    just('/')
+        .ignore_then(url_code_points().separated_by(just('/')).allow_trailing())
+        .map(|parts| parts.into_iter().map(leak_str).collect::<Vec<_>>())
+        .labelled("url_path")
+}
+
+fn query_params<'a>() -> impl Parser<char, QueryParams<'a>, Error = ParseError> + Clone {
+    let pair = url_code_points()
+        .then_ignore(just('='))
+        .then(url_code_points());
+    just('?')
+        .ignore_then(pair.separated_by(just('&')).at_least(1))
+        .map(|parts| {
+            parts
+                .into_iter()
+                .map(|(k, v)| (leak_str(k), leak_str(v)))
+                .collect::<Vec<_>>()
+        })
+        .labelled("query params")
+}
+
+fn fragment() -> impl Parser<char, &'static str, Error = ParseError> + Clone {
+    just('#')
+        .ignore_then(url_code_points())
+        .map(leak_str)
+        .labelled("fragment")
+}
+
+pub(super) fn path_code_points() -> impl Parser<char, String, Error = ParseError> + Clone {
+    let accept = |c: &char| {
+        *c == '-' || *c == '_' || *c == '.' || *c == ':' || *c == '*' || c.is_ascii_alphanumeric()
+    };
+    filter(accept).repeated().at_least(1).collect::<String>()
+}
+
+pub(super) fn url_code_points() -> impl Parser<char, String, Error = ParseError> + Clone {
+    let accept = |c: &char| *c == '-' || *c == '.' || c.is_ascii_alphanumeric();
+    filter(accept).repeated().at_least(1).collect::<String>()
+}
+
+pub(super) fn url_parser<'a>() -> impl Parser<char, Url<'a>, Error = ParseError> + Clone {
+    scheme()
+        .then(authority().or_not())
+        .then(ip_or_host())
+        .then(port().or_not())
+        .then(url_path().or_not())
+        .then(query_params().or_not())
+        .then(fragment().or_not())
+        .map(
+            |((((((scheme, authority), host), port), path), query), fragment)| Url {
                 scheme,
                 authority,
                 host,
@@ -39,182 +178,7 @@ pub fn url(input: &str) -> NomRes<&str, Url<'_>> {
                 fragment,
             },
         )
-    })
-}
-
-fn scheme(input: &str) -> NomRes<&str, Scheme> {
-    context(
-        "scheme",
-        terminated(url_code_points, tag("://")),
-        // alt((tag_no_case("HTTP://"), tag_no_case("HTTPS://"))),
-    )(input)
-    .map(|(next_input, res)| (next_input, res.into()))
-}
-
-fn authority(input: &str) -> NomRes<&str, (&str, Option<&str>)> {
-    context(
-        "authority",
-        terminated(
-            separated_pair(alphanumeric1, opt(tag(":")), opt(alphanumeric1)),
-            tag("@"),
-        ),
-    )(input)
-}
-
-fn ip_or_host(input: &str) -> NomRes<&str, Host> {
-    context("ip or host", alt((ip, host)))(input)
-}
-
-fn host(input: &str) -> NomRes<&str, Host> {
-    context(
-        "host",
-        alt((
-            tuple((many1(terminated(alphanumerichyphen1, tag("."))), alpha1)),
-            tuple((many_m_n(1, 1, alphanumerichyphen1), take(0_usize))),
-        )),
-    )(input)
-    .map(|(next_input, mut res)| {
-        if !res.1.is_empty() {
-            res.0.push(res.1);
-        }
-        (next_input, Host::Host(res.0.join(".")))
-    })
-}
-
-fn ip(input: &str) -> NomRes<&str, Host> {
-    context(
-        "ip",
-        tuple((count(terminated(ip_num, tag(".")), 3), ip_num)),
-    )(input)
-    .map(|(next_input, res)| {
-        let mut result: [u8; 4] = [0, 0, 0, 0];
-        res.0
-            .into_iter()
-            .enumerate()
-            .for_each(|(i, v)| result[i] = v);
-        result[3] = res.1;
-        (next_input, Host::IP(result))
-    })
-}
-
-fn ip_num(input: &str) -> NomRes<&str, u8> {
-    context("ip number", n_to_m_digits(1, 3))(input).and_then(|(next_input, result)| {
-        match result.parse::<u8>() {
-            Ok(n) => Ok((next_input, n)),
-            Err(_) => Err(NomErr::Error(VerboseError { errors: vec![] })),
-        }
-    })
-}
-
-fn port(input: &str) -> NomRes<&str, u16> {
-    context("port", preceded(tag(":"), n_to_m_digits(2, 4)))(input).and_then(|(next_input, res)| {
-        match res.parse::<u16>() {
-            Ok(n) => Ok((next_input, n)),
-            Err(_) => Err(NomErr::Error(VerboseError { errors: vec![] })),
-        }
-    })
-}
-
-fn url_path(input: &str) -> NomRes<&str, Vec<&str>> {
-    context(
-        "url_path",
-        tuple((
-            tag("/"),
-            many0(terminated(url_code_points, tag("/"))),
-            opt(url_code_points),
-        )),
-    )(input)
-    .map(|(next_input, res)| {
-        let mut url_path: Vec<&str> = res.1.iter().map(|p| p.to_owned()).collect();
-        if let Some(last) = res.2 {
-            url_path.push(last);
-        }
-        (next_input, url_path)
-    })
-}
-
-fn query_params(input: &str) -> NomRes<&str, QueryParams<'_>> {
-    context(
-        "query params",
-        tuple((
-            tag("?"),
-            url_code_points,
-            tag("="),
-            url_code_points,
-            many0(tuple((
-                tag("&"),
-                url_code_points,
-                tag("="),
-                url_code_points,
-            ))),
-        )),
-    )(input)
-    .map(|(next_input, res)| {
-        let mut qps = Vec::new();
-        qps.push((res.1, res.3));
-        for qp in res.4 {
-            qps.push((qp.1, qp.3));
-        }
-        (next_input, qps)
-    })
-}
-
-fn fragment(input: &str) -> NomRes<&str, &str> {
-    context("fragment", tuple((tag("#"), url_code_points)))(input)
-        .map(|(next_input, res)| (next_input, res.1))
-}
-
-fn alphanumerichyphen1<T>(i: T) -> NomRes<T, T>
-where
-    T: InputTakeAtPosition,
-    <T as InputTakeAtPosition>::Item: AsChar,
-{
-    i.split_at_position1_complete(
-        |item| {
-            let char_item = item.as_char();
-            !(char_item == '-' || char_item.is_alphanum())
-        },
-        ErrorKind::AlphaNumeric,
-    )
-}
-
-pub fn path_code_points<T>(i: T) -> NomRes<T, T>
-where
-    T: InputTakeAtPosition,
-    <T as InputTakeAtPosition>::Item: AsChar,
-{
-    let accept =
-        |c: char| c == '-' || c == '_' || c == '.' || c == ':' || c == '*' || c.is_alphanum();
-    i.split_at_position1_complete(
-        |item| {
-            let char_item = item.as_char();
-            !accept(char_item)
-        },
-        ErrorKind::AlphaNumeric,
-    )
-}
-
-pub fn url_code_points<T>(i: T) -> NomRes<T, T>
-where
-    T: InputTakeAtPosition,
-    <T as InputTakeAtPosition>::Item: AsChar,
-{
-    let accept = |c: char| c == '-' || c == '.' || c.is_alphanum();
-    i.split_at_position1_complete(
-        |item| {
-            let char_item = item.as_char();
-            !accept(char_item)
-            // ... actual ascii code points and url encoding...: https://infra.spec.whatwg.org/#ascii-code-point
-        },
-        ErrorKind::AlphaNumeric,
-    )
-}
-
-fn n_to_m_digits<'a>(n: usize, m: usize) -> impl FnMut(&'a str) -> NomRes<&str, String> {
-    move |input| {
-        many_m_n(n, m, one_of("0123456789"))(input)
-            .map(|(next_input, result)| (next_input, result.into_iter().collect()))
-    }
+        .labelled("url")
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -222,279 +186,166 @@ fn n_to_m_digits<'a>(n: usize, m: usize) -> impl FnMut(&'a str) -> NomRes<&str, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nom::{
-        error::{ErrorKind, VerboseError, VerboseErrorKind},
-        Err as NomErr,
-    };
+
+    fn parse_with<'a, O>(
+        parser: impl Parser<char, O, Error = ParseError>,
+        input: &'a str,
+    ) -> Result<O, Vec<ParseError>> {
+        parser.then_ignore(end()).parse(input)
+    }
 
     #[test]
     fn test_scheme() {
-        assert_eq!(scheme("https://yay"), Ok(("yay", Scheme("https".into()))));
-        assert_eq!(scheme("http://yay"), Ok(("yay", Scheme("http".into()))));
-        assert_eq!(scheme("bla://yay"), Ok(("yay", Scheme("bla".into()))));
-        assert_eq!(
-            scheme("bla:/yay"),
-            Err(NomErr::Error(VerboseError {
-                errors: vec![
-                    (":/yay", VerboseErrorKind::Nom(ErrorKind::Tag)),
-                    ("bla:/yay", VerboseErrorKind::Context("scheme")),
-                ]
-            }))
-        );
+        assert_eq!(scheme().parse("https://yay"), Ok(Scheme("https".into())));
+        assert_eq!(scheme().parse("http://yay"), Ok(Scheme("http".into())));
+        assert_eq!(scheme().parse("bla://yay"), Ok(Scheme("bla".into())));
+        assert!(scheme().parse("bla:/yay").is_err());
     }
 
     #[test]
     fn test_authority() {
         assert_eq!(
-            authority("username:password@zupzup.org"),
-            Ok(("zupzup.org", ("username", Some("password"))))
+            authority().parse("username:password@zupzup.org"),
+            Ok(("username", Some("password")))
         );
         assert_eq!(
-            authority("username@zupzup.org"),
-            Ok(("zupzup.org", ("username", None)))
+            authority().parse("username@zupzup.org"),
+            Ok(("username", None))
         );
-        assert_eq!(
-            authority("zupzup.org"),
-            Err(NomErr::Error(VerboseError {
-                errors: vec![
-                    (".org", VerboseErrorKind::Nom(ErrorKind::Tag)),
-                    ("zupzup.org", VerboseErrorKind::Context("authority")),
-                ]
-            }))
-        );
-        assert_eq!(
-            authority(":zupzup.org"),
-            Err(NomErr::Error(VerboseError {
-                errors: vec![
-                    (
-                        ":zupzup.org",
-                        VerboseErrorKind::Nom(ErrorKind::AlphaNumeric)
-                    ),
-                    (":zupzup.org", VerboseErrorKind::Context("authority")),
-                ]
-            }))
-        );
-        assert_eq!(
-            authority("username:passwordzupzup.org"),
-            Err(NomErr::Error(VerboseError {
-                errors: vec![
-                    (".org", VerboseErrorKind::Nom(ErrorKind::Tag)),
-                    (
-                        "username:passwordzupzup.org",
-                        VerboseErrorKind::Context("authority")
-                    ),
-                ]
-            }))
-        );
-        assert_eq!(
-            authority("@zupzup.org"),
-            Err(NomErr::Error(VerboseError {
-                errors: vec![
-                    (
-                        "@zupzup.org",
-                        VerboseErrorKind::Nom(ErrorKind::AlphaNumeric)
-                    ),
-                    ("@zupzup.org", VerboseErrorKind::Context("authority")),
-                ]
-            }))
-        )
+        assert!(authority().parse("zupzup.org").is_err());
+        assert!(authority().parse(":zupzup.org").is_err());
+        assert!(authority().parse("username:passwordzupzup.org").is_err());
+        assert!(authority().parse("@zupzup.org").is_err());
     }
 
     #[test]
     fn test_host() {
         assert_eq!(
-            host("localhost:8080"),
-            Ok((":8080", Host::Host("localhost".to_string())))
+            host().parse("localhost:8080"),
+            Ok(Host::Host("localhost".to_string()))
         );
         assert_eq!(
-            host("example.org:8080"),
-            Ok((":8080", Host::Host("example.org".to_string())))
+            host().parse("example.org:8080"),
+            Ok(Host::Host("example.org".to_string()))
         );
         assert_eq!(
-            host("some-subsite.example.org:8080"),
-            Ok((":8080", Host::Host("some-subsite.example.org".to_string())))
+            host().parse("some-subsite.example.org:8080"),
+            Ok(Host::Host("some-subsite.example.org".to_string()))
         );
         assert_eq!(
-            host("example.123"),
-            Ok((".123", Host::Host("example".to_string())))
+            host().parse("example.123"),
+            Ok(Host::Host("example".to_string()))
         );
-        assert_eq!(
-            host("$$$.com"),
-            Err(NomErr::Error(VerboseError {
-                errors: vec![
-                    ("$$$.com", VerboseErrorKind::Nom(ErrorKind::AlphaNumeric)),
-                    ("$$$.com", VerboseErrorKind::Nom(ErrorKind::ManyMN)),
-                    ("$$$.com", VerboseErrorKind::Nom(ErrorKind::Alt)),
-                    ("$$$.com", VerboseErrorKind::Context("host")),
-                ]
-            }))
-        );
-        assert_eq!(
-            host(".com"),
-            Err(NomErr::Error(VerboseError {
-                errors: vec![
-                    (".com", VerboseErrorKind::Nom(ErrorKind::AlphaNumeric)),
-                    (".com", VerboseErrorKind::Nom(ErrorKind::ManyMN)),
-                    (".com", VerboseErrorKind::Nom(ErrorKind::Alt)),
-                    (".com", VerboseErrorKind::Context("host")),
-                ]
-            }))
-        );
+        assert!(host().parse("$$$.com").is_err());
+        assert!(host().parse(".com").is_err());
     }
 
     #[test]
     fn test_ipv4() {
         assert_eq!(
-            ip("192.168.0.1:8080"),
-            Ok((":8080", Host::IP([192, 168, 0, 1])))
+            ip().parse("192.168.0.1:8080"),
+            Ok(Host::IP([192, 168, 0, 1]))
         );
-        assert_eq!(ip("0.0.0.0:8080"), Ok((":8080", Host::IP([0, 0, 0, 0]))));
+        assert_eq!(ip().parse("0.0.0.0:8080"), Ok(Host::IP([0, 0, 0, 0])));
+        assert!(ip().parse("1924.168.0.1:8080").is_err());
+        assert!(ip().parse("192.168.0000.144:8080").is_err());
         assert_eq!(
-            ip("1924.168.0.1:8080"),
-            Err(NomErr::Error(VerboseError {
-                errors: vec![
-                    ("4.168.0.1:8080", VerboseErrorKind::Nom(ErrorKind::Tag)),
-                    ("1924.168.0.1:8080", VerboseErrorKind::Nom(ErrorKind::Count)),
-                    ("1924.168.0.1:8080", VerboseErrorKind::Context("ip")),
-                ]
-            }))
+            ip().parse("192.168.0.1444:8080"),
+            Ok(Host::IP([192, 168, 0, 144]))
         );
-        assert_eq!(
-            ip("192.168.0000.144:8080"),
-            Err(NomErr::Error(VerboseError {
-                errors: vec![
-                    ("0.144:8080", VerboseErrorKind::Nom(ErrorKind::Tag)),
-                    (
-                        "192.168.0000.144:8080",
-                        VerboseErrorKind::Nom(ErrorKind::Count)
-                    ),
-                    ("192.168.0000.144:8080", VerboseErrorKind::Context("ip")),
-                ]
-            }))
-        );
-        assert_eq!(
-            ip("192.168.0.1444:8080"),
-            Ok(("4:8080", Host::IP([192, 168, 0, 144])))
-        );
-        assert_eq!(
-            ip("192.168.0:8080"),
-            Err(NomErr::Error(VerboseError {
-                errors: vec![
-                    (":8080", VerboseErrorKind::Nom(ErrorKind::Tag)),
-                    ("192.168.0:8080", VerboseErrorKind::Nom(ErrorKind::Count)),
-                    ("192.168.0:8080", VerboseErrorKind::Context("ip")),
-                ]
-            }))
-        );
-        assert_eq!(
-            ip("999.168.0.0:8080"),
-            Err(NomErr::Error(VerboseError {
-                errors: vec![
-                    ("999.168.0.0:8080", VerboseErrorKind::Nom(ErrorKind::Count)),
-                    ("999.168.0.0:8080", VerboseErrorKind::Context("ip")),
-                ]
-            }))
-        );
+        assert!(ip().parse("192.168.0:8080").is_err());
+        assert!(ip().parse("999.168.0.0:8080").is_err());
     }
 
     #[test]
     fn test_url_path() {
-        assert_eq!(url_path("/a/b/c?d"), Ok(("?d", vec!["a", "b", "c"])));
-        assert_eq!(url_path("/a/b/c/?d"), Ok(("?d", vec!["a", "b", "c"])));
+        assert_eq!(url_path().parse("/a/b/c?d"), Ok(vec!["a", "b", "c"]));
+        assert_eq!(url_path().parse("/a/b/c/?d"), Ok(vec!["a", "b", "c"]));
         assert_eq!(
-            url_path("/a/b-c-d/c/?d"),
-            Ok(("?d", vec!["a", "b-c-d", "c"]))
+            url_path().parse("/a/b-c-d/c/?d"),
+            Ok(vec!["a", "b-c-d", "c"])
         );
-        assert_eq!(url_path("/a/1234/c/?d"), Ok(("?d", vec!["a", "1234", "c"])));
+        assert_eq!(url_path().parse("/a/1234/c/?d"), Ok(vec!["a", "1234", "c"]));
         assert_eq!(
-            url_path("/a/1234/c.txt?d"),
-            Ok(("?d", vec!["a", "1234", "c.txt"]))
+            url_path().parse("/a/1234/c.txt?d"),
+            Ok(vec!["a", "1234", "c.txt"])
         );
     }
 
     #[test]
     fn test_query_params() {
         assert_eq!(
-            query_params("?bla=5&blub=val#yay"),
-            Ok(("#yay", vec![("bla", "5"), ("blub", "val")]))
+            query_params().parse("?bla=5&blub=val#yay"),
+            Ok(vec![("bla", "5"), ("blub", "val")])
         );
 
         assert_eq!(
-            query_params("?bla-blub=arr-arr#yay"),
-            Ok(("#yay", vec![("bla-blub", "arr-arr"),]))
+            query_params().parse("?bla-blub=arr-arr#yay"),
+            Ok(vec![("bla-blub", "arr-arr")])
         );
     }
 
     #[test]
     fn test_fragment() {
-        assert_eq!(fragment("#bla"), Ok(("", "bla")));
-        assert_eq!(fragment("#bla-blub"), Ok(("", "bla-blub")));
+        assert_eq!(fragment().parse("#bla"), Ok("bla"));
+        assert_eq!(fragment().parse("#bla-blub"), Ok("bla-blub"));
     }
 
     #[test]
     fn test_url() {
         assert_eq!(
-            url("https://www.zupzup.org/about/"),
-            Ok((
-                "",
-                Url {
-                    scheme: Scheme("https".into()),
-                    authority: None,
-                    host: Host::Host("www.zupzup.org".to_string()),
-                    port: None,
-                    path: Some(vec!["about"]),
-                    query: None,
-                    fragment: None
-                }
-            ))
+            parse_with(url_parser(), "https://www.zupzup.org/about/"),
+            Ok(Url {
+                scheme: Scheme("https".into()),
+                authority: None,
+                host: Host::Host("www.zupzup.org".to_string()),
+                port: None,
+                path: Some(vec!["about"]),
+                query: None,
+                fragment: None
+            })
         );
 
         assert_eq!(
-            url("http://localhost"),
-            Ok((
-                "",
-                Url {
-                    scheme: Scheme("http".into()),
-                    authority: None,
-                    host: Host::Host("localhost".to_string()),
-                    port: None,
-                    path: None,
-                    query: None,
-                    fragment: None
-                }
-            ))
+            parse_with(url_parser(), "http://localhost"),
+            Ok(Url {
+                scheme: Scheme("http".into()),
+                authority: None,
+                host: Host::Host("localhost".to_string()),
+                port: None,
+                path: None,
+                query: None,
+                fragment: None
+            })
         );
 
         assert_eq!(
-            url("https://www.zupzup.org:443/about/?someVal=5#anchor"),
-            Ok((
-                "",
-                Url {
-                    scheme: Scheme("https".into()),
-                    authority: None,
-                    host: Host::Host("www.zupzup.org".to_string()),
-                    port: Some(443),
-                    path: Some(vec!["about"]),
-                    query: Some(vec![("someVal", "5")]),
-                    fragment: Some("anchor")
-                }
-            ))
+            parse_with(
+                url_parser(),
+                "https://www.zupzup.org:443/about/?someVal=5#anchor"
+            ),
+            Ok(Url {
+                scheme: Scheme("https".into()),
+                authority: None,
+                host: Host::Host("www.zupzup.org".to_string()),
+                port: Some(443),
+                path: Some(vec!["about"]),
+                query: Some(vec![("someVal", "5")]),
+                fragment: Some("anchor")
+            })
         );
 
         assert_eq!(
-            url("http://user:pw@127.0.0.1:8080"),
-            Ok((
-                "",
-                Url {
-                    scheme: Scheme("http".into()),
-                    authority: Some(("user", Some("pw"))),
-                    host: Host::IP([127, 0, 0, 1]),
-                    port: Some(8080),
-                    path: None,
-                    query: None,
-                    fragment: None
-                }
-            ))
+            parse_with(url_parser(), "http://user:pw@127.0.0.1:8080"),
+            Ok(Url {
+                scheme: Scheme("http".into()),
+                authority: Some(("user", Some("pw"))),
+                host: Host::IP([127, 0, 0, 1]),
+                port: Some(8080),
+                path: None,
+                query: None,
+                fragment: None
+            })
         );
     }
 }

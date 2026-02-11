@@ -1,305 +1,406 @@
-use super::{convert_error, NomRes};
+use super::{convert_error, ParseError};
 use crate::{
     api::*,
-    guard_ok,
     prog::{parse_url::*, path::*},
 };
-use nom::{
-    branch::alt,
-    bytes::complete::{escaped, tag, take_till},
-    character::complete::{anychar, digit1, none_of, one_of, space0},
-    combinator::{all_consuming, opt, recognize},
-    error::{context, VerboseError, VerboseErrorKind},
-    multi::{many0, many1, separated_list0, separated_list1},
-    sequence::{delimited, tuple},
-};
-use std::str::{from_utf8, FromStr};
+use chumsky::prelude::*;
+use std::str::FromStr;
+
+// TODO: this is not ok, remove this function and fix the problems
+fn leak_str(s: String) -> &'static str {
+    Box::leak(s.into_boxed_str())
+}
 
 pub fn parse_path(input: &str) -> Res<Path<'_>> {
-    let path_res = all_consuming(path_items)(input);
-    let path = guard_ok!(path_res, err => { return userres(convert_error(input, err))});
-    Ok(path.1)
+    path_items_parser()
+        .then_ignore(end())
+        .parse(input)
+        .map_err(|err| usererr(convert_error(input, err)))
 }
 
 pub fn parse_path_with_starter(input: &str) -> Res<(PathStart<'_>, Path<'_>)> {
-    let path_res = all_consuming(path_with_starter)(input);
-    let path = guard_ok!(path_res, err => { return userres(convert_error(input, err))});
-    Ok(path.1)
+    path_with_starter_parser()
+        .then_ignore(end())
+        .parse(input)
+        .map_err(|err| usererr(convert_error(input, err)))
 }
 
-pub fn path_with_starter(input: &str) -> NomRes<&str, (PathStart<'_>, Path<'_>)> {
-    context("path", tuple((path_start, space0, path_items)))(input)
-        .map(|(next_input, res)| (next_input, (res.0, res.2)))
+fn ws() -> impl Parser<char, (), Error = ParseError> + Clone {
+    filter(|c: &char| c.is_whitespace()).repeated().ignored()
 }
 
-fn path_start(input: &str) -> NomRes<&str, PathStart<'_>> {
-    context(
-        "path_start",
-        alt((path_start_url, path_start_file, path_start_string)),
-    )(input)
+fn identifier_parser() -> impl Parser<char, String, Error = ParseError> + Clone {
+    filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_')
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
+        .labelled("identifier")
 }
 
-fn path_start_url(input: &str) -> NomRes<&str, PathStart<'_>> {
-    context("path_start_url", url)(input).map(|(next_input, res)| (next_input, PathStart::Url(res)))
-}
-
-fn path_start_file(input: &str) -> NomRes<&str, PathStart<'_>> {
-    context(
-        "path_start_file",
-        tuple((
-            alt((tag("/"), tag("."), tag("~"))),
-            separated_list0(tag("/"), path_code_points),
-        )),
-    )(input)
-    .map(|(next_input, res)| {
-        let mut len: usize = res.0.len();
-        len += res.1.into_iter().map(|s| s.len() + 1).sum::<usize>();
-        (next_input, PathStart::File(input[0..len].to_string()))
-    })
-}
-
-fn path_start_string(input: &str) -> NomRes<&str, PathStart<'_>> {
-    context("path_start_string", string)(input)
-        .map(|(next_input, res)| (next_input, PathStart::String(res)))
-}
-
-fn path_items(input: &str) -> NomRes<&str, Path<'_>> {
-    context("path_items", many0(path_item))(input).map(|(next_input, res)| {
-        let path_items = res.iter().map(|p| p.to_owned()).collect();
-        (next_input, Path(path_items))
-    })
-}
-
-fn path_item(input: &str) -> NomRes<&str, PathItem<'_>> {
-    context("path_item", alt((elevation_path_item, normal_path_item)))(input)
-}
-
-fn elevation_path_item(input: &str) -> NomRes<&str, PathItem<'_>> {
-    context(
-        "elevation path item",
-        tuple((
-            space0,
-            tag("^"),
-            space0,
-            path_item_selector,
-            space0,
-            many0(interpretation_param),
-        )),
-    )(input)
-    .map(|(next_input, res)| {
-        (
-            next_input,
-            PathItem::Elevation(ElevationPathItem {
-                interpretation: res.3,
-                params: res.5,
-            }),
+fn number_isize_parser() -> impl Parser<char, isize, Error = ParseError> + Clone {
+    one_of("+-")
+        .or_not()
+        .then(
+            filter(|c: &char| c.is_ascii_digit())
+                .repeated()
+                .at_least(1)
+                .collect::<String>(),
         )
-    })
-}
-
-fn normal_path_item(input: &str) -> NomRes<&str, PathItem<'_>> {
-    context(
-        "normal path item",
-        tuple((
-            space0,
-            relation,
-            space0,
-            opt(path_item_selector),
-            space0,
-            opt(path_item_index),
-            space0,
-            many0(filter),
-            space0,
-        )),
-    )(input)
-    .and_then(|(next_input, res)| {
-        if res.3.is_none() && res.5.is_none() {
-            Err(nom::Err::Error(VerboseError { errors: vec![] }))
-        } else {
-            let npi = NormalPathItem {
-                relation: Relation::try_from(res.1).unwrap_or_else(|_| panic!("bad relation")),
-                selector: res.3,
-                index: res.5,
-                filters: res.7,
-            };
-            if npi.relation == Relation::Field && !npi.filters.is_empty() {
-                Err(nom::Err::Error(VerboseError {
-                    errors: vec![(
-                        next_input,
-                        VerboseErrorKind::Context("field relation cannot have filters"),
-                    )],
-                }))
-            } else {
-                Ok((next_input, PathItem::Normal(npi)))
+        .try_map(|(sign, digits), span| {
+            let mut raw = String::new();
+            if let Some(sign) = sign {
+                raw.push(sign);
             }
-        }
+            raw.push_str(&digits);
+            isize::from_str(raw.as_str()).map_err(|_| Simple::custom(span, "invalid number"))
+        })
+        .labelled("number")
+}
+
+fn quoted_parser(quote: char) -> impl Parser<char, String, Error = ParseError> + Clone {
+    let inner = choice((
+        just('\\').ignore_then(any()).map(|c| {
+            let mut out = String::from("\\");
+            out.push(c);
+            out
+        }),
+        filter(move |c: &char| *c != quote && *c != '\\').map(|c| c.to_string()),
+    ))
+    .repeated()
+    .collect::<Vec<String>>()
+    .map(|parts| parts.concat());
+
+    just(quote)
+        .ignore_then(inner)
+        .then_ignore(just(quote))
+        .map(move |raw| unescape_string(raw.as_str(), quote))
+}
+
+fn string_parser() -> impl Parser<char, String, Error = ParseError> + Clone {
+    choice((quoted_parser('\''), quoted_parser('"'))).labelled("string")
+}
+
+fn operation_parser<'a>() -> impl Parser<char, &'a str, Error = ParseError> + Clone {
+    choice((just("==").to("=="), just("!=").to("!="))).labelled("operation")
+}
+
+pub(super) fn value_int_parser() -> impl Parser<char, OwnValue, Error = ParseError> + Clone {
+    number_isize_parser()
+        .map(|num| OwnValue::from(num as i64))
+        .labelled("value_int")
+}
+
+fn value_string_parser() -> impl Parser<char, OwnValue, Error = ParseError> + Clone {
+    string_parser()
+        .map(OwnValue::String)
+        .labelled("value_string")
+}
+
+fn value_ident_parser() -> impl Parser<char, OwnValue, Error = ParseError> + Clone {
+    identifier_parser()
+        .map(OwnValue::String)
+        .labelled("value_ident")
+}
+
+pub(super) fn rvalue_parser() -> impl Parser<char, OwnValue, Error = ParseError> + Clone {
+    choice((
+        value_string_parser(),
+        value_int_parser(),
+        value_ident_parser(),
+    ))
+    .labelled("value")
+}
+
+fn relation_parser() -> impl Parser<char, Relation, Error = ParseError> + Clone {
+    let rels = [
+        Relation::Attr as u8 as char,
+        Relation::Sub as u8 as char,
+        Relation::Interpretation as u8 as char,
+        Relation::Field as u8 as char,
+    ];
+    one_of(rels)
+        .map(|c| Relation::try_from(c).unwrap_or_else(|_| panic!("bad relation")))
+        .labelled("relation")
+}
+
+fn path_start_parser<'a>() -> impl Parser<char, PathStart<'a>, Error = ParseError> + Clone {
+    let path_start_url = url_parser().map(PathStart::Url).labelled("path_start_url");
+    let path_start_file = one_of("/.~")
+        .then(path_code_points().separated_by(just('/')))
+        .map(|(starter, parts)| {
+            let mut full = starter.to_string();
+            if !parts.is_empty() {
+                full.push_str(parts.join("/").as_str());
+            }
+            PathStart::File(full)
+        })
+        .labelled("path_start_file");
+    let path_start_string = string_parser()
+        .map(PathStart::String)
+        .labelled("path_start_string");
+    choice((path_start_url, path_start_file, path_start_string)).labelled("path_start")
+}
+
+pub(super) fn path_with_starter_parser<'a>(
+) -> impl Parser<char, (PathStart<'a>, Path<'a>), Error = ParseError> + Clone {
+    path_start_parser()
+        .then_ignore(ws())
+        .then(path_items_parser())
+        .labelled("path")
+}
+
+pub(super) fn path_items_parser<'a>() -> impl Parser<char, Path<'a>, Error = ParseError> + Clone {
+    recursive(|path_items| {
+        let path_item_selector = path_code_points()
+            .map(|s| Selector::from(leak_str(s)))
+            .labelled("path_item_selector");
+        let path_item_index = just('[')
+            .ignore_then(number_isize_parser())
+            .then_ignore(just(']'))
+            .labelled("path_item_index");
+        let type_expression = just(':')
+            .ignore_then(identifier_parser())
+            .map(|ty| Expression::Type { ty })
+            .labelled("type expression");
+        let ternary_expression = path_item_parser(path_items.clone())
+            .repeated()
+            .map(Path)
+            .then(
+                ws().ignore_then(operation_parser().then_ignore(ws()).then(rvalue_parser()))
+                    .or_not(),
+            )
+            .try_map(|(left, op_right), span| {
+                if left.0.is_empty() && op_right.is_none() {
+                    return Err(Simple::custom(span, "empty ternary expression"));
+                }
+                Ok(Expression::Ternary { left, op_right })
+            })
+            .labelled("ternary expression");
+        let expression = ws()
+            .ignore_then(
+                choice((type_expression, ternary_expression))
+                    .separated_by(just('|'))
+                    .at_least(1),
+            )
+            .map(|expressions: Vec<Expression<'_>>| {
+                if expressions.len() == 1 {
+                    expressions.into_iter().next().unwrap()
+                } else {
+                    Expression::Or { expressions }
+                }
+            })
+            .labelled("expression");
+        let filter = just('[')
+            .ignore_then(expression)
+            .then_ignore(just(']'))
+            .map(|expr| Filter { expr })
+            .labelled("filter");
+
+        let interpretation_param_longform = identifier_parser()
+            .then_ignore(ws())
+            .then_ignore(just('='))
+            .then_ignore(ws())
+            .then(rvalue_parser())
+            .map(|(name, value)| InterpretationParam {
+                name: Some(name),
+                value,
+            })
+            .labelled("interpretation parameter longform");
+        let interpretation_param_shortform =
+            choice((rvalue_parser(), identifier_parser().map(OwnValue::String)))
+                .map(|value| InterpretationParam { name: None, value })
+                .labelled("interpretation parameter shortform");
+        let interpretation_param = just('[')
+            .ignore_then(ws())
+            .ignore_then(choice((
+                interpretation_param_longform,
+                interpretation_param_shortform,
+            )))
+            .then_ignore(ws())
+            .then_ignore(just(']'))
+            .labelled("interpretation parameter");
+
+        let elevation_path_item = ws()
+            .ignore_then(just('^'))
+            .ignore_then(ws())
+            .ignore_then(path_item_selector.clone())
+            .then_ignore(ws())
+            .then(interpretation_param.repeated())
+            .map(|(interpretation, params)| {
+                PathItem::Elevation(ElevationPathItem {
+                    interpretation,
+                    params,
+                })
+            })
+            .labelled("elevation path item");
+
+        let normal_path_item = ws()
+            .ignore_then(relation_parser())
+            .then_ignore(ws())
+            .then(path_item_selector.or_not())
+            .then_ignore(ws())
+            .then(path_item_index.or_not())
+            .then_ignore(ws())
+            .then(filter.repeated())
+            .then_ignore(ws())
+            .try_map(|(((relation, selector), index), filters), span| {
+                if selector.is_none() && index.is_none() {
+                    return Err(Simple::custom(
+                        span,
+                        "normal path item requires selector or index",
+                    ));
+                }
+                if relation == Relation::Field && !filters.is_empty() {
+                    return Err(Simple::custom(span, "field relation cannot have filters"));
+                }
+                Ok(PathItem::Normal(NormalPathItem {
+                    relation,
+                    selector,
+                    index,
+                    filters,
+                }))
+            })
+            .labelled("normal path item");
+
+        choice((elevation_path_item, normal_path_item))
+            .repeated()
+            .map(Path)
+            .labelled("path_items")
     })
 }
 
-fn path_item_selector(input: &str) -> NomRes<&str, Selector<'_>> {
-    context("path_item_selector", path_code_points)(input)
-        .map(|(next_input, res)| (next_input, Selector::from(res)))
-}
-
-fn path_item_index(input: &str) -> NomRes<&str, isize> {
-    context(
-        "path_item_index",
-        delimited(tag("["), number_isize, tag("]")),
-    )(input)
-}
-
-fn filter(input: &str) -> NomRes<&str, Filter<'_>> {
-    context("filter", delimited(tag("["), expression, tag("]")))(input)
-        .map(|(next_input, res)| (next_input, Filter { expr: res }))
-}
-
-fn expression(input: &str) -> NomRes<&str, Expression<'_>> {
-    context(
-        "expression",
-        tuple((
-            space0,
-            separated_list1(tag("|"), alt((type_expression, ternary_expression))),
-        )),
-    )(input)
-    .map(|(next_input, res)| {
-        (
-            next_input,
-            if res.1.len() == 1 {
-                res.1.into_iter().next().unwrap()
+fn path_item_parser<'a>(
+    path_items: impl Parser<char, Path<'a>, Error = ParseError> + Clone + 'a,
+) -> impl Parser<char, PathItem<'a>, Error = ParseError> + Clone {
+    let path_item_selector = path_code_points()
+        .map(|s| Selector::from(leak_str(s)))
+        .labelled("path_item_selector");
+    let path_item_index = just('[')
+        .ignore_then(number_isize_parser())
+        .then_ignore(just(']'))
+        .labelled("path_item_index");
+    let type_expression = just(':')
+        .ignore_then(identifier_parser())
+        .map(|ty| Expression::Type { ty })
+        .labelled("type expression");
+    let ternary_expression = path_items
+        .clone()
+        .then(
+            ws().ignore_then(operation_parser().then_ignore(ws()).then(rvalue_parser()))
+                .or_not(),
+        )
+        .try_map(|(left, op_right), span| {
+            if left.0.is_empty() && op_right.is_none() {
+                return Err(Simple::custom(span, "empty ternary expression"));
+            }
+            Ok(Expression::Ternary { left, op_right })
+        })
+        .labelled("ternary expression");
+    let expression = ws()
+        .ignore_then(
+            choice((type_expression, ternary_expression))
+                .separated_by(just('|'))
+                .at_least(1),
+        )
+        .map(|expressions: Vec<Expression<'_>>| {
+            if expressions.len() == 1 {
+                expressions.into_iter().next().unwrap()
             } else {
-                Expression::Or { expressions: res.1 }
-            },
-        )
-    })
-}
+                Expression::Or { expressions }
+            }
+        })
+        .labelled("expression");
+    let filter = just('[')
+        .ignore_then(expression)
+        .then_ignore(just(']'))
+        .map(|expr| Filter { expr })
+        .labelled("filter");
+    let interpretation_param_longform = identifier_parser()
+        .then_ignore(ws())
+        .then_ignore(just('='))
+        .then_ignore(ws())
+        .then(rvalue_parser())
+        .map(|(name, value)| InterpretationParam {
+            name: Some(name),
+            value,
+        })
+        .labelled("interpretation parameter longform");
+    let interpretation_param_shortform =
+        choice((rvalue_parser(), identifier_parser().map(OwnValue::String)))
+            .map(|value| InterpretationParam { name: None, value })
+            .labelled("interpretation parameter shortform");
+    let interpretation_param = just('[')
+        .ignore_then(ws())
+        .ignore_then(choice((
+            interpretation_param_longform,
+            interpretation_param_shortform,
+        )))
+        .then_ignore(ws())
+        .then_ignore(just(']'))
+        .labelled("interpretation parameter");
 
-fn ternary_expression(input: &str) -> NomRes<&str, Expression<'_>> {
-    context(
-        "ternary expression",
-        tuple((path_items, space0, opt(tuple((operation, space0, rvalue))))),
-    )(input)
-    .map(|(next_input, (left, _, opts))| {
-        (
-            next_input,
-            Expression::Ternary {
-                left,
-                op_right: opts.map(|(op, _, right)| (op, right)),
-            },
-        )
-    })
-}
+    let elevation_path_item = ws()
+        .ignore_then(just('^'))
+        .ignore_then(ws())
+        .ignore_then(path_item_selector.clone())
+        .then_ignore(ws())
+        .then(interpretation_param.repeated())
+        .map(|(interpretation, params)| {
+            PathItem::Elevation(ElevationPathItem {
+                interpretation,
+                params,
+            })
+        })
+        .labelled("elevation path item");
+    let normal_path_item = ws()
+        .ignore_then(relation_parser())
+        .then_ignore(ws())
+        .then(path_item_selector.or_not())
+        .then_ignore(ws())
+        .then(path_item_index.or_not())
+        .then_ignore(ws())
+        .then(filter.repeated())
+        .then_ignore(ws())
+        .try_map(|(((relation, selector), index), filters), span| {
+            if selector.is_none() && index.is_none() {
+                return Err(Simple::custom(
+                    span,
+                    "normal path item requires selector or index",
+                ));
+            }
+            if relation == Relation::Field && !filters.is_empty() {
+                return Err(Simple::custom(span, "field relation cannot have filters"));
+            }
+            Ok(PathItem::Normal(NormalPathItem {
+                relation,
+                selector,
+                index,
+                filters,
+            }))
+        })
+        .labelled("normal path item");
 
-fn type_expression(input: &str) -> NomRes<&str, Expression<'_>> {
-    context("type expression", tuple((tag(":"), identifier)))(input)
-        .map(|(next_input, res)| (next_input, Expression::Type { ty: res.1 }))
-}
-
-fn interpretation_param(input: &str) -> NomRes<&str, InterpretationParam> {
-    context(
-        "interpretation parameter",
-        delimited(
-            tag("["),
-            tuple((
-                space0,
-                alt((
-                    interpretation_param_longform,
-                    interpretation_param_shortform,
-                )),
-                space0,
-            )),
-            tag("]"),
-        ),
-    )(input)
-    .map(|(next_input, res)| (next_input, res.1))
-}
-
-fn interpretation_param_longform(input: &str) -> NomRes<&str, InterpretationParam> {
-    context(
-        "interpretation parameter longform",
-        tuple((identifier, space0, tag("="), space0, rvalue)),
-    )(input)
-    .map(|(next_input, res)| {
-        (
-            next_input,
-            InterpretationParam {
-                name: Some(res.0),
-                value: res.4,
-            },
-        )
-    })
-}
-
-fn interpretation_param_shortform(input: &str) -> NomRes<&str, InterpretationParam> {
-    context(
-        "interpretation parameter shortform",
-        alt((rvalue, |input| {
-            identifier(input).map(|(next_input, res)| (next_input, OwnValue::String(res)))
-        })),
-    )(input)
-    .map(|(next_input, res)| {
-        (
-            next_input,
-            InterpretationParam {
-                name: None,
-                value: res,
-            },
-        )
-    })
-}
-
-fn relation(input: &str) -> NomRes<&str, char> {
-    context(
-        "relation",
-        alt((
-            tag(from_utf8(&[Relation::Attr as u8]).unwrap()),
-            tag(from_utf8(&[Relation::Sub as u8]).unwrap()),
-            tag(from_utf8(&[Relation::Interpretation as u8]).unwrap()),
-            tag(from_utf8(&[Relation::Field as u8]).unwrap()),
-        )),
-    )(input)
-    .map(|(next_input, res)| (next_input, res.chars().next().unwrap()))
-}
-
-pub(super) fn rvalue(input: &str) -> NomRes<&str, OwnValue> {
-    context("value", alt((value_string, value_int, value_ident)))(input)
-}
-
-fn value_ident(input: &str) -> NomRes<&str, OwnValue> {
-    context("value ident", identifier)(input)
-        .map(|(next_input, res)| (next_input, OwnValue::String(res.to_string())))
-}
-
-fn value_string(input: &str) -> NomRes<&str, OwnValue> {
-    context("value_string", string)(input)
-        .map(|(next_input, res)| (next_input, OwnValue::String(res)))
-}
-
-pub(super) fn value_int(input: &str) -> NomRes<&str, OwnValue> {
-    context("value_int", number_isize)(input)
-        .map(|(next_input, num)| (next_input, OwnValue::from(num as i64)))
-}
-
-fn identifier(input: &str) -> NomRes<&str, String> {
-    fn accept(c: char) -> bool {
-        c.is_alphanumeric() || c == '_'
-    }
-    context("identifier", take_till(|c| !accept(c)))(input)
-        .map(|(next_input, res)| (next_input, res.to_string()))
-}
-
-fn string(input: &str) -> NomRes<&str, String> {
-    context("string", alt((parse_quoted_single, parse_quoted_double)))(input)
+    choice((elevation_path_item, normal_path_item)).labelled("path_item")
 }
 
 #[cfg(test)]
 #[test]
 fn test_parse_string() {
-    assert_eq!(string(r#""(\w+)""#).unwrap().1, r#"(\w+)"#);
-    assert_eq!(string(r#"'(\w+)'"#).unwrap().1, r#"(\w+)"#);
-    assert_eq!(string(r#""(\\w+)""#).unwrap().1, r#"(\w+)"#);
     assert_eq!(
-        string(r#""(\w+.\w+)@(\w+)""#).unwrap().1,
-        r#"(\w+.\w+)@(\w+)"#
+        string_parser().parse(r#""(\w+)""#),
+        Ok(r#"(\w+)"#.to_string())
+    );
+    assert_eq!(
+        string_parser().parse(r#"'(\w+)'"#),
+        Ok(r#"(\w+)"#.to_string())
+    );
+    assert_eq!(
+        string_parser().parse(r#""(\\w+)""#),
+        Ok(r#"(\w+)"#.to_string())
+    );
+    assert_eq!(
+        string_parser().parse(r#""(\w+.\w+)@(\w+)""#),
+        Ok(r#"(\w+.\w+)@(\w+)"#.to_string())
     );
 }
 
@@ -320,33 +421,4 @@ fn unescape_string(s: &str, special: char) -> String {
         }
     }
     r
-}
-
-fn parse_quoted_single(input: &str) -> NomRes<&str, String> {
-    let esc = escaped(none_of("\'\\"), '\\', anychar);
-    let esc_or_empty = alt((esc, tag("")));
-    delimited(tag("'"), esc_or_empty, tag("'"))(input)
-        .map(|(next_input, res)| (next_input, unescape_string(res, '\'')))
-}
-
-fn parse_quoted_double(input: &str) -> NomRes<&str, String> {
-    let esc = escaped(none_of("\"\\"), '\\', anychar);
-    let esc_or_empty = alt((esc, tag("")));
-    delimited(tag("\""), esc_or_empty, tag("\""))(input)
-        .map(|(next_input, res)| (next_input, unescape_string(res, '"')))
-}
-
-fn number_isize(input: &str) -> NomRes<&str, isize> {
-    context(
-        "number",
-        recognize(tuple((opt(one_of("+-")), many1(digit1)))),
-    )(input)
-    .map(|(next_input, res)| {
-        let n = isize::from_str(res).unwrap_or_else(|_| panic!("parse error, logic error"));
-        (next_input, n)
-    })
-}
-
-fn operation(input: &str) -> NomRes<&str, &str> {
-    context("operation", alt((tag("=="), tag("!="))))(input)
 }
