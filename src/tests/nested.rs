@@ -4,7 +4,7 @@ use crate::{api::*, pprint, utils::log::set_verbose};
 fn test_nested_0() -> Res<()> {
     set_verbose(true);
 
-    let yxj = r#"{"one": ["<?xml?><root>mytext: This is my yaml string</root>"]}"#;
+    let yxj = r#"{"one": ["<?xml version='1.0'?><root>mytext: This is my yaml string</root>"]}"#;
 
     let cell = Xell::from(yxj).to("^json/one/[0]^xml/root");
     assert_eq!(cell.read().value()?, "mytext: This is my yaml string");
@@ -20,8 +20,8 @@ fn test_nested_mut() -> Res<()> {
     set_verbose(true);
 
     println!("1");
-    let text = Xell::from(r#"{"one": ["<?xml?><root><a>mytext: yaml string</a></root>"]}"#)
-        .policy(WritePolicy::WriteBackOnDrop);
+    let s = r#"{"one": ["<?xml version='1.0'?><root><a>mytext: yaml string</a></root>"]}"#;
+    let text = Xell::from(s).policy(WritePolicy::WriteBackOnDrop);
 
     println!("2");
     {
@@ -62,7 +62,7 @@ fn test_nested_mut() -> Res<()> {
 
     assert_eq!(
         text.read().value()?,
-        r#"{"one":["<?xml?><root><a>mytext: NEW YAML STRING</a></root>"]}"#
+        r#"{"one":["<?xml version=\"1.0\"?><root><a>mytext: NEW YAML STRING</a></root>"]}"#
     );
 
     Ok(())
