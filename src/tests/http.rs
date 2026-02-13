@@ -12,7 +12,7 @@ fn test_http_basic() -> Res<()> {
     let cell = Xell::new("http://api.github.com^http[HEAD]");
     pprint(&cell, 0, 0);
     assert_eq!(cell.to("@status/code").read().value()?, Value::from(200));
-    assert!(cell.read().value()?.as_cow_str().len() == 0);
+    assert!(cell.read().value()?.as_cow_str().is_empty());
 
     Ok(())
 }

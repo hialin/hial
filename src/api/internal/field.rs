@@ -85,7 +85,7 @@ impl GroupTrait for Group {
                 .read()
                 .value()
                 .err()
-                .map_or(false, |e| e.kind == HErrKind::None)
+                .is_some_and(|e| e.kind == HErrKind::None)
         {
             return nores();
         }
@@ -95,7 +95,7 @@ impl GroupTrait for Group {
                 .read()
                 .label()
                 .err()
-                .map_or(false, |e| e.kind == HErrKind::None)
+                .is_some_and(|e| e.kind == HErrKind::None)
         {
             return nores();
         }

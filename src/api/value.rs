@@ -56,7 +56,7 @@ impl Eq for Int {}
 
 impl PartialOrd for Int {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.as_i128().cmp(&other.as_i128()))
+        Some(self.cmp(other))
     }
 }
 

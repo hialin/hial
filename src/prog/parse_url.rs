@@ -3,6 +3,7 @@ use crate::prog::url::*;
 use super::ParseError;
 use chumsky::prelude::*;
 
+// TODO: this is not ok, remove this function and fix the problems
 fn leak_str(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
@@ -63,7 +64,7 @@ fn authority<'a>() -> impl Parser<char, Authority<'a>, Error = ParseError> + Clo
         .labelled("authority")
 }
 
-fn host<'a>() -> impl Parser<char, Host, Error = ParseError> + Clone {
+fn host() -> impl Parser<char, Host, Error = ParseError> + Clone {
     let dotted = alphanumerichyphen1()
         .then_ignore(just('.'))
         .repeated()
@@ -104,7 +105,7 @@ fn ip() -> impl Parser<char, Host, Error = ParseError> + Clone {
         .labelled("ip")
 }
 
-fn ip_or_host<'a>() -> impl Parser<char, Host, Error = ParseError> + Clone {
+fn ip_or_host() -> impl Parser<char, Host, Error = ParseError> + Clone {
     choice((ip(), host())).labelled("ip or host")
 }
 
@@ -187,9 +188,9 @@ pub(super) fn url_parser<'a>() -> impl Parser<char, Url<'a>, Error = ParseError>
 mod tests {
     use super::*;
 
-    fn parse_with<'a, O>(
+    fn parse_with<O>(
         parser: impl Parser<char, O, Error = ParseError>,
-        input: &'a str,
+        input: &str,
     ) -> Result<O, Vec<ParseError>> {
         parser.then_ignore(end()).parse(input)
     }

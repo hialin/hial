@@ -378,7 +378,7 @@ impl GroupTrait for Group {
 
     fn at(&self, index: usize) -> Res<Cell> {
         match &self.nodes {
-            NodeGroup::Array(ref array)
+            NodeGroup::Array(array)
                 if index
                     < array
                         .read()
@@ -390,7 +390,7 @@ impl GroupTrait for Group {
                     pos: index,
                 })
             }
-            NodeGroup::Object(ref o)
+            NodeGroup::Object(o)
                 if index < o.read().ok_or_else(|| lockerr("cannot read group"))?.len() =>
             {
                 Ok(Cell {

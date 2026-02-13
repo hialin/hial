@@ -72,7 +72,7 @@ pub trait GroupTrait: Clone + Debug {
     fn label_type(&self) -> LabelType;
     fn len(&self) -> Res<usize>;
     fn is_empty(&self) -> bool {
-        self.len().map_or(false, |l| l == 0)
+        self.len().is_ok_and(|l| l == 0)
     }
     fn at(&self, index: usize) -> Res<Self::Cell>;
     fn get_all(&self, label: Value<'_>) -> Res<Self::CellIterator>;

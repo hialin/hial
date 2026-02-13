@@ -8,7 +8,7 @@ use crate::{
     api::{internal::*, interpretation::*, *},
     enumerated_dynamic_type, guard_ok, guard_some,
     interpretations::*,
-    prog::{searcher::Searcher, Path},
+    prog::{Path, searcher::Searcher},
     warning,
 };
 
@@ -311,6 +311,7 @@ impl Xell {
 
     pub fn try_new(path_with_start: &str) -> Res<Xell> {
         let (start, path) = Path::parse_with_starter(path_with_start)?;
+        println!("start: {:?}, path: {:?}", start, path);
         let root = start.eval()?;
         let mut searcher = Searcher::new(root, path);
         let path = format!("{}{}", start, searcher.unmatched_path().as_str());
@@ -834,7 +835,7 @@ impl Group {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len().map_or(false, |l| l == 0)
+        self.len().is_ok_and(|l| l == 0)
     }
 
     pub fn at(&self, index: usize) -> Xell {

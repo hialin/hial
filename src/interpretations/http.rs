@@ -82,10 +82,10 @@ impl Cell {
                 if method.as_cow_str().as_ref() == HEAD_METHOD {
                     m = HEAD_METHOD
                 }
-            } else if let Some(method) = params.get(&Value::from(0)) {
-                if method.as_value() == Value::Str(HEAD_METHOD) {
-                    m = HEAD_METHOD
-                }
+            } else if let Some(method) = params.get(&Value::from(0))
+                && method.as_value() == Value::Str(HEAD_METHOD)
+            {
+                m = HEAD_METHOD
             };
             m
         };

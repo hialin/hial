@@ -143,7 +143,11 @@ fn sitter_from_source(source: String, language: String) -> Res<Cell> {
         domain: domain.clone(),
         // TODO: find alternative for this unsafe change of lifetime to 'static
         // this should be safe as long as the tree is in Rc and not modified
-        cursor: unsafe { std::mem::transmute(domain.tree.walk()) },
+        cursor: unsafe {
+            std::mem::transmute::<tree_sitter::TreeCursor<'_>, tree_sitter::TreeCursor<'_>>(
+                domain.tree.walk(),
+            )
+        },
         position: 0,
     })
 }

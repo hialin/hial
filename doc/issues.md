@@ -1,5 +1,9 @@
 # List of Todos and other Issues
 
+- color the output of pprint
+    - maybe stream the found cells, colorize separately
+- switch to anyhow errors
+
 - add split(":") interpretation, read-write
 - '**[filter]' must work as '**/*[filter]' (filter to be applied only on leaves)
 - support rust/ts write: `hial './src/tests/rust.rs^rust/*[:function_item].label = "modified_fn_name"'`

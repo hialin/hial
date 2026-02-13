@@ -250,11 +250,11 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 counts.count_attributes += a.len();
                 let name = decoder.decode(e.name().0).map_err(|e| deformed(e.to_string()))?;
                 let mut text = String::new();
-                if let Some(Node::Text(t)) = v.first() {
-                    if !t.trim().is_empty() {
-                        // TODO: use a deque to avoid shifting elements on remove
-                        text = guard_variant!(v.remove(0), Node::Text).unwrap();
-                    }
+                if let Some(Node::Text(t)) = v.first()
+                    && !t.trim().is_empty()
+                {
+                    // TODO: use a deque to avoid shifting elements on remove
+                    text = guard_variant!(v.remove(0), Node::Text).unwrap();
                 }
                 let element = Node::Element((name.into(), OwnRc::new(a), text, OwnRc::new(v)));
                 last(&mut stack)?.push(element);
@@ -332,7 +332,7 @@ impl CellReaderTrait for CellReader {
                 Node::DocType(x) => Ok(Value::Str(x.trim())),
                 Node::PI(x) => Ok(Value::Str(x)),
                 Node::Element((_, _, text, _)) => {
-                    return Ok(Value::Str(text.as_str()));
+                    Ok(Value::Str(text.as_str()))
                 }
                 Node::Text(x) => Ok(Value::Str(x)),
                 Node::Comment(x) => Ok(Value::Str(x)),

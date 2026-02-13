@@ -307,7 +307,7 @@ fn yaml_to_value(s: &Yaml) -> Res<Value<'_>> {
             Value::Float(StrFloat(f))
         }
         Yaml::Alias(n) => Value::Str("alias"),
-        Yaml::String(ref s) => Value::Str(s.as_str()),
+        Yaml::String(s) => Value::Str(s.as_str()),
         Yaml::BadValue => Value::Str("badvalue"),
         _ => Value::None,
     })

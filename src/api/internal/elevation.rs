@@ -216,7 +216,7 @@ impl GroupTrait for Group {
     }
 
     fn is_empty(&self) -> bool {
-        self.len().map_or(false, |x| x == 0)
+        self.len().is_ok_and(|x| x == 0)
     }
 
     fn at(&self, index: usize) -> Res<Self::Cell> {
@@ -310,10 +310,10 @@ impl Group {
                 };
             }
 
-            if let Some(auto) = auto_interpretation(&origin) {
-                if let Some((index, ..)) = map.get_full(auto) {
-                    map.move_index(index, 0)
-                }
+            if let Some(auto) = auto_interpretation(&origin)
+                && let Some((index, ..)) = map.get_full(auto)
+            {
+                map.move_index(index, 0)
             }
         }
         // println!(

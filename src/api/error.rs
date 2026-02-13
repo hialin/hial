@@ -58,14 +58,15 @@ pub struct HErrData {
 impl HErr {
     pub(crate) fn with_path(self, path: impl Into<String>) -> Self {
         let path = path.into();
-        if let Err(old_path) = self.data.cell_path.set(path.clone()) {
-            if old_path != path && !old_path.is_empty() {
-                warning!(
-                    "overwrote cell path to augment HErr: {} -> {}",
-                    old_path,
-                    path
-                );
-            }
+        if let Err(old_path) = self.data.cell_path.set(path.clone())
+            && old_path != path
+            && !old_path.is_empty()
+        {
+            warning!(
+                "overwrote cell path to augment HErr: {} -> {}",
+                old_path,
+                path
+            );
         }
         self
     }

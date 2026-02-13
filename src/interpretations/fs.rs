@@ -524,11 +524,18 @@ fn read_file(path: &Path) -> Res<FileEntry> {
             is_link: xmd.file_type().is_symlink(),
         })
         .map_err(|e| {
-            caused(
-                HErrKind::IO,
-                format!("cannot query file metadata of {}", path.to_string_lossy()),
-                e,
-            )
+            if e.kind() == std::io::ErrorKind::NotFound {
+                noerrm(format!(
+                    "cannot query file metadata of {}",
+                    path.to_string_lossy()
+                ))
+            } else {
+                caused(
+                    HErrKind::IO,
+                    format!("cannot query file metadata of {}", path.to_string_lossy()),
+                    e,
+                )
+            }
         });
     Ok(FileEntry {
         path: path.to_path_buf(),

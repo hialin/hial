@@ -93,36 +93,35 @@ fn init_elevation_registry() -> Res<()> {
 }
 
 pub(crate) fn auto_interpretation(cell: &Xell) -> Option<&str> {
-    if cell.interpretation() == "fs" && cell.read().ty().ok()? == "file" {
-        if let Ok(reader) = cell.read().err() {
-            if let Ok(Value::Str(name)) = reader.label() {
-                if name.ends_with(".c") {
-                    return Some("c");
-                } else if name.ends_with(".javascript") {
-                    return Some("javascript");
-                } else if name.ends_with(".json") {
-                    return Some("json");
-                } else if name.ends_with(".rs") {
-                    return Some("rust");
-                } else if name.ends_with(".toml") {
-                    return Some("toml");
-                } else if name.ends_with(".xml") {
-                    return Some("xml");
-                } else if name.ends_with(".yaml") || name.ends_with(".yml") {
-                    return Some("yaml");
-                }
-            }
+    if cell.interpretation() == "fs"
+        && cell.read().ty().ok()? == "file"
+        && let Ok(reader) = cell.read().err()
+        && let Ok(Value::Str(name)) = reader.label()
+    {
+        if name.ends_with(".c") {
+            return Some("c");
+        } else if name.ends_with(".javascript") {
+            return Some("javascript");
+        } else if name.ends_with(".json") {
+            return Some("json");
+        } else if name.ends_with(".rs") {
+            return Some("rust");
+        } else if name.ends_with(".toml") {
+            return Some("toml");
+        } else if name.ends_with(".xml") {
+            return Some("xml");
+        } else if name.ends_with(".yaml") || name.ends_with(".yml") {
+            return Some("yaml");
         }
     }
-    if cell.interpretation() == "value" {
-        if let Ok(reader) = cell.read().err() {
-            if let Ok(Value::Str(s)) = reader.value() {
-                if s.starts_with("http://") || s.starts_with("https://") {
-                    return Some("http");
-                } else if s.starts_with('.') || s.starts_with('/') {
-                    return Some("fs");
-                }
-            }
+    if cell.interpretation() == "value"
+        && let Ok(reader) = cell.read().err()
+        && let Ok(Value::Str(s)) = reader.value()
+    {
+        if s.starts_with("http://") || s.starts_with("https://") {
+            return Some("http");
+        } else if s.starts_with('.') || s.starts_with('/') {
+            return Some("fs");
         }
     }
     None

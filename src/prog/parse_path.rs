@@ -1,4 +1,4 @@
-use super::{convert_error, ParseError};
+use super::{ParseError, convert_error};
 use crate::{
     api::*,
     prog::{parse_url::*, path::*},
@@ -125,13 +125,21 @@ fn relation_parser() -> impl Parser<char, Relation, Error = ParseError> + Clone 
 
 fn path_start_parser<'a>() -> impl Parser<char, PathStart<'a>, Error = ParseError> + Clone {
     let path_start_url = url_parser().map(PathStart::Url).labelled("path_start_url");
-    let path_start_file = one_of("/.~")
+    let file_prefix = choice((
+        just("./").to("./"),
+        just("~/").to("~/"),
+        just("/").to("/"),
+        empty().to(""),
+    ));
+    let path_start_file = file_prefix
         .then(path_code_points().separated_by(just('/')))
-        .map(|(starter, parts)| {
-            let mut full = starter.to_string();
-            if !parts.is_empty() {
-                full.push_str(parts.join("/").as_str());
-            }
+        .map(|(prefix, parts)| {
+            let suffix = parts.join("/");
+            let full = if suffix.is_empty() {
+                prefix.to_string()
+            } else {
+                format!("{prefix}{suffix}")
+            };
             PathStart::File(full)
         })
         .labelled("path_start_file");
@@ -141,8 +149,8 @@ fn path_start_parser<'a>() -> impl Parser<char, PathStart<'a>, Error = ParseErro
     choice((path_start_url, path_start_file, path_start_string)).labelled("path_start")
 }
 
-pub(super) fn path_with_starter_parser<'a>(
-) -> impl Parser<char, (PathStart<'a>, Path<'a>), Error = ParseError> + Clone {
+pub(super) fn path_with_starter_parser<'a>()
+-> impl Parser<char, (PathStart<'a>, Path<'a>), Error = ParseError> + Clone {
     path_start_parser()
         .then_ignore(ws())
         .then(path_items_parser())
@@ -401,6 +409,31 @@ fn test_parse_string() {
     assert_eq!(
         string_parser().parse(r#""(\w+.\w+)@(\w+)""#),
         Ok(r#"(\w+.\w+)@(\w+)"#.to_string())
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn test_parse_file_path_start_variants() {
+    assert_eq!(
+        path_start_parser().then_ignore(end()).parse("~/x"),
+        Ok(PathStart::File("~/x".to_string()))
+    );
+    assert_eq!(
+        path_start_parser().then_ignore(end()).parse("./x"),
+        Ok(PathStart::File("./x".to_string()))
+    );
+    assert_eq!(
+        path_start_parser().then_ignore(end()).parse("/x/y"),
+        Ok(PathStart::File("/x/y".to_string()))
+    );
+    assert_eq!(
+        path_start_parser().then_ignore(end()).parse("x"),
+        Ok(PathStart::File("x".to_string()))
+    );
+    assert_eq!(
+        path_start_parser().then_ignore(end()).parse("x/y"),
+        Ok(PathStart::File("x/y".to_string()))
     );
 }
 

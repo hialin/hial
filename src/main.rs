@@ -40,10 +40,10 @@ fn parse_args() -> Res<Args> {
                 utils::log::set_verbose(true);
             }
             "-d" if in_flags => {
-                args.depth = args_iter.peek().and_then(|s| s.parse().ok());
+                args.depth = args_iter.next().and_then(|s| s.parse().ok());
             }
             "-b" if in_flags => {
-                args.breadth = args_iter.peek().and_then(|s| s.parse().ok());
+                args.breadth = args_iter.next().and_then(|s| s.parse().ok());
             }
             "--" if in_flags => {
                 in_flags = false;
