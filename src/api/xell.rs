@@ -1,6 +1,7 @@
 use std::{
     cell::{self, OnceCell},
     fmt::{self, Debug, Write},
+    io::Read,
     rc::Rc,
 };
 
@@ -240,6 +241,9 @@ impl CellReader {
     }
     pub fn value(&self) -> Res<Value<'_>> {
         dispatch_dyn_cell_reader!(&self.0, |x| { x.value() })
+    }
+    pub fn value_read(&self) -> Res<Box<dyn Read + '_>> {
+        dispatch_dyn_cell_reader!(&self.0, |x| { x.value_read() })
     }
     pub fn serial(&self) -> Res<String> {
         dispatch_dyn_cell_reader!(&self.0, |x| { x.serial() })
@@ -676,6 +680,7 @@ impl Xell {
                 let mut s = dispatch_dyn_cell!(&cell.dyn_cell, |x| {
                     match x.read() {
                         Ok(r) => match r.value() {
+                            // TODO: this does not work for bytes, is it a problem?
                             Ok(v) => v.as_cow_str().as_ref().replace('\n', "\\n"),
                             Err(e) => err_to_string(e),
                         },
@@ -708,7 +713,27 @@ impl Xell {
                 };
                 write!(s, ":").unwrap_or_else(err_fn);
                 match reader.value() {
-                    Ok(v) => write!(s, "{}", v).unwrap_or_else(err_fn),
+                    Ok(v) => {
+                        if v == Value::Bytes {
+                            match reader.value_read() {
+                                Ok(mut source) => {
+                                    let mut bytes = [0; DISPLAY_BYTES_VALUE_LEN + 1];
+                                    if let Ok(n) = source.read(&mut bytes) {
+                                        let bytes = &bytes[..n];
+                                        write!(s, "⟨").unwrap_or_else(err_fn);
+                                        write_bytes(&mut s, bytes).unwrap_or_else(err_fn);
+                                        write!(s, "⟩").unwrap_or_else(err_fn);
+                                    } else {
+                                        write!(s, "<💥cannot read bytes>").unwrap_or_else(err_fn);
+                                    }
+                                }
+                                Err(e) if e.kind == HErrKind::None => {}
+                                Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
+                            }
+                        } else {
+                            write!(s, "{}", v).unwrap_or_else(err_fn)
+                        }
+                    }
                     Err(e) if e.kind == HErrKind::None => {}
                     Err(e) => write!(s, "<💥{:?}>", e).unwrap_or_else(err_fn),
                 };

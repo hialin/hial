@@ -1,4 +1,7 @@
-use std::fmt::{Error, Write};
+use std::{
+    fmt::{Error, Write},
+    io::Read,
+};
 
 use crate::api::*;
 
@@ -138,7 +141,33 @@ fn print_cell(cell: &Xell, prefix: &str, indent: usize, buffer: &mut String) -> 
                 if empty {
                     empty = v.is_empty();
                 }
-                print_value(buffer, indent, v)
+                if v == Value::Bytes {
+                    match reader.value_read() {
+                        Ok(mut source) => {
+                            let mut bytes = [0; DISPLAY_BYTES_VALUE_LEN + 1];
+                            match source.read(&mut bytes) {
+                                Ok(n) => {
+                                    let bytes = &bytes[..n];
+                                    print_bytes(buffer, bytes)
+                                }
+                                Err(err) => {
+                                    empty = false;
+                                    write!(buffer, "⚠cannot read bytes: {:?}", err)
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            if err.kind == HErrKind::None {
+                                write!(buffer, "")
+                            } else {
+                                empty = false;
+                                write!(buffer, "⚠{:?}⚠", err)
+                            }
+                        }
+                    }
+                } else {
+                    print_value(buffer, indent, v)
+                }
             }
             Err(err) => {
                 if err.kind == HErrKind::None {
@@ -167,12 +196,14 @@ fn print_value(buffer: &mut String, indent: usize, v: Value) -> Result<(), Error
         Value::Int(x) => write!(buffer, "{}", x),
         Value::Float(x) => write!(buffer, "{}", x),
         Value::Str(x) => print_string(buffer, indent, x),
-        Value::Bytes(x) => {
-            write!(buffer, "⟨")?;
-            write_bytes(buffer, x)?;
-            write!(buffer, "⟩")
-        }
+        Value::Bytes => write!(buffer, "⟨bytes⟩"),
     }
+}
+
+fn print_bytes(buffer: &mut String, bytes: &[u8]) -> Result<(), Error> {
+    write!(buffer, "⟨")?;
+    write_bytes(buffer, bytes)?;
+    write!(buffer, "⟩")
 }
 
 fn print_string(buffer: &mut String, indent: usize, s: &str) -> Result<(), Error> {

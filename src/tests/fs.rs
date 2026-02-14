@@ -1,4 +1,5 @@
 use crate::{api::*, prog::Path};
+use std::io::Read;
 
 #[test]
 fn test_files() -> Res<()> {
@@ -59,15 +60,11 @@ fn fs_write_prog_policy() -> Res<()> {
         .to(p)
         .err()?;
     c.write().value("Hi there")?;
-    assert_eq!(
-        Xell::from(".").to(p).read().value()?,
-        Value::Bytes("Hi there".as_bytes())
-    );
+    assert_eq!(Xell::from(".").to(p).read().value()?, Value::Bytes);
+    assert_eq!(read_value_bytes(&Xell::from(".").to(p))?, b"Hi there");
     c.write().value("-")?;
-    assert_eq!(
-        Xell::from(".").to(p).read().value()?,
-        Value::Bytes("-".as_bytes())
-    );
+    assert_eq!(Xell::from(".").to(p).read().value()?, Value::Bytes);
+    assert_eq!(read_value_bytes(&Xell::from(".").to(p))?, b"-");
     Ok(())
 }
 
@@ -76,12 +73,11 @@ fn fs_write_path_policy() -> Res<()> {
     let p = ".^fs[w]/src/tests/data/write2.txt";
     let c = Xell::new(p).err()?;
     c.write().value("Hi there")?;
-    assert_eq!(
-        Xell::new(p).read().value()?,
-        Value::Bytes("Hi there".as_bytes())
-    );
+    assert_eq!(Xell::new(p).read().value()?, Value::Bytes);
+    assert_eq!(read_value_bytes(&Xell::new(p))?, b"Hi there");
     c.write().value("-")?;
-    assert_eq!(Xell::new(p).read().value()?, Value::Bytes("-".as_bytes()));
+    assert_eq!(Xell::new(p).read().value()?, Value::Bytes);
+    assert_eq!(read_value_bytes(&Xell::new(p))?, b"-");
     Ok(())
 }
 
@@ -106,28 +102,32 @@ fn fs_write_beyond_fs() -> Res<()> {
     let ov = Xell::from("./src/tests/data/write3.txt").policy(WritePolicy::WriteBackOnDrop);
 
     // A is the initial value
-    assert_eq!(
-        ov.be("path").be("fs").read().value()?,
-        Value::Bytes("A".as_bytes())
-    );
+    assert_eq!(ov.be("path").be("fs").read().value()?, Value::Bytes);
+    assert_eq!(read_value_bytes(&ov.be("path").be("fs"))?, b"A");
 
     // write B and drop, should write automatically
     {
         ov.be("path").be("fs").write().value("B")?;
     }
-    assert_eq!(
-        ov.be("path").be("fs").read().value()?,
-        Value::Bytes("B".as_bytes())
-    );
+    assert_eq!(ov.be("path").be("fs").read().value()?, Value::Bytes);
+    assert_eq!(read_value_bytes(&ov.be("path").be("fs"))?, b"B");
 
     // write A again to go back to the initial state
     {
         ov.be("path").be("fs").write().value("A")?;
     }
-    assert_eq!(
-        ov.be("path").be("fs").read().value()?,
-        Value::Bytes("A".as_bytes())
-    );
+    assert_eq!(ov.be("path").be("fs").read().value()?, Value::Bytes);
+    assert_eq!(read_value_bytes(&ov.be("path").be("fs"))?, b"A");
 
     Ok(())
+}
+
+fn read_value_bytes(cell: &Xell) -> Res<Vec<u8>> {
+    let reader = cell.read().err()?;
+    let mut bytes = Vec::new();
+    reader
+        .value_read()?
+        .read_to_end(&mut bytes)
+        .map_err(|e| caused(HErrKind::IO, "cannot read value bytes", e))?;
+    Ok(bytes)
 }

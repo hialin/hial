@@ -336,13 +336,23 @@ impl CellReaderTrait for CellReader {
                 }
                 Node::Text(x) => Ok(Value::Str(x)),
                 Node::Comment(x) => Ok(Value::Str(x)),
-                Node::CData(x) => Ok(Value::Bytes(x.as_slice())),
+                Node::CData(_) => Ok(Value::Bytes),
                 Node::Error(x) => Ok(Value::Str(x)),
             },
             CellReader::Attr { nodes, pos, .. } => match &nodes[*pos] {
                 Attribute::Attribute(_, x) => Ok(Value::Str(x)),
                 Attribute::Error(x) => Ok(Value::Str(x)),
             },
+        }
+    }
+
+    fn value_read(&self) -> Res<Box<dyn std::io::Read + '_>> {
+        match self {
+            CellReader::Node { nodes, pos, .. } => match &nodes[*pos] {
+                Node::CData(x) => Ok(Box::new(std::io::Cursor::new(x.as_slice()))),
+                _ => nores(),
+            },
+            CellReader::Attr { .. } => nores(),
         }
     }
 
@@ -481,11 +491,7 @@ impl CellWriterTrait for CellWriter {
                 Node::Text(x) => *x = value.as_value().as_cow_str().to_string(),
                 Node::Comment(x) => *x = value.as_value().as_cow_str().to_string(),
                 Node::CData(x) => {
-                    if let OwnValue::Bytes(b) = value {
-                        *x = b;
-                    } else {
-                        *x = value.as_value().as_cow_str().to_string().into_bytes();
-                    }
+                    *x = value.as_value().as_cow_str().to_string().into_bytes();
                 }
                 Node::Error(x) => return userres("cannot set value of error node"),
             },

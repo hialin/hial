@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use indexmap::{indexmap, IndexMap};
+use indexmap::{IndexMap, indexmap};
 use linkme::distributed_slice;
 
 use crate::{
@@ -126,18 +126,7 @@ impl CellReaderTrait for CellReader {
                 if md.is_dir {
                     return nores();
                 }
-                if self.cached_value.get().is_none() {
-                    // TODO: reading file value should return bytes, not string
-                    let content = std::fs::read(&fe.path).map_err(|e| {
-                        caused(HErrKind::IO, format!("cannot read file: {:?}", fe.path), e)
-                    })?;
-                    // let content = String::from_utf8_lossy(&content);
-                    self.cached_value
-                        .set(content.into_boxed_slice())
-                        .map_err(|_| faulterr("cannot set cached value, it is already set"))?;
-                }
-                // Ok(Value::Str(self.cached_value.get().unwrap()))
-                Ok(Value::Bytes(self.cached_value.get().unwrap()))
+                Ok(Value::Bytes)
             }
             GroupType::FileAttributes(fpos) => {
                 if self.pos != 0 {
@@ -145,6 +134,34 @@ impl CellReaderTrait for CellReader {
                 }
                 Ok(Value::from(md.filesize))
             }
+        }
+    }
+
+    fn value_read(&self) -> Res<Box<dyn std::io::Read + '_>> {
+        let fe = self.fileentry()?;
+        let md = fe.metadata.as_ref().map_err(|e| e.clone())?;
+
+        match self.ty {
+            GroupType::Folder => {
+                if md.is_dir {
+                    return nores();
+                }
+                // TODO: stream here instead of reading the whole file into memory
+                if self.cached_value.get().is_none() {
+                    let content = std::fs::read(&fe.path).map_err(|e| {
+                        caused(HErrKind::IO, format!("cannot read file: {:?}", fe.path), e)
+                    })?;
+                    self.cached_value
+                        .set(content.into_boxed_slice())
+                        .map_err(|_| faulterr("cannot set cached value, it is already set"))?;
+                }
+                let bytes = self
+                    .cached_value
+                    .get()
+                    .ok_or_else(|| faulterr("cannot read cached value"))?;
+                Ok(Box::new(std::io::Cursor::new(bytes.as_ref())))
+            }
+            GroupType::FileAttributes(_) => nores(),
         }
     }
 

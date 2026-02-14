@@ -1,9 +1,9 @@
-use std::{fs::File, rc::Rc};
+use std::{fs::File, io::Read, rc::Rc};
 
 use indexmap::IndexMap;
 use linkme::distributed_slice;
 use serde::Serialize;
-use serde_json::{ser::PrettyFormatter, Serializer, Value as SValue};
+use serde_json::{Serializer, Value as SValue, ser::PrettyFormatter};
 
 use crate::{
     api::{interpretation::*, *},
@@ -90,12 +90,36 @@ impl Cell {
                 )
             }
             "http" => {
-                let s = origin.read().value()?.to_string();
+                let reader = origin.read();
+                let value = reader.value()?;
+                let s = if value == Value::Bytes {
+                    // TODO: read from stream instead of reading the whole body into memory
+                    let mut bytes = Vec::new();
+                    reader
+                        .value_read()?
+                        .read_to_end(&mut bytes)
+                        .map_err(|e| caused(HErrKind::IO, "cannot read json", e))?;
+                    String::from_utf8_lossy(&bytes).into_owned()
+                } else {
+                    value.to_string()
+                };
                 let indent = detect_indentation(&s);
                 (serde_json::from_str(s.as_ref())?, indent)
             }
             _ => {
-                let s = origin.read().value()?.to_string();
+                let reader = origin.read();
+                let value = reader.value()?;
+                let s = if value == Value::Bytes {
+                    // TODO: read from stream instead of reading the whole body into memory
+                    let mut bytes = Vec::new();
+                    reader
+                        .value_read()?
+                        .read_to_end(&mut bytes)
+                        .map_err(|e| caused(HErrKind::IO, "cannot read json", e))?;
+                    String::from_utf8_lossy(&bytes).into_owned()
+                } else {
+                    value.to_string()
+                };
                 let indent = detect_indentation(&s);
                 (serde_json::from_str(s.as_ref())?, indent)
             }
@@ -445,7 +469,7 @@ fn ownvalue_to_serde(v: OwnValue) -> SValue {
     match v {
         OwnValue::None => SValue::Null,
         OwnValue::Bool(b) => SValue::Bool(b),
-        OwnValue::Int(Int{n,..}) => match n {
+        OwnValue::Int(Int { n, .. }) => match n {
             IntData::Signed(i) => SValue::Number(i.into()),
             IntData::Unsigned(u) => SValue::Number(u.into()),
         },
@@ -453,7 +477,6 @@ fn ownvalue_to_serde(v: OwnValue) -> SValue {
             SValue::Number(serde_json::Number::from_f64(f).unwrap_or(serde_json::Number::from(0)))
         }
         OwnValue::String(s) => SValue::String(s),
-        OwnValue::Bytes(b) => SValue::String(String::from_utf8_lossy(&b).into()),
     }
 }
 

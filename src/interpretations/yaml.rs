@@ -93,9 +93,17 @@ impl Cell {
             _ => {
                 let r = origin.read();
                 let v = r.value()?;
-                let cow = v.as_cow_str();
-                let value = cow.as_ref();
-                Cell::make_cell(value, Some(origin)).map_err(|e| {
+                let source = if v == Value::Bytes {
+                    // TODO: read from stream instead of reading the whole body into memory
+                    let mut bytes = Vec::new();
+                    r.value_read()?
+                        .read_to_end(&mut bytes)
+                        .map_err(|e| caused(HErrKind::IO, "cannot read yaml", e))?;
+                    String::from_utf8_lossy(&bytes).into_owned()
+                } else {
+                    v.as_cow_str().into_owned()
+                };
+                Cell::make_cell(source, Some(origin)).map_err(|e| {
                     if e.kind == HErrKind::InvalidFormat {
                         noerr()
                     } else {
@@ -316,14 +324,13 @@ fn yaml_to_value(s: &Yaml) -> Res<Value<'_>> {
 fn ownvalue_to_yaml(v: OwnValue) -> Res<Yaml> {
     Ok(match v {
         OwnValue::Bool(b) => Yaml::Boolean(b),
-        OwnValue::Int(Int{n,..}) => match n {
+        OwnValue::Int(Int { n, .. }) => match n {
             IntData::Signed(i) => Yaml::Integer(i),
             IntData::Unsigned(u) => Yaml::Integer(u as i64),
         },
         OwnValue::Float(StrFloat(f)) => Yaml::Real(f.to_string()),
         OwnValue::String(s) => Yaml::String(s),
         OwnValue::None => Yaml::Null,
-        OwnValue::Bytes(b) => Yaml::String(String::from_utf8_lossy(&b).to_string()),
     })
 }
 

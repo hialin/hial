@@ -1,4 +1,4 @@
-use std::{fmt::Debug, marker::PhantomData};
+use std::{fmt::Debug, io::Read, marker::PhantomData};
 
 use crate::api::*;
 
@@ -31,6 +31,10 @@ pub trait CellReaderTrait: Debug {
     fn label(&self) -> Res<Value<'_>>;
 
     fn value(&self) -> Res<Value<'_>>;
+
+    fn value_read(&self) -> Res<Box<dyn Read + '_>> {
+        nores()
+    }
 
     /// provide a serialization of the data from the cell and its descendants
     /// to be used for saving the data to a data store.

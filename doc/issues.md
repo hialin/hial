@@ -2,7 +2,6 @@
 
 - color the output of pprint
     - maybe stream the found cells, colorize separately
-- switch to anyhow errors
 
 - add split(":") interpretation, read-write
 - '**[filter]' must work as '**/*[filter]' (filter to be applied only on leaves)

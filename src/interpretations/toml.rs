@@ -1,4 +1,4 @@
-use std::{cell::OnceCell, rc::Rc};
+use std::{cell::OnceCell, io::Read, rc::Rc};
 
 use indexmap::IndexMap;
 use linkme::distributed_slice;
@@ -91,9 +91,19 @@ impl Cell {
             _ => {
                 let r = origin.read();
                 let v = r.value()?;
-                let cow = v.as_cow_str();
-                let value = cow.as_ref();
-                Self::make_cell(value, Some(origin))
+                if v == Value::Bytes {
+                    // TODO: read from stream instead of reading the whole body into memory
+                    let mut bytes = Vec::new();
+                    r.value_read()?
+                        .read_to_end(&mut bytes)
+                        .map_err(|e| caused(HErrKind::IO, "cannot read toml", e))?;
+                    let value = String::from_utf8_lossy(&bytes);
+                    Self::make_cell(value.as_ref(), Some(origin))
+                } else {
+                    let cow = v.as_cow_str();
+                    let value = cow.as_ref();
+                    Self::make_cell(value, Some(origin))
+                }
             }
         }
     }
@@ -361,7 +371,6 @@ fn to_toml(value: OwnValue) -> Res<TomlValue> {
             IntData::Unsigned(u) => u as i64,
         })),
         OwnValue::String(s) => Ok(TomlValue::String(s)),
-        OwnValue::Bytes(s) => Ok(TomlValue::String(String::from_utf8_lossy(&s).into())),
     }
 }
 

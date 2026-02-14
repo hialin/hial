@@ -11,6 +11,7 @@ use std::{
 use indexmap::Equivalent;
 
 pub const DISPLAY_VALUE_NONE: &str = "ø"; // ❍•⸰·
+pub const DISPLAY_VALUE_BYTES: &str = "<bytes>";
 pub const DISPLAY_BYTES_VALUE_LEN: usize = 72;
 
 #[derive(Copy, Clone)]
@@ -68,15 +69,24 @@ impl Ord for Int {
 
 impl Default for Int {
     fn default() -> Self {
-        Int{sz: IntKind::I64, n: IntData::Signed(0)}
+        Int {
+            sz: IntKind::I64,
+            n: IntData::Signed(0),
+        }
     }
 }
 
 impl Display for Int {
     fn fmt(&self, buf: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Int { n: IntData::Signed(x), .. } => write!(buf, "{}", x),
-            Int {  n: IntData::Unsigned(x), .. } => write!(buf, "{}", x),
+            Int {
+                n: IntData::Signed(x),
+                ..
+            } => write!(buf, "{}", x),
+            Int {
+                n: IntData::Unsigned(x),
+                ..
+            } => write!(buf, "{}", x),
         }
     }
 }
@@ -95,32 +105,50 @@ impl fmt::Debug for Int {
 
 impl From<i32> for Int {
     fn from(x: i32) -> Self {
-        Int{sz: IntKind::I32, n: IntData::Signed(x as i64)}
+        Int {
+            sz: IntKind::I32,
+            n: IntData::Signed(x as i64),
+        }
     }
 }
 impl From<u32> for Int {
     fn from(x: u32) -> Self {
-        Int{sz: IntKind::U32, n: IntData::Unsigned(x as u64)}
+        Int {
+            sz: IntKind::U32,
+            n: IntData::Unsigned(x as u64),
+        }
     }
 }
 impl From<i64> for Int {
     fn from(x: i64) -> Self {
-        Int{sz: IntKind::I64, n: IntData::Signed(x)}
+        Int {
+            sz: IntKind::I64,
+            n: IntData::Signed(x),
+        }
     }
 }
 impl From<u64> for Int {
     fn from(x: u64) -> Self {
-        Int{sz: IntKind::U64, n: IntData::Unsigned(x)}
+        Int {
+            sz: IntKind::U64,
+            n: IntData::Unsigned(x),
+        }
     }
 }
 impl From<isize> for Int {
     fn from(x: isize) -> Self {
-        Int{sz: IntKind::I64, n: IntData::Signed(x as i64)}
+        Int {
+            sz: IntKind::I64,
+            n: IntData::Signed(x as i64),
+        }
     }
 }
 impl From<usize> for Int {
     fn from(x: usize) -> Self {
-        Int{sz: IntKind::U64, n: IntData::Unsigned(x as u64)}
+        Int {
+            sz: IntKind::U64,
+            n: IntData::Unsigned(x as u64),
+        }
     }
 }
 
@@ -194,8 +222,7 @@ pub enum Value<'a> {
     Int(Int),
     Float(StrFloat),
     Str(&'a str),
-    // OsStr(&'a OsStr),
-    Bytes(&'a [u8]),
+    Bytes,
 }
 
 impl Hash for Value<'_> {
@@ -206,8 +233,7 @@ impl Hash for Value<'_> {
             Value::Int(x) => x.hash(state),
             Value::Float(x) => x.hash(state),
             Value::Str(x) => x.hash(state),
-            // Value::OsStr(x) => x.to_string_lossy().hash(state),
-            Value::Bytes(x) => x.hash(state),
+            Value::Bytes => DISPLAY_VALUE_BYTES.hash(state),
         }
     }
 }
@@ -220,8 +246,7 @@ impl<'a> Display for Value<'a> {
             Value::Int(x) => write!(buf, "{}", x),
             Value::Float(x) => write!(buf, "{}", x),
             Value::Str(x) => write!(buf, "{}", x),
-            // Value::OsStr(x) => write!(buf, "{}", x.to_string_lossy()),
-            Value::Bytes(x) => write!(buf, "{}", String::from_utf8_lossy(x)),
+            Value::Bytes => write!(buf, "{}", DISPLAY_VALUE_BYTES),
         }
     }
 }
@@ -234,12 +259,7 @@ impl<'a> fmt::Debug for Value<'a> {
             Value::Int(x) => write!(buf, "Value::Int({})", x),
             Value::Float(x) => write!(buf, "Value::Float({})", x),
             Value::Str(x) => write!(buf, "Value::Str({:?})", x),
-            // Value::OsStr(x) => write!(buf, "{}", x.to_string_lossy()),
-            Value::Bytes(x) => {
-                write!(buf, "Value::Bytes(len {}, \"", x.len())?;
-                write_bytes(buf, x)?;
-                write!(buf, "\")")
-            }
+            Value::Bytes => write!(buf, "Value::Bytes"),
         }
     }
 }
@@ -295,7 +315,7 @@ pub enum OwnValue {
     Float(StrFloat),
     String(String),
     // OsString(OsString),
-    Bytes(Vec<u8>),
+    // Bytes(Vec<u8>),
 }
 
 impl Display for OwnValue {
@@ -335,7 +355,6 @@ impl OwnValue {
             OwnValue::Int(x) => Value::Int(*x),
             OwnValue::Float(x) => Value::Float(*x),
             OwnValue::String(x) => Value::Str(x.as_str()),
-            OwnValue::Bytes(x) => Value::Bytes(x.as_ref()),
         }
     }
 
@@ -362,7 +381,7 @@ impl Value<'_> {
             Value::Int(x) => OwnValue::Int(*x),
             Value::Float(x) => OwnValue::Float(*x),
             Value::Str(x) => OwnValue::String(x.to_string()),
-            Value::Bytes(x) => OwnValue::Bytes(Vec::from(*x)),
+            Value::Bytes => OwnValue::None, // TODO: must change this
         }
     }
 
@@ -384,7 +403,6 @@ impl Value<'_> {
         match self {
             Value::None => true,
             Value::Str(x) => x.is_empty(),
-            Value::Bytes(x) => x.is_empty(),
             _ => false,
         }
     }
@@ -464,7 +482,6 @@ impl Equivalent<OwnValue> for Value<'_> {
             OwnValue::Int(x) => matches!(self, Value::Int(y) if x == y),
             OwnValue::Float(x) => matches!(self, Value::Float(y) if x == y),
             OwnValue::String(x) => matches!(self, Value::Str(y) if x == y),
-            OwnValue::Bytes(x) => matches!(self, Value::Bytes(y) if x == y),
         }
     }
 }

@@ -1,6 +1,6 @@
 use indexmap::IndexMap;
 use linkme::distributed_slice;
-use reqwest::{blocking::Client, Error as ReqwestError};
+use reqwest::{Error as ReqwestError, blocking::Client};
 
 use crate::{
     api::{interpretation::*, *},
@@ -251,7 +251,7 @@ impl CellReaderTrait for CellReader {
 
     fn value(&self) -> Res<Value<'_>> {
         match (&self.kind, self.pos) {
-            (GroupKind::Root, 0) => Ok(Value::Bytes(&self.response.body)),
+            (GroupKind::Root, 0) => Ok(Value::Bytes),
             (GroupKind::Attr, 0) => nores(),
             (GroupKind::Attr, 1) => nores(),
             (GroupKind::Status, 0) => Ok(Value::from(self.response.status as i32)),
@@ -265,6 +265,16 @@ impl CellReaderTrait for CellReader {
                 Ok(Value::Str(header_values[0].as_str()))
             }
             _ => fault(format!("bad kind/pos: {:?}/{}", self.kind, self.pos)),
+        }
+    }
+
+    fn value_read(&self) -> Res<Box<dyn std::io::Read + '_>> {
+        match (&self.kind, self.pos) {
+            // TODO: stream here instead of reading the whole body into memory
+            (GroupKind::Root, 0) => Ok(Box::new(std::io::Cursor::new(
+                self.response.body.as_slice(),
+            ))),
+            _ => nores(),
         }
     }
 
