@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read, rc::Rc};
+use std::rc::Rc;
 
 use indexmap::IndexMap;
 use linkme::distributed_slice;
@@ -8,10 +8,7 @@ use serde_json::{Serializer, Value as SValue, ser::PrettyFormatter};
 use crate::{
     api::{interpretation::*, *},
     guard_some, implement_try_from_xell,
-    utils::{
-        indentation::{detect_file_indentation, detect_indentation},
-        ownrc::*,
-    },
+    utils::{indentation::detect_indentation, ownrc::*},
 };
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
@@ -76,54 +73,31 @@ implement_try_from_xell!(Cell, Json);
 
 impl Cell {
     pub(crate) fn from_cell(origin: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
-        let (serde_value, indent) = match origin.interpretation() {
-            "fs" => {
-                let r = origin.read();
-                let path = r.as_file_path()?;
-                let indent = detect_file_indentation(path);
+        let reader = origin.read();
+        let value = reader.value()?;
+        let (serde_value, indent) = match value {
+            Value::Bytes => {
+                let reader = reader.value_read()?;
                 (
-                    serde_json::from_reader(
-                        File::open(path)
-                            .map_err(|e| caused(HErrKind::IO, "cannot read json", e))?,
-                    )?,
-                    indent,
+                    serde_json::from_reader::<_, SValue>(reader).map_err(|e| {
+                        caused(
+                            HErrKind::InvalidFormat,
+                            format!("cannot read json: {:?}", origin.path().unwrap_or_default()),
+                            e,
+                        )
+                    })?,
+                    "".to_string(),
                 )
             }
-            "http" => {
-                let reader = origin.read();
-                let value = reader.value()?;
-                let s = if value == Value::Bytes {
-                    // TODO: read from stream instead of reading the whole body into memory
-                    let mut bytes = Vec::new();
-                    reader
-                        .value_read()?
-                        .read_to_end(&mut bytes)
-                        .map_err(|e| caused(HErrKind::IO, "cannot read json", e))?;
-                    String::from_utf8_lossy(&bytes).into_owned()
-                } else {
-                    value.to_string()
-                };
-                let indent = detect_indentation(&s);
-                (serde_json::from_str(s.as_ref())?, indent)
-            }
             _ => {
-                let reader = origin.read();
-                let value = reader.value()?;
-                let s = if value == Value::Bytes {
-                    // TODO: read from stream instead of reading the whole body into memory
-                    let mut bytes = Vec::new();
-                    reader
-                        .value_read()?
-                        .read_to_end(&mut bytes)
-                        .map_err(|e| caused(HErrKind::IO, "cannot read json", e))?;
-                    String::from_utf8_lossy(&bytes).into_owned()
-                } else {
-                    value.to_string()
-                };
-                let indent = detect_indentation(&s);
-                (serde_json::from_str(s.as_ref())?, indent)
+                let s = value.as_cow_str();
+                (
+                    serde_json::from_str(s.as_ref())?,
+                    detect_indentation(s.as_ref()),
+                )
             }
         };
+
         Self::from_serde_value(serde_value, Some(origin), indent)
     }
 

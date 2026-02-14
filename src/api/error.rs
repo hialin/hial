@@ -1,5 +1,6 @@
 use std::{cell::OnceCell, error::Error, fmt, rc::Rc};
 
+use super::{DynCell, Xell};
 use crate::warning;
 
 pub type Res<T> = Result<T, HErr>;
@@ -50,51 +51,20 @@ impl fmt::Display for HErrKind {
 #[derive(Debug)]
 pub struct HErrData {
     pub msg: String,
-    pub cell_path: OnceCell<String>,
+    pub xell: OnceCell<Xell>,
     pub cause: Option<Box<dyn Error>>,
     pub backtrace: Option<Box<[String]>>,
 }
 
 impl HErr {
-    pub(crate) fn with_path(self, path: impl Into<String>) -> Self {
-        let path = path.into();
-        if let Err(old_path) = self.data.cell_path.set(path.clone())
-            && old_path != path
-            && !old_path.is_empty()
-        {
-            warning!(
-                "overwrote cell path to augment HErr: {} -> {}",
-                old_path,
-                path
-            );
+    pub(crate) fn with_xell(self, xell: Xell) -> Self {
+        if matches!(xell.dyn_cell, DynCell::Error(_)) {
+            return self;
+        }
+        if self.data.xell.set(xell).is_err() {
+            warning!("cannot overwrite xell to augment HErr");
         }
         self
-    }
-    pub(crate) fn with_path_res(self, path: impl Into<Res<String>>) -> Self {
-        match path.into() {
-            Ok(p) => self.with_path(p),
-            Err(e) => {
-                warning!("cannot get cell path to augment HErr: {}", e);
-                self
-            }
-        }
-    }
-}
-
-pub trait ResHErrAugmentation {
-    fn with_path(self, path: impl Into<String>) -> Self;
-    fn with_path_res(self, path: impl Into<Res<String>>) -> Self;
-}
-
-impl<T> ResHErrAugmentation for Res<T> {
-    fn with_path(self, path: impl Into<String>) -> Self {
-        let path = path.into();
-        self.map_err(|err| err.with_path(path))
-    }
-
-    fn with_path_res(self, path: impl Into<Res<String>>) -> Self {
-        let pathres = path.into();
-        self.map_err(|err| err.with_path_res(pathres))
     }
 }
 
@@ -103,7 +73,7 @@ pub fn noerrm(message: impl Into<String>) -> HErr {
         kind: HErrKind::None,
         data: Rc::new(HErrData {
             msg: message.into(),
-            cell_path: OnceCell::new(),
+            xell: OnceCell::new(),
             cause: None,
             backtrace: Some(capture_stack_trace()),
         }),
@@ -126,7 +96,7 @@ pub fn usererr(reason: impl Into<String>) -> HErr {
         kind: HErrKind::User,
         data: Rc::new(HErrData {
             msg: reason.into(),
-            cell_path: OnceCell::new(),
+            xell: OnceCell::new(),
             cause: None,
             backtrace: Some(capture_stack_trace()),
         }),
@@ -146,7 +116,7 @@ pub fn faulterr(reason: impl Into<String>) -> HErr {
         kind: HErrKind::Internal,
         data: Rc::new(HErrData {
             msg: reason.into(),
-            cell_path: OnceCell::new(),
+            xell: OnceCell::new(),
             cause: None,
             backtrace: Some(capture_stack_trace()),
         }),
@@ -165,7 +135,7 @@ pub fn caused(kind: HErrKind, reason: impl Into<String>, cause: impl Error + 'st
         kind,
         data: Rc::new(HErrData {
             msg: reason.into(),
-            cell_path: OnceCell::new(),
+            xell: OnceCell::new(),
             cause: Some(Box::new(cause) as Box<dyn Error>),
             backtrace: Some(capture_stack_trace()),
         }),
@@ -177,7 +147,7 @@ pub fn deformed(reason: impl Into<String>) -> HErr {
         kind: HErrKind::InvalidFormat,
         data: Rc::new(HErrData {
             msg: reason.into(),
-            cell_path: OnceCell::new(),
+            xell: OnceCell::new(),
             cause: None,
             backtrace: Some(capture_stack_trace()),
         }),
@@ -189,7 +159,7 @@ pub fn lockerr(reason: impl Into<String>) -> HErr {
         kind: HErrKind::CannotLock,
         data: Rc::new(HErrData {
             msg: reason.into(),
-            cell_path: OnceCell::new(),
+            xell: OnceCell::new(),
             cause: None,
             backtrace: Some(capture_stack_trace()),
         }),
@@ -205,7 +175,9 @@ impl std::fmt::Display for HErr {
             write!(f, "{}", self.kind)?;
         }
 
-        if let Some(path) = self.data.cell_path.get() {
+        if let Some(cell) = self.data.xell.get()
+            && let Ok(path) = cell.path()
+        {
             write!(f, " -- cell path: {}", path)?;
         }
         if let Some(ref cause) = self.data.cause {

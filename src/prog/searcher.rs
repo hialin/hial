@@ -9,8 +9,8 @@ use crate::{
     api::*,
     debug_err, guard_ok, guard_some,
     prog::{
-        path::{Expression, PathItem},
         Path,
+        path::{Expression, PathItem},
     },
     warning,
 };
@@ -30,6 +30,7 @@ pub struct Searcher<'s> {
     stack: Vec<MatchTest>,
     // to find out where the search failed
     next_max_path_index: usize,
+    filter_eval: bool,
 }
 
 /// a cell to be matched against path_index
@@ -69,6 +70,10 @@ pub struct MatchTest {
 
 impl<'s> Searcher<'s> {
     pub(crate) fn new(start: Xell, path: Path<'s>) -> Searcher<'s> {
+        Self::new_with_filter_eval(start, path, false)
+    }
+
+    fn new_with_filter_eval(start: Xell, path: Path<'s>, filter_eval: bool) -> Searcher<'s> {
         ifdebug!(println!(
             "\nnew Searcher, path: {:?}:",
             path.0
@@ -85,6 +90,7 @@ impl<'s> Searcher<'s> {
             path: path.0,
             stack: vec![start_match],
             next_max_path_index: 0,
+            filter_eval,
         }
     }
 
@@ -138,6 +144,8 @@ impl<'s> Searcher<'s> {
             PathItem::Elevation(npi) => {
                 let opt_res = Self::process_elevation(
                     &mut self.stack,
+                    &self.path,
+                    self.filter_eval,
                     npi,
                     parent,
                     path_index,
@@ -193,6 +201,8 @@ impl<'s> Searcher<'s> {
     #[must_use]
     fn process_elevation(
         stack: &mut Vec<MatchTest>,
+        path: &[PathItem],
+        filter_eval: bool,
         epi: &ElevationPathItem,
         parent: Xell,
         path_index: usize,
@@ -242,6 +252,18 @@ impl<'s> Searcher<'s> {
             }
         }
         let cell = guard_ok!(itp_cell.sub().at(0).err(), err => {
+            // After `*` or `**`, some candidates may not expose an elevation child; skip them.
+            if filter_eval|| (path_index > 0 && matches!(
+                    &path[path_index - 1],
+                    PathItem::Normal(NormalPathItem {
+                        selector: Some(Selector::Star | Selector::DoubleStar),
+                        ..
+                    })
+                ))
+            {
+                return None;
+            }
+
             return Some(Err(err));
         });
 
@@ -449,7 +471,7 @@ impl<'s> Searcher<'s> {
             }
         }
 
-        let eval_iter_left = Self::new(cell, left);
+        let eval_iter_left = Self::new_with_filter_eval(cell, left, true);
         for cell in eval_iter_left {
             let cell = guard_ok!(cell, err => {
                 debug_err!(err);

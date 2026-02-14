@@ -321,8 +321,8 @@ impl Xell {
         let path = format!("{}{}", start, searcher.unmatched_path().as_str());
         match searcher.next() {
             Some(Ok(c)) => Ok(c),
-            Some(Err(e)) => Err(e.with_path(path)),
-            None => nores().with_path(path),
+            Some(Err(e)) => Err(e),
+            None => noresm(path),
         }
     }
 
@@ -362,7 +362,7 @@ impl Xell {
         self.domain
             .origin
             .clone()
-            .ok_or_else(|| noerr().with_path_res(self.path()))
+            .ok_or_else(|| noerr().with_xell(self.clone()))
             .unwrap_or_else(Xell::from)
     }
 
@@ -370,7 +370,7 @@ impl Xell {
         let reader: DynCellReader = dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match x.read() {
                 Ok(r) => DynCellReader::from(r),
-                Err(e) => DynCellReader::from(e.with_path(self.path().unwrap_or_default())),
+                Err(e) => DynCellReader::from(e.with_xell(self.clone())),
             }
         });
         CellReader(reader)
@@ -386,8 +386,7 @@ impl Xell {
             // allow writing elevation cells, to set elevation parameters
             && !matches!(self.dyn_cell, DynCell::Elevation(_))
         {
-            let err = usererr("cannot write, read-only domain")
-                .with_path(self.path().unwrap_or_default());
+            let err = usererr("cannot write, read-only domain").with_xell(self.clone());
             return CellWriter {
                 dyn_cell_writer: DynCellWriter::from(err),
                 domain: Rc::clone(&self.domain),
@@ -397,7 +396,7 @@ impl Xell {
         let writer: DynCellWriter = dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match x.write() {
                 Ok(r) => DynCellWriter::from(r),
-                Err(e) => DynCellWriter::from(e.with_path(self.path().unwrap_or_default())),
+                Err(e) => DynCellWriter::from(e.with_xell(self.clone())),
             }
         });
         CellWriter {
@@ -410,7 +409,7 @@ impl Xell {
         let sub = dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match x.sub() {
                 Ok(r) => DynGroup::from(r),
-                Err(e) => DynGroup::from(e.with_path(self.path().unwrap_or_default())),
+                Err(e) => DynGroup::from(e.with_xell(self.clone())),
             }
         });
         Group {
@@ -423,7 +422,7 @@ impl Xell {
         let attr = dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match x.attr() {
                 Ok(r) => DynGroup::from(r),
-                Err(e) => DynGroup::from(e.with_path(self.path().unwrap_or_default())),
+                Err(e) => DynGroup::from(e.with_xell(self.clone())),
             }
         });
         Group {
@@ -442,14 +441,14 @@ impl Xell {
     pub fn elevate(&self) -> Group {
         if let DynCell::Error(err) = &self.dyn_cell {
             return Group {
-                dyn_group: DynGroup::from(err.clone().with_path(self.path().unwrap_or_default())),
+                dyn_group: DynGroup::from(err.clone().with_xell(self.clone())),
                 domain: Rc::clone(&self.domain),
             };
         }
         let dyn_group = dispatch_dyn_cell!(&self.dyn_cell, |x| {
             match elevation::Group::new(self.clone()) {
                 Ok(r) => DynGroup::from(r),
-                Err(e) => DynGroup::from(e.with_path(self.path().unwrap_or_default())),
+                Err(e) => DynGroup::from(e.with_xell(self.clone())),
             }
         });
         Group {
@@ -461,7 +460,7 @@ impl Xell {
     pub fn field(&self) -> Group {
         if let DynCell::Error(err) = &self.dyn_cell {
             return Group {
-                dyn_group: DynGroup::from(err.clone().with_path(self.path().unwrap_or_default())),
+                dyn_group: DynGroup::from(err.clone().with_xell(self.clone())),
                 domain: Rc::clone(&self.domain),
             };
         }
@@ -495,7 +494,7 @@ impl Xell {
                 path += searcher.unmatched_path().as_str();
                 warning!("💥 path search error, path={:?}; error= {:?}", path, e);
                 Xell {
-                    dyn_cell: DynCell::from(e.with_path(self.path().unwrap_or_default())),
+                    dyn_cell: DynCell::from(e.with_xell(self.clone())),
                     domain: Rc::clone(&self.domain),
                 }
             }
@@ -504,7 +503,7 @@ impl Xell {
                 path += searcher.unmatched_path().as_str();
                 warning!("💥 path search failed: {}", path);
                 Xell {
-                    dyn_cell: DynCell::from(noerr().with_path(path)),
+                    dyn_cell: DynCell::from(noerrm(path).with_xell(self.clone())),
                     domain: Rc::clone(&self.domain),
                 }
             }

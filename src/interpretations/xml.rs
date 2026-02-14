@@ -1,15 +1,18 @@
 use linkme::distributed_slice;
 use quick_xml::{
-    events::{BytesDecl, BytesEnd, BytesStart, Event},
     Error as XmlError, Reader,
+    events::{BytesDecl, BytesEnd, BytesStart, Event},
 };
-use std::{fs::File, io::BufRead, rc::Rc};
+use std::{
+    io::{BufRead, BufReader},
+    rc::Rc,
+};
 
 use crate::{
     api::{interpretation::*, *},
     debug, guard_variant, implement_try_from_xell,
     utils::{
-        indentation::{detect_file_indentation, detect_indentation},
+        indentation::{IndentationReader, detect_indentation},
         ownrc::{OwnRc, ReadRc, WriteRc},
         ownrcutils::read,
     },
@@ -98,32 +101,28 @@ implement_try_from_xell!(Cell, Xml);
 
 impl Cell {
     pub(crate) fn from_cell(origin: Xell, _: &str, params: &ElevateParams) -> Res<Xell> {
-        match origin.interpretation() {
-            "fs" => {
-                let r = origin.read();
-                let path = r.as_file_path()?;
-                let file = File::open(path).map_err(|e| {
-                    caused(
-                        HErrKind::InvalidFormat,
-                        format!("cannot open file {:?}", path),
-                        e,
-                    )
-                })?;
-                let indent = detect_file_indentation(path);
-                let mut reader = Reader::from_file(path).map_err(HErr::from)?;
-                let root = xml_to_node(&mut reader)?;
-                Self::from_root_node(root, Some(origin), indent)
+        let r = origin.read();
+        let value = r.value()?;
+        let (indent, root) = match value {
+            Value::Bytes => {
+                let reader = r.value_read()?;
+                let mut indentation_reader = IndentationReader::new(reader);
+                let root = {
+                    let mut xml_reader = Reader::from_reader(BufReader::new(&mut indentation_reader));
+                    xml_to_node(&mut xml_reader)?
+                };
+                let indent = indentation_reader.detected_indentation();
+                (indent, root)
             }
             _ => {
-                let r = origin.read();
-                let v = r.value()?;
-                let cow = v.as_cow_str();
-                let indent = detect_indentation(cow.as_ref());
-                let mut reader = Reader::from_str(cow.as_ref());
+                let s = value.as_cow_str();
+                let indent = detect_indentation(s.as_ref());
+                let mut reader = Reader::from_str(s.as_ref());
                 let root = xml_to_node(&mut reader)?;
-                Self::from_root_node(root, Some(origin), indent)
+                (indent, root)
             }
-        }
+        };
+        Self::from_root_node(root, Some(origin), indent)
     }
 
     fn from_root_node(root: Node, origin: Option<Xell>, indent: String) -> Res<Xell> {
@@ -199,7 +198,9 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
             }
             Ok(Event::DocType(ref e)) => {
                 counts.count_doc_type += 1;
-                let doctype = decoder.decode(e.as_ref()).map_err(|e| deformed(e.to_string()))?;
+                let doctype = decoder
+                    .decode(e.as_ref())
+                    .map_err(|e| deformed(e.to_string()))?;
                 last(&mut stack)?.push(Node::DocType(doctype.into()));
             }
             Ok(Event::PI(ref e)) => {
@@ -212,8 +213,12 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                 for resa in e.attributes().with_checks(false) {
                     match resa {
                         Ok(a) => {
-                            let key = decoder.decode(a.key.0).map_err(|e| deformed(e.to_string()))?;
-                            let value = decoder.decode(&a.value).map_err(|e| deformed(e.to_string()))?;
+                            let key = decoder
+                                .decode(a.key.0)
+                                .map_err(|e| deformed(e.to_string()))?;
+                            let value = decoder
+                                .decode(&a.value)
+                                .map_err(|e| deformed(e.to_string()))?;
                             attrs.push(Attribute::Attribute(key.into(), value.into()))
                         }
                         Err(err) => attrs.push(Attribute::Error(format!("{}", err))),
@@ -225,12 +230,16 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
             }
             Ok(Event::Text(e)) => {
                 counts.count_text += 1;
-                let text = decoder.decode(e.as_ref()).map_err(|e| deformed(e.to_string()))?;
+                let text = decoder
+                    .decode(e.as_ref())
+                    .map_err(|e| deformed(e.to_string()))?;
                 last(&mut stack)?.push(Node::Text(text.into()));
             }
             Ok(Event::Comment(e)) => {
                 counts.count_comment += 1;
-                let text = decoder.decode(e.as_ref()).map_err(|e| deformed(e.to_string()))?;
+                let text = decoder
+                    .decode(e.as_ref())
+                    .map_err(|e| deformed(e.to_string()))?;
                 last(&mut stack)?.push(Node::Comment(text.into()));
             }
             Ok(Event::CData(e)) => {
@@ -248,7 +257,9 @@ fn xml_to_node<B: BufRead>(reader: &mut Reader<B>) -> Res<Node> {
                     .ok_or_else(|| faulterr("no element in attr stack"))?;
                 a.shrink_to_fit();
                 counts.count_attributes += a.len();
-                let name = decoder.decode(e.name().0).map_err(|e| deformed(e.to_string()))?;
+                let name = decoder
+                    .decode(e.name().0)
+                    .map_err(|e| deformed(e.to_string()))?;
                 let mut text = String::new();
                 if let Some(Node::Text(t)) = v.first()
                     && !t.trim().is_empty()
@@ -331,9 +342,7 @@ impl CellReaderTrait for CellReader {
                 Node::Decl(_) => nores(),
                 Node::DocType(x) => Ok(Value::Str(x.trim())),
                 Node::PI(x) => Ok(Value::Str(x)),
-                Node::Element((_, _, text, _)) => {
-                    Ok(Value::Str(text.as_str()))
-                }
+                Node::Element((_, _, text, _)) => Ok(Value::Str(text.as_str())),
                 Node::Text(x) => Ok(Value::Str(x)),
                 Node::Comment(x) => Ok(Value::Str(x)),
                 Node::CData(_) => Ok(Value::Bytes),

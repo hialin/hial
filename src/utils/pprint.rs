@@ -8,6 +8,8 @@ use crate::api::*;
 const SPACE_TO_SEPARATOR: usize = 32;
 const SEPARATORS: &[&str] = &["│ ", "╞ ", "┝ ", "├ "];
 const INDENT: usize = 4;
+const ANSI_DIM_ON: &str = "\x1b[2m";
+const ANSI_DIM_OFF: &str = "\x1b[22m";
 
 pub fn pprint(cell: &Xell, depth: usize, breadth: usize) {
     let mut buffer = String::new();
@@ -201,9 +203,9 @@ fn print_value(buffer: &mut String, indent: usize, v: Value) -> Result<(), Error
 }
 
 fn print_bytes(buffer: &mut String, bytes: &[u8]) -> Result<(), Error> {
-    write!(buffer, "⟨")?;
+    write!(buffer, "{}⟨", ANSI_DIM_ON)?;
     write_bytes(buffer, bytes)?;
-    write!(buffer, "⟩")
+    write!(buffer, "⟩{}", ANSI_DIM_OFF)
 }
 
 fn print_string(buffer: &mut String, indent: usize, s: &str) -> Result<(), Error> {

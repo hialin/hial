@@ -6,11 +6,6 @@ use crate::{
 use chumsky::prelude::*;
 use std::str::FromStr;
 
-// TODO: this is not ok, remove this function and fix the problems
-fn leak_str(s: String) -> &'static str {
-    Box::leak(s.into_boxed_str())
-}
-
 pub fn parse_path(input: &str) -> Res<Path<'_>> {
     path_items_parser()
         .then_ignore(end())
@@ -25,102 +20,12 @@ pub fn parse_path_with_starter(input: &str) -> Res<(PathStart<'_>, Path<'_>)> {
         .map_err(|err| usererr(convert_error(input, err)))
 }
 
-fn ws() -> impl Parser<char, (), Error = ParseError> + Clone {
-    filter(|c: &char| c.is_whitespace()).repeated().ignored()
-}
-
-fn identifier_parser() -> impl Parser<char, String, Error = ParseError> + Clone {
-    filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_')
-        .repeated()
-        .at_least(1)
-        .collect::<String>()
-        .labelled("identifier")
-}
-
-fn number_isize_parser() -> impl Parser<char, isize, Error = ParseError> + Clone {
-    one_of("+-")
-        .or_not()
-        .then(
-            filter(|c: &char| c.is_ascii_digit())
-                .repeated()
-                .at_least(1)
-                .collect::<String>(),
-        )
-        .try_map(|(sign, digits), span| {
-            let mut raw = String::new();
-            if let Some(sign) = sign {
-                raw.push(sign);
-            }
-            raw.push_str(&digits);
-            isize::from_str(raw.as_str()).map_err(|_| Simple::custom(span, "invalid number"))
-        })
-        .labelled("number")
-}
-
-fn quoted_parser(quote: char) -> impl Parser<char, String, Error = ParseError> + Clone {
-    let inner = choice((
-        just('\\').ignore_then(any()).map(|c| {
-            let mut out = String::from("\\");
-            out.push(c);
-            out
-        }),
-        filter(move |c: &char| *c != quote && *c != '\\').map(|c| c.to_string()),
-    ))
-    .repeated()
-    .collect::<Vec<String>>()
-    .map(|parts| parts.concat());
-
-    just(quote)
-        .ignore_then(inner)
-        .then_ignore(just(quote))
-        .map(move |raw| unescape_string(raw.as_str(), quote))
-}
-
-fn string_parser() -> impl Parser<char, String, Error = ParseError> + Clone {
-    choice((quoted_parser('\''), quoted_parser('"'))).labelled("string")
-}
-
-fn operation_parser<'a>() -> impl Parser<char, &'a str, Error = ParseError> + Clone {
-    choice((just("==").to("=="), just("!=").to("!="))).labelled("operation")
-}
-
-pub(super) fn value_int_parser() -> impl Parser<char, OwnValue, Error = ParseError> + Clone {
-    number_isize_parser()
-        .map(|num| OwnValue::from(num as i64))
-        .labelled("value_int")
-}
-
-fn value_string_parser() -> impl Parser<char, OwnValue, Error = ParseError> + Clone {
-    string_parser()
-        .map(OwnValue::String)
-        .labelled("value_string")
-}
-
-fn value_ident_parser() -> impl Parser<char, OwnValue, Error = ParseError> + Clone {
-    identifier_parser()
-        .map(OwnValue::String)
-        .labelled("value_ident")
-}
-
-pub(super) fn rvalue_parser() -> impl Parser<char, OwnValue, Error = ParseError> + Clone {
-    choice((
-        value_string_parser(),
-        value_int_parser(),
-        value_ident_parser(),
-    ))
-    .labelled("value")
-}
-
-fn relation_parser() -> impl Parser<char, Relation, Error = ParseError> + Clone {
-    let rels = [
-        Relation::Attr as u8 as char,
-        Relation::Sub as u8 as char,
-        Relation::Interpretation as u8 as char,
-        Relation::Field as u8 as char,
-    ];
-    one_of(rels)
-        .map(|c| Relation::try_from(c).unwrap_or_else(|_| panic!("bad relation")))
-        .labelled("relation")
+pub(super) fn path_with_starter_parser<'a>()
+-> impl Parser<char, (PathStart<'a>, Path<'a>), Error = ParseError> + Clone {
+    path_start_parser()
+        .then_ignore(ws())
+        .then(path_items_parser())
+        .labelled("path")
 }
 
 fn path_start_parser<'a>() -> impl Parser<char, PathStart<'a>, Error = ParseError> + Clone {
@@ -147,14 +52,6 @@ fn path_start_parser<'a>() -> impl Parser<char, PathStart<'a>, Error = ParseErro
         .map(PathStart::String)
         .labelled("path_start_string");
     choice((path_start_url, path_start_file, path_start_string)).labelled("path_start")
-}
-
-pub(super) fn path_with_starter_parser<'a>()
--> impl Parser<char, (PathStart<'a>, Path<'a>), Error = ParseError> + Clone {
-    path_start_parser()
-        .then_ignore(ws())
-        .then(path_items_parser())
-        .labelled("path")
 }
 
 pub(super) fn path_items_parser<'a>() -> impl Parser<char, Path<'a>, Error = ParseError> + Clone {
@@ -454,4 +351,107 @@ fn unescape_string(s: &str, special: char) -> String {
         }
     }
     r
+}
+
+// TODO: this is not ok, remove this function and fix the problems
+fn leak_str(s: String) -> &'static str {
+    Box::leak(s.into_boxed_str())
+}
+
+fn ws() -> impl Parser<char, (), Error = ParseError> + Clone {
+    filter(|c: &char| c.is_whitespace()).repeated().ignored()
+}
+
+fn identifier_parser() -> impl Parser<char, String, Error = ParseError> + Clone {
+    filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_')
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
+        .labelled("identifier")
+}
+
+fn number_isize_parser() -> impl Parser<char, isize, Error = ParseError> + Clone {
+    one_of("+-")
+        .or_not()
+        .then(
+            filter(|c: &char| c.is_ascii_digit())
+                .repeated()
+                .at_least(1)
+                .collect::<String>(),
+        )
+        .try_map(|(sign, digits), span| {
+            let mut raw = String::new();
+            if let Some(sign) = sign {
+                raw.push(sign);
+            }
+            raw.push_str(&digits);
+            isize::from_str(raw.as_str()).map_err(|_| Simple::custom(span, "invalid number"))
+        })
+        .labelled("number")
+}
+
+fn quoted_parser(quote: char) -> impl Parser<char, String, Error = ParseError> + Clone {
+    let inner = choice((
+        just('\\').ignore_then(any()).map(|c| {
+            let mut out = String::from("\\");
+            out.push(c);
+            out
+        }),
+        filter(move |c: &char| *c != quote && *c != '\\').map(|c| c.to_string()),
+    ))
+    .repeated()
+    .collect::<Vec<String>>()
+    .map(|parts| parts.concat());
+
+    just(quote)
+        .ignore_then(inner)
+        .then_ignore(just(quote))
+        .map(move |raw| unescape_string(raw.as_str(), quote))
+}
+
+fn string_parser() -> impl Parser<char, String, Error = ParseError> + Clone {
+    choice((quoted_parser('\''), quoted_parser('"'))).labelled("string")
+}
+
+fn operation_parser<'a>() -> impl Parser<char, &'a str, Error = ParseError> + Clone {
+    choice((just("==").to("=="), just("!=").to("!="))).labelled("operation")
+}
+
+pub(super) fn value_int_parser() -> impl Parser<char, OwnValue, Error = ParseError> + Clone {
+    number_isize_parser()
+        .map(|num| OwnValue::from(num as i64))
+        .labelled("value_int")
+}
+
+fn value_string_parser() -> impl Parser<char, OwnValue, Error = ParseError> + Clone {
+    string_parser()
+        .map(OwnValue::String)
+        .labelled("value_string")
+}
+
+fn value_ident_parser() -> impl Parser<char, OwnValue, Error = ParseError> + Clone {
+    identifier_parser()
+        .map(OwnValue::String)
+        .labelled("value_ident")
+}
+
+pub(super) fn rvalue_parser() -> impl Parser<char, OwnValue, Error = ParseError> + Clone {
+    choice((
+        value_string_parser(),
+        value_int_parser(),
+        value_ident_parser(),
+    ))
+    .labelled("value")
+}
+
+fn relation_parser() -> impl Parser<char, Relation, Error = ParseError> + Clone {
+    let rels = [
+        Relation::Attr as u8 as char,
+        Relation::Sub as u8 as char,
+        Relation::Interpretation as u8 as char,
+        Relation::Field as u8 as char,
+    ];
+    one_of(rels)
+        .map(|c| Relation::try_from(c).unwrap_or_else(|_| panic!("bad relation")))
+        .labelled("relation")
 }
