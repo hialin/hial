@@ -39,6 +39,18 @@ fn test_multihop_path() -> Res<()> {
 }
 
 #[test]
+fn search_empty_elevation_uses_auto_interpretation() -> Res<()> {
+    let root = Xell::from(".").be("path").be("fs");
+    let cell = root.to("/src/tests/data/assignment.json^/a");
+    assert_eq!(cell.read().value()?, Int::from(1));
+    assert_eq!(
+        cell.path()?,
+        "`.`^path^fs/src/tests/data/assignment.json^json/a"
+    );
+    Ok(())
+}
+
+#[test]
 fn search_simple_search() -> Res<()> {
     const TREE: &str = r#"
             a:

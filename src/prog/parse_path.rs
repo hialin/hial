@@ -128,12 +128,12 @@ pub(super) fn path_items_parser<'a>() -> impl Parser<char, Path<'a>, Error = Par
         let elevation_path_item = ws()
             .ignore_then(just('^'))
             .ignore_then(ws())
-            .ignore_then(path_item_selector.clone())
+            .ignore_then(path_item_selector.clone().or_not())
             .then_ignore(ws())
             .then(interpretation_param.repeated())
             .map(|(interpretation, params)| {
                 PathItem::Elevation(ElevationPathItem {
-                    interpretation,
+                    interpretation: interpretation.unwrap_or(Selector::Str("")),
                     params,
                 })
             })
@@ -247,12 +247,12 @@ fn path_item_parser<'a>(
     let elevation_path_item = ws()
         .ignore_then(just('^'))
         .ignore_then(ws())
-        .ignore_then(path_item_selector.clone())
+        .ignore_then(path_item_selector.clone().or_not())
         .then_ignore(ws())
         .then(interpretation_param.repeated())
         .map(|(interpretation, params)| {
             PathItem::Elevation(ElevationPathItem {
-                interpretation,
+                interpretation: interpretation.unwrap_or(Selector::Str("")),
                 params,
             })
         })

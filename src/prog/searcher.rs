@@ -215,6 +215,14 @@ impl<'s> Searcher<'s> {
         ));
         let group = parent.elevate();
         let itp_cell = match epi.interpretation {
+            Selector::Str("") => {
+                if let Some(itp) = parent.auto_interpretation() {
+                    group.get(itp)
+                } else {
+                    // no auto-detection, skip this elevation
+                    return None;
+                }
+            }
             Selector::Str(itp) => group.get(itp),
             _ => return Some(userres("bad interpretation selector")),
         };

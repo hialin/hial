@@ -35,6 +35,12 @@ fn main() -> Res<()> {
 
 fn parse_args() -> Res<Args> {
     let mut args = Args::default();
+    if matches!(
+        std::env::var("HIAL_COLOR_PALETTE"),
+        Ok(palette) if palette.eq_ignore_ascii_case("light")
+    ) {
+        args.color_palette = ColorPalette::Light;
+    }
 
     let mut args_iter = std::env::args().skip(1).peekable();
     let mut in_flags = true;

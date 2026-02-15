@@ -85,19 +85,18 @@ fn path_simple_elevation() -> Res<()> {
     Ok(())
 }
 
-// TODO: top elevation
-// #[test]
-// fn path_top_elevation() -> Res<()> {
-//     let path = Path::parse("^[0]")?;
-//     assert_eq!(
-//         path.0.as_slice(),
-//         &[PathItem::Elevation(ElevationPathItem {
-//             interpretation: Selector::Str("fs"),
-//             params: vec![]
-//         }),]
-//     );
-//     Ok(())
-// }
+#[test]
+fn path_empty_elevation_selector() -> Res<()> {
+    let path = Path::parse("^")?;
+    assert_eq!(
+        path.0.as_slice(),
+        &[PathItem::Elevation(ElevationPathItem {
+            interpretation: Selector::Str(""),
+            params: vec![]
+        }),]
+    );
+    Ok(())
+}
 
 #[test]
 fn path_simple_selector() -> Res<()> {

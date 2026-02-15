@@ -31,7 +31,39 @@ pub fn pprint_with_mode(
         color_enabled: use_color(color_mode),
         color_palette,
     };
-    if let Err(e) = _pprint(cell, "", &options, &[], false, false) {
+    let root_prefix = cell.path().unwrap_or_default();
+    let has_root_prefix = !root_prefix.is_empty();
+    if has_root_prefix {
+        let root_line_data = LineData {
+            interpretation: String::new(),
+            value_type: String::new(),
+            edge_prefix: root_prefix,
+            key: None,
+            key_error: None,
+            value: None,
+            value_error: None,
+            read_error: None,
+            empty: false,
+        };
+        let root_tree_prefix = TreePrefix {
+            ancestors_have_next: vec![],
+            has_parent: false,
+            is_last: false,
+        };
+        match render_line(
+            &root_line_data,
+            &root_tree_prefix,
+            options.color_enabled,
+            options.color_palette,
+        ) {
+            Ok(line) => println!("{}", line),
+            Err(e) => {
+                eprintln!("pprint error: {:?}", e);
+                return;
+            }
+        }
+    }
+    if let Err(e) = _pprint(cell, "", &options, &[], has_root_prefix, true) {
         eprintln!("pprint error: {:?}", e);
     }
 }
