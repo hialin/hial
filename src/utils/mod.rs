@@ -6,3 +6,4 @@ pub mod ownrc;
 pub mod ownrcutils;
 pub mod picoset;
 pub mod pprint;
+pub(crate) mod pprint_render;

@@ -1,19 +1,37 @@
 use std::{
-    fmt::{Error, Write},
+    fmt::Error,
     io::Read,
 };
 
 use crate::api::*;
+use crate::prog::program::{ColorMode, ColorPalette};
+use crate::utils::pprint_render::{render_line, use_color, LineData, LineValue, TreePrefix};
 
-const SPACE_TO_SEPARATOR: usize = 32;
-const SEPARATORS: &[&str] = &["│ ", "╞ ", "┝ ", "├ "];
-const INDENT: usize = 4;
-const ANSI_DIM_ON: &str = "\x1b[2m";
-const ANSI_DIM_OFF: &str = "\x1b[22m";
+struct PPrintOptions {
+    depth: usize,
+    breadth: usize,
+    color_enabled: bool,
+    color_palette: ColorPalette,
+}
 
 pub fn pprint(cell: &Xell, depth: usize, breadth: usize) {
-    let mut buffer = String::new();
-    if let Err(e) = _pprint(cell, "", depth, breadth, 0, &mut buffer) {
+    pprint_with_mode(cell, depth, breadth, ColorMode::Auto, ColorPalette::Dark);
+}
+
+pub fn pprint_with_mode(
+    cell: &Xell,
+    depth: usize,
+    breadth: usize,
+    color_mode: ColorMode,
+    color_palette: ColorPalette,
+) {
+    let options = PPrintOptions {
+        depth,
+        breadth,
+        color_enabled: use_color(color_mode),
+        color_palette,
+    };
+    if let Err(e) = _pprint(cell, "", &options, &[], false, false) {
         eprintln!("pprint error: {:?}", e);
     }
 }
@@ -21,125 +39,124 @@ pub fn pprint(cell: &Xell, depth: usize, breadth: usize) {
 fn _pprint(
     cell: &Xell,
     prefix: &str,
-    depth: usize,
-    breadth: usize,
-    indent: usize,
-    buffer: &mut String,
+    options: &PPrintOptions,
+    ancestors_have_next: &[bool],
+    has_parent: bool,
+    is_last: bool,
 ) -> Result<(), Error> {
-    if indent > depth || depth == usize::MAX {
+    if options.depth != usize::MAX && ancestors_have_next.len() > options.depth {
         return Ok(());
     }
-    print_cell(cell, prefix, indent, buffer)?;
-    pprint_group("@", cell.attr(), depth, breadth, indent, buffer)?;
-    pprint_group("", cell.sub(), depth, breadth, indent, buffer)?;
+    let line_data = extract_line_data(cell, prefix);
+    let tree_prefix = TreePrefix {
+        ancestors_have_next: ancestors_have_next.to_vec(),
+        has_parent,
+        is_last,
+    };
+    println!(
+        "{}",
+        render_line(
+            &line_data,
+            &tree_prefix,
+            options.color_enabled,
+            options.color_palette
+        )?
+    );
+    pprint_group(cell, options, &tree_prefix)?;
     Ok(())
 }
 
 fn pprint_group(
-    prefix: &str,
-    group: Group,
-    depth: usize,
-    breadth: usize,
-    indent: usize,
-    buffer: &mut String,
+    cell: &Xell,
+    options: &PPrintOptions,
+    parent_prefix: &TreePrefix,
 ) -> Result<(), Error> {
     const SHOW_ELLIPSES: bool = false;
-    if depth > 0 && indent + 1 == depth {
+    let indent = parent_prefix.ancestors_have_next.len() + usize::from(parent_prefix.has_parent);
+    if options.depth > 0 && indent == options.depth {
         if SHOW_ELLIPSES {
-            make_indent(indent + 1, buffer)?;
-            println!("{}{}…", buffer, prefix);
-            buffer.clear();
+            println!("…");
         }
-    } else {
-        for (i, x) in group.into_iter().enumerate() {
-            match x.err() {
-                Ok(x) => _pprint(&x, prefix, depth, breadth, indent + 1, buffer)?,
-                Err(err) => eprintln!("error: {:?}", err),
-            }
-            if breadth > 0 && i + 1 >= breadth {
-                if SHOW_ELLIPSES {
-                    make_indent(indent + 1, buffer)?;
-                    println!("{}{}…", buffer, prefix);
-                    buffer.clear();
-                }
-                break;
-            }
+        return Ok(());
+    }
+
+    let mut ancestors = parent_prefix.ancestors_have_next.clone();
+    if parent_prefix.has_parent {
+        ancestors.push(!parent_prefix.is_last);
+    }
+
+    let mut children = cell
+        .attr()
+        .into_iter()
+        .map(|x| ("@", x))
+        .chain(cell.sub().into_iter().map(|x| ("", x)))
+        .peekable();
+
+    let mut shown = 0usize;
+    while let Some((prefix, item)) = children.next() {
+        shown += 1;
+        let reached_breadth = options.breadth > 0 && shown >= options.breadth;
+        let is_last = reached_breadth || children.peek().is_none();
+        match item.err() {
+            Ok(child) => _pprint(&child, prefix, options, &ancestors, true, is_last)?,
+            Err(err) => eprintln!("error: {:?}", err),
         }
-    }
-    Ok(())
-}
-
-fn make_indent(indent: usize, buffer: &mut String) -> Result<(), Error> {
-    while buffer.len() < SPACE_TO_SEPARATOR {
-        buffer.push(' ');
-    }
-
-    let mut visual_correction = 0;
-    if indent > 0 {
-        let typeseparator: &'static str = SEPARATORS.get(indent).unwrap_or(&SEPARATORS[0]);
-        buffer.push_str(typeseparator);
-        visual_correction = 2; // unicode separator has 3 bytes for 1 char
-    }
-
-    let width = buffer.len() - visual_correction + INDENT * indent;
-    while buffer.len() < width {
-        buffer.push(' ');
+        if reached_breadth {
+            if SHOW_ELLIPSES {
+                println!("…");
+            }
+            break;
+        }
     }
 
     Ok(())
 }
 
-fn print_cell(cell: &Xell, prefix: &str, indent: usize, buffer: &mut String) -> Result<(), Error> {
-    let mut typ = String::new();
-    write!(buffer, "{} ", cell.interpretation(),)?;
-
+fn extract_line_data(cell: &Xell, prefix: &str) -> LineData {
+    let mut value_type = String::new();
+    let mut key = None;
+    let mut key_error = None;
+    let mut value = None;
+    let mut value_error = None;
+    let mut read_error = None;
     let mut empty = true;
+
     let reader = match cell.read().err() {
         Ok(reader) => Some(reader),
         Err(err) => {
             if err.kind != HErrKind::None {
                 empty = false;
-                write!(buffer, "⚠cannot read: {:?}⚠", err)?;
+                read_error = Some(format!("⚠cannot read: {:?}⚠", err));
             }
             None
         }
     };
 
     if let Some(reader) = reader {
-        write!(
-            buffer,
-            "{}",
-            reader.ty().unwrap_or_else(|e| {
-                typ = format!("⚠{:?}⚠", e);
-                &typ
-            })
-        )?;
-        make_indent(indent, buffer)?;
-        write!(buffer, "{}", prefix)?;
+        value_type = reader
+            .ty()
+            .map(|ty| ty.to_string())
+            .unwrap_or_else(|e| format!("⚠{:?}⚠", e));
 
-        let key = reader.label();
-        let value = reader.value();
-        match key {
+        let key_res = reader.label();
+        let value_res = reader.value();
+        match key_res {
             Ok(k) => {
-                if Some(&k) != value.as_ref().ok() {
+                if Some(&k) != value_res.as_ref().ok() {
                     empty = false;
-                    write!(buffer, "{}: ", k)
-                } else {
-                    write!(buffer, "")
+                    key = Some(k.to_string());
                 }
             }
             Err(err) => {
-                if err.kind == HErrKind::None {
-                    write!(buffer, "")
-                } else {
+                if err.kind != HErrKind::None {
                     empty = false;
-                    write!(buffer, "⚠{:?}⚠ ", err)
+                    key_error = Some(format!("⚠{:?}⚠", err));
                 }
             }
-        }?;
-        match value {
+        }
+
+        match value_res {
             Ok(v) => {
-                // write!(buffer, "empty={} ", v.is_empty())?;
                 if empty {
                     empty = v.is_empty();
                 }
@@ -150,85 +167,68 @@ fn print_cell(cell: &Xell, prefix: &str, indent: usize, buffer: &mut String) -> 
                             match source.read(&mut bytes) {
                                 Ok(n) => {
                                     let bytes = &bytes[..n];
-                                    print_bytes(buffer, bytes)
+                                    value = Some(LineValue::Bytes(format_bytes(bytes)));
                                 }
                                 Err(err) => {
                                     empty = false;
-                                    write!(buffer, "⚠cannot read bytes: {:?}", err)
+                                    value_error = Some(format!("⚠cannot read bytes: {:?}⚠", err));
                                 }
                             }
                         }
                         Err(err) => {
-                            if err.kind == HErrKind::None {
-                                write!(buffer, "")
-                            } else {
+                            if err.kind != HErrKind::None {
                                 empty = false;
-                                write!(buffer, "⚠{:?}⚠", err)
+                                value_error = Some(format!("⚠{:?}⚠", err));
                             }
                         }
                     }
-                } else {
-                    print_value(buffer, indent, v)
+                } else if let Some(v) = extract_value(v) {
+                    value = Some(v);
                 }
             }
             Err(err) => {
-                if err.kind == HErrKind::None {
-                    write!(buffer, "")
-                } else {
+                if err.kind != HErrKind::None {
                     empty = false;
-                    write!(buffer, "⚠{:?}⚠", err)
+                    value_error = Some(format!("⚠{:?}⚠", err));
                 }
             }
-        }?;
-    }
-
-    if empty {
-        write!(buffer, "•")?;
-    }
-
-    println!("{}", buffer);
-    buffer.clear();
-    Ok(())
-}
-
-fn print_value(buffer: &mut String, indent: usize, v: Value) -> Result<(), Error> {
-    match v {
-        Value::None => write!(buffer, "None"),
-        Value::Bool(x) => write!(buffer, "{}", x),
-        Value::Int(x) => write!(buffer, "{}", x),
-        Value::Float(x) => write!(buffer, "{}", x),
-        Value::Str(x) => print_string(buffer, indent, x),
-        Value::Bytes => write!(buffer, "⟨bytes⟩"),
-    }
-}
-
-fn print_bytes(buffer: &mut String, bytes: &[u8]) -> Result<(), Error> {
-    write!(buffer, "{}⟨", ANSI_DIM_ON)?;
-    write_bytes(buffer, bytes)?;
-    write!(buffer, "⟩{}", ANSI_DIM_OFF)
-}
-
-fn print_string(buffer: &mut String, indent: usize, s: &str) -> Result<(), Error> {
-    if !s.contains('\n') {
-        return write!(buffer, "{}", s);
-    }
-
-    let mut pre = String::new();
-    make_indent(indent, &mut pre)?;
-    pre.push_str("❝ ");
-
-    for (i, l) in s.split('\n').enumerate() {
-        if i == 0 {
-            writeln!(buffer, "❝ {}", l)?;
-        } else {
-            writeln!(buffer, "{}{}", pre, l)?;
         }
     }
-    if buffer.ends_with("\n\n") {
-        buffer.pop(); // remove last '\n'
+
+    LineData {
+        interpretation: cell.interpretation().to_string(),
+        value_type,
+        edge_prefix: prefix.to_string(),
+        key,
+        key_error,
+        value,
+        value_error,
+        read_error,
+        empty,
     }
-    if buffer.ends_with('\n') {
-        buffer.pop();
+}
+
+fn extract_value(value: Value) -> Option<LineValue> {
+    match value {
+        Value::None => Some(LineValue::Inline("None".to_string())),
+        Value::Bool(v) => Some(LineValue::Inline(v.to_string())),
+        Value::Int(v) => Some(LineValue::Inline(v.to_string())),
+        Value::Float(v) => Some(LineValue::Inline(v.to_string())),
+        Value::Str(s) => {
+            if s.contains('\n') {
+                Some(LineValue::Multiline(
+                    s.split('\n').map(|line| line.to_string()).collect(),
+                ))
+            } else {
+                Some(LineValue::Inline(s.to_string()))
+            }
+        }
+        Value::Bytes => None,
     }
-    Ok(())
+}
+
+fn format_bytes(bytes: &[u8]) -> String {
+    let mut value = String::new();
+    let _ = write_bytes(&mut value, bytes);
+    value
 }

@@ -1,6 +1,7 @@
 use crate::{
     api::*,
-    debug, pprint,
+    debug,
+    utils::pprint::pprint_with_mode,
     prog::{searcher::Searcher, *},
 };
 use std::fmt::{Display, Formatter};
@@ -18,6 +19,23 @@ pub struct Program<'a>(pub(crate) Vec<Statement<'a>>);
 pub struct ProgramParams {
     pub print_depth: usize,
     pub print_breadth: usize,
+    pub print_color: ColorMode,
+    pub color_palette: ColorPalette,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub enum ColorMode {
+    #[default]
+    Auto,
+    Always,
+    Never,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub enum ColorPalette {
+    #[default]
+    Dark,
+    Light,
 }
 
 #[derive(Clone, Debug)]
@@ -75,7 +93,13 @@ impl<'a> Program<'a> {
                     ifdebug!(println!("-- PathWithStart: {} {}", start, path));
                     let searcher = Searcher::new(start.eval()?, path.clone());
                     for cell in searcher {
-                        pprint(&cell?, params.print_depth, params.print_breadth);
+                        pprint_with_mode(
+                            &cell?,
+                            params.print_depth,
+                            params.print_breadth,
+                            params.print_color,
+                            params.color_palette,
+                        );
                     }
                 }
             }

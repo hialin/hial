@@ -1,6 +1,6 @@
 use hiallib::{
     api::*,
-    prog::{Program, ProgramParams},
+    prog::{ColorMode, ColorPalette, Program, ProgramParams},
     *,
 };
 
@@ -8,6 +8,8 @@ use hiallib::{
 struct Args {
     depth: Option<usize>,
     breadth: Option<usize>,
+    color_mode: ColorMode,
+    color_palette: ColorPalette,
     program: String,
 }
 
@@ -24,6 +26,8 @@ fn main() -> Res<()> {
     let params = ProgramParams {
         print_depth: args.depth.unwrap_or(usize::MAX),
         print_breadth: args.breadth.unwrap_or(0),
+        print_color: args.color_mode,
+        color_palette: args.color_palette,
     };
     program.run(params)?;
     Ok(())
@@ -44,6 +48,20 @@ fn parse_args() -> Res<Args> {
             }
             "-b" if in_flags => {
                 args.breadth = args_iter.next().and_then(|s| s.parse().ok());
+            }
+            "--color" if in_flags => {
+                args.color_mode = ColorMode::Always;
+            }
+            "--no-color" if in_flags => {
+                args.color_mode = ColorMode::Never;
+            }
+            "--color-palette" if in_flags => {
+                if let Some(palette) = args_iter.next() {
+                    args.color_palette = match palette.as_str() {
+                        "light" => ColorPalette::Light,
+                        _ => ColorPalette::Dark,
+                    };
+                }
             }
             "--" if in_flags => {
                 in_flags = false;
