@@ -22,7 +22,7 @@ fn main() -> Res<()> {
     debug!("Command: run {}", args.program);
     let program = Program::parse(&args.program)?;
     let params = ProgramParams {
-        print_depth: args.depth.unwrap_or(0),
+        print_depth: args.depth.unwrap_or(usize::MAX),
         print_breadth: args.breadth.unwrap_or(0),
     };
     program.run(params)?;

@@ -26,7 +26,7 @@ fn _pprint(
     indent: usize,
     buffer: &mut String,
 ) -> Result<(), Error> {
-    if depth > 0 && indent > depth {
+    if indent > depth || depth == usize::MAX {
         return Ok(());
     }
     print_cell(cell, prefix, indent, buffer)?;

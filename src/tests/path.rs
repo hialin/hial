@@ -179,6 +179,27 @@ fn path_ternary_expr() -> Res<()> {
             ],
         })]
     );
+
+    let path = Path::parse("/a[buildVersion==dev]")?;
+    assert_eq!(
+        path.0.as_slice(),
+        &[PathItem::Normal(NormalPathItem {
+            relation: Relation::Sub,
+            selector: Some(Selector::Str("a")),
+            index: None,
+            filters: vec![Filter {
+                expr: Expression::Ternary {
+                    left: Path(vec![PathItem::Normal(NormalPathItem {
+                        relation: Relation::Field,
+                        selector: Some(Selector::Str("buildVersion")),
+                        index: None,
+                        filters: vec![],
+                    })]),
+                    op_right: Some(("==", OwnValue::String("dev".to_string())))
+                }
+            }],
+        })]
+    );
     Ok(())
 }
 

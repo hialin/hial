@@ -285,7 +285,23 @@ fn path_item_parser<'a>(
         })
         .labelled("normal path item");
 
-    choice((elevation_path_item, normal_path_item)).labelled("path_item")
+    let field_shorthand_path_item = identifier_parser()
+        .map(|name| {
+            PathItem::Normal(NormalPathItem {
+                relation: Relation::Field,
+                selector: Some(Selector::from(leak_str(name))),
+                index: None,
+                filters: vec![],
+            })
+        })
+        .labelled("field shorthand path item");
+
+    choice((
+        elevation_path_item,
+        normal_path_item,
+        field_shorthand_path_item,
+    ))
+    .labelled("path_item")
 }
 
 #[cfg(test)]
