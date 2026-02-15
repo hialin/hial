@@ -686,9 +686,9 @@ impl Xell {
                         Err(e) => err_to_string(e),
                     }
                 });
-                if s.len() > 16 {
-                    s.truncate(16);
-                    s += "...";
+                if s.len() > 20 {
+                    s.truncate(19);
+                    s += "…";
                 }
                 format!("`{}`", s)
             };
@@ -842,9 +842,9 @@ fn test_cell_domain_path() -> Res<()> {
     // let leaf = root.to("/a/b/c/x");
     // assert_eq!(leaf.domain_path()?, r#"/a/b/c/x"#);
 
-    assert_eq!(root.path()?, r#"`{"a": {"x": "xa"...`^yaml"#);
+    assert_eq!(root.path()?, r#"`{"a": {"x": "xa", "…`^yaml"#);
 
-    // assert_eq!(leaf.path()?, r#"`{"a": {"x": "xa"...`^yaml/a/b/c/x"#);
+    // assert_eq!(leaf.path()?, r#"`{"a": {"x": "xa", "…`^yaml/a/b/c/x"#);
 
     Ok(())
 }

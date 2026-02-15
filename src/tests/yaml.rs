@@ -44,7 +44,7 @@ hosts:
     let yaml = Xell::from(yaml).be("yaml").to("/hosts/[1]/labels/power");
     assert_eq!(
         yaml.path()?,
-        "`\\nhosts:\\n  - ho...`^yaml/hosts/[1]/labels/power"
+        "`\\nhosts:\\n  - host_…`^yaml/hosts/[1]/labels/power"
     );
     Ok(())
 }

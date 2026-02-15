@@ -31,7 +31,7 @@ The Cell is usually a pointer to a group and a position in the group.
 //       /[i] -> document
 //         /field -> field (scalar value or nested doc/array)
 
-const DEFAULT_DOC_LIMIT: i64 = 100;
+const DEFAULT_DOC_LIMIT: i64 = 1000;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Cell {

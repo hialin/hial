@@ -3,6 +3,13 @@ use crate::{
     prog::{Path, PathStart, path::*, url::*},
 };
 
+// hial -d 3 'mongodb://localhost:27017^mongo/ai-result/classification-benchmarks-files'
+// hial -d 3 ~/Downloads/misclassified_neighbors.json\^
+// hial 'src/tests/data/*^'
+// hial 'src^fs/tests/data/*^'
+// hial 'src^fs/tests/fs.rs^'
+// hial 'src^fs/tests/fs.rs^/**[#type==function_item]'
+
 #[test]
 fn test_parse_paths() -> Res<()> {
     {

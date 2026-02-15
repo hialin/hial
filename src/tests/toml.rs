@@ -38,7 +38,7 @@ fn toml_path() -> Res<()> {
     let toml = Xell::from(TOML).be("toml").to("/database/data/[0]/[1]");
     assert_eq!(
         toml.path()?,
-        "`\\n# This is a TO...`^toml/database/data/[0]/[1]"
+        "`\\n# This is a TOML …`^toml/database/data/[0]/[1]"
     );
     Ok(())
 }

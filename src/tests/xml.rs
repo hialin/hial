@@ -76,7 +76,7 @@ fn xml_path() -> Res<()> {
             </doc>
         "#;
     let xml = Xell::from(xml.to_string()).to("^xml/doc/q/qq");
-    assert_eq!(xml.path()?, "`<?xml version=\"1...`^xml/doc/q/qq");
+    assert_eq!(xml.path()?, "`<?xml version=\"1.0\"…`^xml/doc/q/qq");
     Ok(())
 }
 

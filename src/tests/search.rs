@@ -13,7 +13,7 @@ fn test_simple_path() -> Res<()> {
         "#;
     let root = Xell::from(TREE).be("yaml");
     let x = root.to("/a/b/c/x");
-    assert_eq!(x.path()?, "`\\n            a:...`^yaml/a/b/c/x");
+    assert_eq!(x.path()?, "`\\n            a:\\n …`^yaml/a/b/c/x");
     Ok(())
 }
 
@@ -32,7 +32,8 @@ fn test_multihop_path() -> Res<()> {
 
     assert_eq!(
         result.path()?,
-        "`http://api.githu...`^http^json/rate_limit_url^http^json/resources/core/limit".to_string()
+        "`http://api.github.c…`^http^json/rate_limit_url^http^json/resources/core/limit"
+            .to_string()
     );
 
     Ok(())

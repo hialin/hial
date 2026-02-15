@@ -59,7 +59,7 @@ fn json_path() -> Res<()> {
     let target = json.to(path).err()?;
     assert_eq!(
         target.path()?,
-        r#"`{"hosts":[{"host...`^json"#.to_string() + path,
+        r#"`{"hosts":[{"host_id…`^json"#.to_string() + path,
     );
     Ok(())
 }
