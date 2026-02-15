@@ -1,3 +1,4 @@
+use crate::api::*;
 use std::fmt::{Display, Formatter};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -24,6 +25,13 @@ pub enum Host {
 
 pub type QueryParam<'a> = (&'a str, &'a str);
 pub type QueryParams<'a> = Vec<QueryParam<'a>>;
+
+impl<'a> Url<'a> {
+    pub(crate) fn parse(input: &str) -> Res<Url<'_>> {
+        let input = input.trim();
+        super::parse_url::parse_url(input)
+    }
+}
 
 impl<'a> Display for Url<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

@@ -1,52 +1,40 @@
 use crate::prog::url::*;
 
-use super::ParseError;
+use super::{ParseError, convert_error};
+use crate::api::*;
 use chumsky::prelude::*;
 
-// TODO: this is not ok, remove this function and fix the problems
-fn leak_str(s: String) -> &'static str {
-    Box::leak(s.into_boxed_str())
+pub fn parse_url(input: &str) -> Res<Url<'_>> {
+    url_parser()
+        .then_ignore(end())
+        .parse(input)
+        .map_err(|err| usererr(convert_error(input, err)))
 }
 
-fn ascii_alpha(c: &char) -> bool {
-    c.is_ascii_alphabetic()
-}
-
-fn ascii_alnum(c: &char) -> bool {
-    c.is_ascii_alphanumeric()
-}
-
-fn ascii_alnum_or_hyphen(c: &char) -> bool {
-    *c == '-' || c.is_ascii_alphanumeric()
-}
-
-fn digits_between(min: usize, max: usize) -> impl Parser<char, String, Error = ParseError> + Clone {
-    filter(|c: &char| c.is_ascii_digit())
-        .repeated()
-        .at_least(min)
-        .at_most(max)
-        .collect::<String>()
-}
-
-fn alpha1() -> impl Parser<char, String, Error = ParseError> + Clone {
-    filter(ascii_alpha)
-        .repeated()
-        .at_least(1)
-        .collect::<String>()
-}
-
-fn alphanumeric1() -> impl Parser<char, String, Error = ParseError> + Clone {
-    filter(ascii_alnum)
-        .repeated()
-        .at_least(1)
-        .collect::<String>()
-}
-
-fn alphanumerichyphen1() -> impl Parser<char, String, Error = ParseError> + Clone {
-    filter(ascii_alnum_or_hyphen)
-        .repeated()
-        .at_least(1)
-        .collect::<String>()
+pub(super) fn url_parser<'a>() -> impl Parser<char, Url<'a>, Error = ParseError> + Clone {
+    scheme()
+        .then(choice((
+            authority()
+                .then(ip_or_host())
+                .map(|(authority, host)| (Some(authority), host)),
+            ip_or_host().map(|host| (None, host)),
+        )))
+        .then(port().or_not())
+        .then(url_path().or_not())
+        .then(query_params().or_not())
+        .then(fragment().or_not())
+        .map(
+            |(((((scheme, (authority, host)), port), path), query), fragment)| Url {
+                scheme,
+                authority,
+                host,
+                port,
+                path: path.and_then(|p| if p.is_empty() { None } else { Some(p) }),
+                query,
+                fragment,
+            },
+        )
+        .labelled("url")
 }
 
 fn scheme() -> impl Parser<char, Scheme, Error = ParseError> + Clone {
@@ -64,28 +52,18 @@ fn authority<'a>() -> impl Parser<char, Authority<'a>, Error = ParseError> + Clo
         .labelled("authority")
 }
 
-fn host() -> impl Parser<char, Host, Error = ParseError> + Clone {
-    let dotted = alphanumerichyphen1()
-        .then_ignore(just('.'))
-        .repeated()
-        .at_least(1)
-        .then(alpha1())
-        .map(|(mut head, tail)| {
-            head.push(tail);
-            Host::Host(head.join("."))
-        });
-
-    let single = alphanumerichyphen1().map(Host::Host);
-    choice((dotted, single)).labelled("host")
+fn ip_or_host() -> impl Parser<char, Host, Error = ParseError> + Clone {
+    choice((ip(), host())).labelled("ip or host")
 }
 
-fn ip_num() -> impl Parser<char, u8, Error = ParseError> + Clone {
-    digits_between(1, 3)
-        .try_map(|result: String, span| match result.parse::<u8>() {
+fn port() -> impl Parser<char, u16, Error = ParseError> + Clone {
+    just(':')
+        .ignore_then(digits_between(1, 5))
+        .try_map(|res: String, span| match res.parse::<u16>() {
             Ok(n) => Ok(n),
-            Err(_) => Err(Simple::custom(span, "invalid ip number")),
+            Err(_) => Err(Simple::custom(span, "invalid port")),
         })
-        .labelled("ip number")
+        .labelled("port")
 }
 
 fn ip() -> impl Parser<char, Host, Error = ParseError> + Clone {
@@ -105,23 +83,30 @@ fn ip() -> impl Parser<char, Host, Error = ParseError> + Clone {
         .labelled("ip")
 }
 
-fn ip_or_host() -> impl Parser<char, Host, Error = ParseError> + Clone {
-    choice((ip(), host())).labelled("ip or host")
-}
+fn host() -> impl Parser<char, Host, Error = ParseError> + Clone {
+    let dotted = alphanumerichyphen1()
+        .then_ignore(just('.'))
+        .repeated()
+        .at_least(1)
+        .then(alpha1())
+        .map(|(mut head, tail)| {
+            head.push(tail);
+            Host::Host(head.join("."))
+        });
 
-fn port() -> impl Parser<char, u16, Error = ParseError> + Clone {
-    just(':')
-        .ignore_then(digits_between(2, 4))
-        .try_map(|res: String, span| match res.parse::<u16>() {
-            Ok(n) => Ok(n),
-            Err(_) => Err(Simple::custom(span, "invalid port")),
-        })
-        .labelled("port")
+    let single = alphanumerichyphen1().map(Host::Host);
+    choice((dotted, single)).labelled("host")
 }
 
 fn url_path<'a>() -> impl Parser<char, Vec<&'a str>, Error = ParseError> + Clone {
     just('/')
-        .ignore_then(url_code_points().separated_by(just('/')).allow_trailing())
+        .ignore_then(
+            url_code_points()
+                .separated_by(just('/'))
+                .allow_trailing()
+                .or_not()
+                .map(|parts| parts.unwrap_or_default()),
+        )
         .map(|parts| parts.into_iter().map(leak_str).collect::<Vec<_>>())
         .labelled("url_path")
 }
@@ -148,6 +133,44 @@ fn fragment() -> impl Parser<char, &'static str, Error = ParseError> + Clone {
         .labelled("fragment")
 }
 
+fn ip_num() -> impl Parser<char, u8, Error = ParseError> + Clone {
+    digits_between(1, 3)
+        .try_map(|result: String, span| match result.parse::<u8>() {
+            Ok(n) => Ok(n),
+            Err(_) => Err(Simple::custom(span, "invalid ip number")),
+        })
+        .labelled("ip number")
+}
+
+fn alphanumerichyphen1() -> impl Parser<char, String, Error = ParseError> + Clone {
+    filter(ascii_alnum_or_hyphen)
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
+}
+
+fn alphanumeric1() -> impl Parser<char, String, Error = ParseError> + Clone {
+    filter(ascii_alnum)
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
+}
+
+fn digits_between(min: usize, max: usize) -> impl Parser<char, String, Error = ParseError> + Clone {
+    filter(|c: &char| c.is_ascii_digit())
+        .repeated()
+        .at_least(min)
+        .at_most(max)
+        .collect::<String>()
+}
+
+fn alpha1() -> impl Parser<char, String, Error = ParseError> + Clone {
+    filter(ascii_alpha)
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
+}
+
 pub(super) fn path_code_points() -> impl Parser<char, String, Error = ParseError> + Clone {
     let accept = |c: &char| {
         *c == '-' || *c == '_' || *c == '.' || *c == ':' || *c == '*' || c.is_ascii_alphanumeric()
@@ -160,26 +183,21 @@ pub(super) fn url_code_points() -> impl Parser<char, String, Error = ParseError>
     filter(accept).repeated().at_least(1).collect::<String>()
 }
 
-pub(super) fn url_parser<'a>() -> impl Parser<char, Url<'a>, Error = ParseError> + Clone {
-    scheme()
-        .then(authority().or_not())
-        .then(ip_or_host())
-        .then(port().or_not())
-        .then(url_path().or_not())
-        .then(query_params().or_not())
-        .then(fragment().or_not())
-        .map(
-            |((((((scheme, authority), host), port), path), query), fragment)| Url {
-                scheme,
-                authority,
-                host,
-                port,
-                path,
-                query,
-                fragment,
-            },
-        )
-        .labelled("url")
+// TODO: this is not ok, remove this function and fix the problems
+fn leak_str(s: String) -> &'static str {
+    Box::leak(s.into_boxed_str())
+}
+
+fn ascii_alpha(c: &char) -> bool {
+    c.is_ascii_alphabetic()
+}
+
+fn ascii_alnum(c: &char) -> bool {
+    c.is_ascii_alphanumeric()
+}
+
+fn ascii_alnum_or_hyphen(c: &char) -> bool {
+    *c == '-' || c.is_ascii_alphanumeric()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -260,6 +278,8 @@ mod tests {
 
     #[test]
     fn test_url_path() {
+        assert_eq!(url_path().parse("/?d"), Ok(vec![]));
+        assert_eq!(url_path().parse("/"), Ok(vec![]));
         assert_eq!(url_path().parse("/a/b/c?d"), Ok(vec!["a", "b", "c"]));
         assert_eq!(url_path().parse("/a/b/c/?d"), Ok(vec!["a", "b", "c"]));
         assert_eq!(
@@ -295,8 +315,8 @@ mod tests {
     #[test]
     fn test_url() {
         assert_eq!(
-            parse_with(url_parser(), "https://www.zupzup.org/about/"),
-            Ok(Url {
+            parse_url("https://www.zupzup.org/about/").unwrap(),
+            Url {
                 scheme: Scheme("https".into()),
                 authority: None,
                 host: Host::Host("www.zupzup.org".to_string()),
@@ -304,12 +324,12 @@ mod tests {
                 path: Some(vec!["about"]),
                 query: None,
                 fragment: None
-            })
+            }
         );
 
         assert_eq!(
-            parse_with(url_parser(), "http://localhost"),
-            Ok(Url {
+            parse_url("http://localhost").unwrap(),
+            Url {
                 scheme: Scheme("http".into()),
                 authority: None,
                 host: Host::Host("localhost".to_string()),
@@ -317,15 +337,24 @@ mod tests {
                 path: None,
                 query: None,
                 fragment: None
-            })
+            }
+        );
+        assert_eq!(
+            parse_url("http://localhost:2/").unwrap(),
+            Url {
+                scheme: Scheme("http".into()),
+                authority: None,
+                host: Host::Host("localhost".to_string()),
+                port: Some(2),
+                path: None,
+                query: None,
+                fragment: None
+            }
         );
 
         assert_eq!(
-            parse_with(
-                url_parser(),
-                "https://www.zupzup.org:443/about/?someVal=5#anchor"
-            ),
-            Ok(Url {
+            parse_url("https://www.zupzup.org:443/about/?someVal=5#anchor").unwrap(),
+            Url {
                 scheme: Scheme("https".into()),
                 authority: None,
                 host: Host::Host("www.zupzup.org".to_string()),
@@ -333,12 +362,12 @@ mod tests {
                 path: Some(vec!["about"]),
                 query: Some(vec![("someVal", "5")]),
                 fragment: Some("anchor")
-            })
+            }
         );
 
         assert_eq!(
-            parse_with(url_parser(), "http://user:pw@127.0.0.1:8080"),
-            Ok(Url {
+            parse_url("http://user:pw@127.0.0.1:8080").unwrap(),
+            Url {
                 scheme: Scheme("http".into()),
                 authority: Some(("user", Some("pw"))),
                 host: Host::IP([127, 0, 0, 1]),
@@ -346,7 +375,7 @@ mod tests {
                 path: None,
                 query: None,
                 fragment: None
-            })
+            }
         );
     }
 }

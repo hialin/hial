@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use futures_util::StreamExt;
 use indexmap::IndexMap;
 use linkme::distributed_slice;
 use mongodb::bson::{Bson, Document};
@@ -26,23 +25,19 @@ static VALUE_TO_MONGO: ElevationConstructor = ElevationConstructor {
 
 const DEFAULT_DOC_LIMIT: i64 = 100;
 
-fn block_on<F: std::future::Future>(f: F) -> F::Output {
-    pollster::block_on(f)
-}
-
 #[derive(Clone, Debug)]
 pub(crate) enum NodeData {
     Server {
-        client: Rc<mongodb::Client>,
+        client: Rc<mongodb::sync::Client>,
         db_names: OwnRc<Vec<String>>,
     },
     Database {
-        client: Rc<mongodb::Client>,
+        client: Rc<mongodb::sync::Client>,
         name: String,
         coll_names: OwnRc<Vec<String>>,
     },
     Collection {
-        client: Rc<mongodb::Client>,
+        client: Rc<mongodb::sync::Client>,
         db_name: String,
         coll_name: String,
         docs: OwnRc<Vec<Document>>,
@@ -102,12 +97,13 @@ impl Cell {
         let value = reader.value()?;
         let conn_str = value.as_cow_str();
 
-        let client = block_on(async {
-            mongodb::Client::with_uri_str(conn_str.as_ref()).await
-        })
-        .map_err(|e| caused(HErrKind::Net, "mongo: cannot connect", e))?;
+        let client = mongodb::sync::Client::with_uri_str(conn_str.as_ref())
+            .map_err(|e| caused(HErrKind::Net, "mongo: cannot connect", e))?;
 
-        let db_names = block_on(async { client.list_database_names().await })
+        let db_names = client
+            .list_database_names()
+            .with_options(mongodb::options::ListDatabasesOptions::default())
+            .run()
             .map_err(|e| caused(HErrKind::Net, "mongo: cannot list databases", e))?;
 
         let group = Group::new(
@@ -173,15 +169,13 @@ impl CellTrait for Cell {
                     let r = db_names
                         .read()
                         .ok_or_else(|| lockerr("cannot read db_names"))?;
-                    r.get(self.pos)
-                        .ok_or_else(|| faulterr("bad pos"))?
-                        .clone()
+                    r.get(self.pos).ok_or_else(|| faulterr("bad pos"))?.clone()
                 };
-                let coll_names =
-                    block_on(async { client.database(&name).list_collection_names().await })
-                        .map_err(|e| {
-                            caused(HErrKind::Net, "mongo: cannot list collections", e)
-                        })?;
+                let coll_names = client
+                    .database(&name)
+                    .list_collection_names()
+                    .run()
+                    .map_err(|e| caused(HErrKind::Net, "mongo: cannot list collections", e))?;
                 Ok(Group::new(
                     NodeData::Database {
                         client: client.clone(),
@@ -201,24 +195,18 @@ impl CellTrait for Cell {
                     let r = coll_names
                         .read()
                         .ok_or_else(|| lockerr("cannot read coll_names"))?;
-                    r.get(self.pos)
-                        .ok_or_else(|| faulterr("bad pos"))?
-                        .clone()
+                    r.get(self.pos).ok_or_else(|| faulterr("bad pos"))?.clone()
                 };
                 let db = client.database(name);
                 let coll = db.collection::<Document>(&coll_name);
-                let docs: Vec<Document> = block_on(async {
-                    let mut cursor = coll
-                        .find(Document::new())
-                        .limit(DEFAULT_DOC_LIMIT)
-                        .await?;
+                let docs: Vec<Document> = {
+                    let mut cursor = coll.find(Document::new()).limit(DEFAULT_DOC_LIMIT).run()?;
                     let mut v = Vec::new();
-                    while let Some(doc) = cursor.next().await {
-                        v.push(doc?);
+                    while let Some(Ok(doc)) = cursor.next() {
+                        v.push(doc);
                     }
-                    Ok::<_, mongodb::error::Error>(v)
-                })
-                .map_err(|e| caused(HErrKind::Net, "mongo: cannot query collection", e))?;
+                    v
+                };
                 Ok(Group::new(
                     NodeData::Collection {
                         client: client.clone(),
@@ -231,9 +219,7 @@ impl CellTrait for Cell {
             }
             NodeData::Collection { docs, .. } => {
                 let fields = {
-                    let r = docs
-                        .read()
-                        .ok_or_else(|| lockerr("cannot read docs"))?;
+                    let r = docs.read().ok_or_else(|| lockerr("cannot read docs"))?;
                     let doc = r.get(self.pos).ok_or_else(|| faulterr("bad pos"))?;
                     let map: IndexMap<String, Bson> =
                         doc.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -242,18 +228,12 @@ impl CellTrait for Cell {
                 Ok(Group::new(NodeData::Document { fields }, head))
             }
             NodeData::Document { fields } => {
-                let r = fields
-                    .read()
-                    .ok_or_else(|| lockerr("cannot read fields"))?;
-                let (_, bson) = r
-                    .get_index(self.pos)
-                    .ok_or_else(|| faulterr("bad pos"))?;
+                let r = fields.read().ok_or_else(|| lockerr("cannot read fields"))?;
+                let (_, bson) = r.get_index(self.pos).ok_or_else(|| faulterr("bad pos"))?;
                 bson_to_sub_group(bson, self)
             }
             NodeData::Array { items } => {
-                let r = items
-                    .read()
-                    .ok_or_else(|| lockerr("cannot read array"))?;
+                let r = items.read().ok_or_else(|| lockerr("cannot read array"))?;
                 let bson = r.get(self.pos).ok_or_else(|| faulterr("bad pos"))?;
                 bson_to_sub_group(bson, self)
             }
@@ -411,26 +391,22 @@ impl GroupTrait for Group {
 
     fn len(&self) -> Res<usize> {
         match self.data.as_ref() {
-            NodeData::Server { db_names, .. } => Ok(db_names
-                .read()
-                .ok_or_else(|| lockerr("cannot read"))?
-                .len()),
+            NodeData::Server { db_names, .. } => {
+                Ok(db_names.read().ok_or_else(|| lockerr("cannot read"))?.len())
+            }
             NodeData::Database { coll_names, .. } => Ok(coll_names
                 .read()
                 .ok_or_else(|| lockerr("cannot read"))?
                 .len()),
-            NodeData::Collection { docs, .. } => Ok(docs
-                .read()
-                .ok_or_else(|| lockerr("cannot read"))?
-                .len()),
-            NodeData::Document { fields } => Ok(fields
-                .read()
-                .ok_or_else(|| lockerr("cannot read"))?
-                .len()),
-            NodeData::Array { items } => Ok(items
-                .read()
-                .ok_or_else(|| lockerr("cannot read"))?
-                .len()),
+            NodeData::Collection { docs, .. } => {
+                Ok(docs.read().ok_or_else(|| lockerr("cannot read"))?.len())
+            }
+            NodeData::Document { fields } => {
+                Ok(fields.read().ok_or_else(|| lockerr("cannot read"))?.len())
+            }
+            NodeData::Array { items } => {
+                Ok(items.read().ok_or_else(|| lockerr("cannot read"))?.len())
+            }
         }
     }
 
@@ -448,10 +424,10 @@ impl GroupTrait for Group {
     fn get_all(&self, key: Value) -> Res<Self::CellIterator> {
         let cell = match self.data.as_ref() {
             NodeData::Server { db_names, .. } => {
-                let Value::Str(name) = key else { return nores() };
-                let r = db_names
-                    .read()
-                    .ok_or_else(|| lockerr("cannot read"))?;
+                let Value::Str(name) = key else {
+                    return nores();
+                };
+                let r = db_names.read().ok_or_else(|| lockerr("cannot read"))?;
                 match r.iter().position(|n| n == name) {
                     Some(pos) => Ok(Cell {
                         group: self.clone(),
@@ -461,10 +437,10 @@ impl GroupTrait for Group {
                 }
             }
             NodeData::Database { coll_names, .. } => {
-                let Value::Str(name) = key else { return nores() };
-                let r = coll_names
-                    .read()
-                    .ok_or_else(|| lockerr("cannot read"))?;
+                let Value::Str(name) = key else {
+                    return nores();
+                };
+                let r = coll_names.read().ok_or_else(|| lockerr("cannot read"))?;
                 match r.iter().position(|n| n == name) {
                     Some(pos) => Ok(Cell {
                         group: self.clone(),
@@ -476,9 +452,7 @@ impl GroupTrait for Group {
             NodeData::Collection { .. } => nores(),
             NodeData::Document { fields } => {
                 let Value::Str(k) = key else { return nores() };
-                let r = fields
-                    .read()
-                    .ok_or_else(|| lockerr("cannot read"))?;
+                let r = fields.read().ok_or_else(|| lockerr("cannot read"))?;
                 match r.get_index_of(k) {
                     Some(pos) => Ok(Cell {
                         group: self.clone(),

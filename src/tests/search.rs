@@ -1,222 +1,40 @@
-use crate::{
-    api::*,
-    pprint,
-    prog::path::{
-        ElevationPathItem, Expression, Filter, InterpretationParam, NormalPathItem, Path, PathItem,
-    },
-    utils::log::set_verbose,
-};
+use crate::{api::*, pprint, utils::log::set_verbose};
 
 #[test]
-fn path_simple_elevation() -> Res<()> {
-    let path = Path::parse(" ^fs^fs.one[w]^fs.two[w=1] ")?;
-    assert_eq!(
-        path.0.as_slice(),
-        &[
-            PathItem::Elevation(ElevationPathItem {
-                interpretation: Selector::Str("fs"),
-                params: vec![]
-            }),
-            PathItem::Elevation(ElevationPathItem {
-                interpretation: Selector::Str("fs.one"),
-                params: vec![InterpretationParam {
-                    name: None,
-                    value: "w".into(),
-                }]
-            }),
-            PathItem::Elevation(ElevationPathItem {
-                interpretation: Selector::Str("fs.two"),
-                params: vec![InterpretationParam {
-                    name: Some("w".to_string()),
-                    value: OwnValue::Int(1.into()),
-                }]
-            })
-        ]
-    );
-    Ok(())
-}
-
-// TODO: top elevation
-// #[test]
-// fn path_top_elevation() -> Res<()> {
-//     let path = Path::parse("^[0]")?;
-//     assert_eq!(
-//         path.0.as_slice(),
-//         &[PathItem::Elevation(ElevationPathItem {
-//             interpretation: Selector::Str("fs"),
-//             params: vec![]
-//         }),]
-//     );
-//     Ok(())
-// }
-
-#[test]
-fn path_simple_selector() -> Res<()> {
-    let path = Path::parse("/a[2]")?;
-    assert_eq!(
-        path.0.as_slice(),
-        &[PathItem::Normal(NormalPathItem {
-            relation: Relation::Sub,
-            selector: Some(Selector::Str("a")),
-            index: Some(2),
-            filters: vec![],
-        })]
-    );
-
-    let path = Path::parse("/a[-2]")?;
-    assert_eq!(
-        path.0.as_slice(),
-        &[PathItem::Normal(NormalPathItem {
-            relation: Relation::Sub,
-            selector: Some(Selector::Str("a")),
-            index: Some(-2),
-            filters: vec![],
-        }),]
-    );
+fn test_simple_path() -> Res<()> {
+    const TREE: &str = r#"
+            a:
+              x: xa
+              b:
+                x: xb
+                c:
+                    x: xc
+                    y: yc
+        "#;
+    let root = Xell::from(TREE).be("yaml");
+    let x = root.to("/a/b/c/x");
+    assert_eq!(x.path()?, "`\\n            a:...`^yaml/a/b/c/x");
     Ok(())
 }
 
 #[test]
-fn path_simple_type_expr() -> Res<()> {
-    let path = Path::parse("/a[:fn_item0]")?;
-    assert_eq!(
-        path.0.as_slice(),
-        &[PathItem::Normal(NormalPathItem {
-            relation: Relation::Sub,
-            selector: Some(Selector::Str("a")),
-            index: None,
-            filters: vec![Filter {
-                expr: Expression::Type {
-                    ty: "fn_item0".to_string()
-                }
-            }],
-        })]
-    );
-    Ok(())
-}
+fn test_multihop_path() -> Res<()> {
+    set_verbose(true);
 
-#[test]
-fn path_ternary_expr() -> Res<()> {
-    let path = Path::parse("/a[@attr==1][/x]")?;
-    assert_eq!(
-        path.0.as_slice(),
-        &[PathItem::Normal(NormalPathItem {
-            relation: Relation::Sub,
-            selector: Some(Selector::Str("a")),
-            index: None,
-            filters: vec![
-                Filter {
-                    expr: Expression::Ternary {
-                        left: Path(vec![PathItem::Normal(NormalPathItem {
-                            relation: Relation::Attr,
-                            selector: Some(Selector::Str("attr")),
-                            index: None,
-                            filters: vec![],
-                        })]),
-                        op_right: Some(("==", OwnValue::Int(1.into())))
-                    }
-                },
-                Filter {
-                    expr: Expression::Ternary {
-                        left: Path(vec![PathItem::Normal(NormalPathItem {
-                            relation: Relation::Sub,
-                            selector: Some(Selector::Str("x")),
-                            index: None,
-                            filters: vec![],
-                        })]),
-                        op_right: None,
-                    }
-                }
-            ],
-        })]
-    );
-    Ok(())
-}
+    let start = Xell::from("http://api.github.com");
+    let path = "^http^json/rate_limit_url^http^json/resources/core/limit";
 
-#[test]
-fn path_simple_or_expr() -> Res<()> {
-    let path = Path::parse("/a[:x|:y|:z]")?;
-    assert_eq!(
-        path.0.as_slice(),
-        &[PathItem::Normal(NormalPathItem {
-            relation: Relation::Sub,
-            selector: Some(Selector::Str("a")),
-            index: None,
-            filters: vec![Filter {
-                expr: Expression::Or {
-                    expressions: vec![
-                        Expression::Type {
-                            ty: "x".to_string()
-                        },
-                        Expression::Type {
-                            ty: "y".to_string()
-                        },
-                        Expression::Type {
-                            ty: "z".to_string()
-                        }
-                    ]
-                }
-            }],
-        })]
-    );
-    Ok(())
-}
+    let results = start.all(path)?;
+    assert_eq!(results.len(), 1);
+    let result = &results[0];
 
-#[test]
-fn path_items() -> Res<()> {
-    let path = Path::parse("/a@name/[2]/*[#value=='3'][/x]")?;
+    assert_eq!(result.read().value()?, Value::from(60));
+
     assert_eq!(
-        path.0.as_slice(),
-        &[
-            PathItem::Normal(NormalPathItem {
-                relation: Relation::Sub,
-                selector: Some("a".into()),
-                index: None,
-                filters: vec![],
-            }),
-            PathItem::Normal(NormalPathItem {
-                relation: Relation::Attr,
-                selector: Some("name".into()),
-                index: None,
-                filters: vec![],
-            }),
-            PathItem::Normal(NormalPathItem {
-                relation: Relation::Sub,
-                selector: None,
-                index: Some(2),
-                filters: vec![],
-            }),
-            PathItem::Normal(NormalPathItem {
-                relation: Relation::Sub,
-                selector: Some(Selector::Star),
-                index: None,
-                filters: vec![
-                    Filter {
-                        expr: Expression::Ternary {
-                            left: Path(vec![PathItem::Normal(NormalPathItem {
-                                relation: Relation::Field,
-                                selector: Some("value".into()),
-                                index: None,
-                                filters: vec![],
-                            }),]),
-                            op_right: Some(("==", OwnValue::String("3".to_string())))
-                        }
-                    },
-                    Filter {
-                        expr: Expression::Ternary {
-                            left: Path(vec![PathItem::Normal(NormalPathItem {
-                                relation: Relation::Sub,
-                                selector: Some("x".into()),
-                                index: None,
-                                filters: vec![],
-                            }),]),
-                            op_right: None
-                        }
-                    }
-                ],
-            })
-        ]
+        result.path()?,
+        "`http://api.githu...`^http^json/rate_limit_url^http^json/resources/core/limit".to_string()
     );
+
     Ok(())
 }
 
@@ -598,7 +416,9 @@ fn search_double_kleene_with_filter() -> Res<()> {
     let eval = str_eval(root.clone(), "/dir1/**")?;
     assert_eq!(
         eval,
-        ["dir1:", "f1:", "size:ø", "dir2:", "size:ø", "f2:", "size:2", "dir3:", "f3:", "size:3"]
+        [
+            "dir1:", "f1:", "size:ø", "dir2:", "size:ø", "f2:", "size:2", "dir3:", "f3:", "size:3"
+        ]
     );
 
     pprint(&root, 0, 0);
