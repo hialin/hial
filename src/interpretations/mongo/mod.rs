@@ -11,6 +11,11 @@ use crate::{
     implement_try_from_xell,
 };
 
+mod connect;
+mod env;
+mod oidc;
+mod token_store;
+
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
 static VALUE_TO_MONGO: ElevationConstructor = ElevationConstructor {
     source_interpretations: &["value"],
@@ -78,9 +83,7 @@ impl Cell {
         let reader = origin.read().err()?;
         let value = reader.value()?;
         let conn_str = value.as_cow_str();
-
-        let client = mongodb::sync::Client::with_uri_str(conn_str.as_ref())
-            .map_err(|e| caused(HErrKind::Net, "mongo: cannot connect", e))?;
+        let client = connect::connect_client(conn_str.as_ref())?;
 
         let group = Group::Server { client };
         let cell = Cell { group, pos: 0 };

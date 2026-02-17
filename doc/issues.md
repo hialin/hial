@@ -1,7 +1,10 @@
 # List of Todos and other Issues
 
-- color the output of pprint
-    - maybe stream the found cells, colorize separately
+- config file
+- oaic mongo connection
+- upgrade chumsky
+- filter argument for get_all, mongo case
+- path interpretation: expose parent/filename/ext
 
 - add split(":") interpretation, read-write
 - '**[filter]' must work as '**/*[filter]' (filter to be applied only on leaves)
@@ -14,7 +17,6 @@
 - basic profiling
 - functions
 - should blobs/bytes be part of value? they are only useful via reinterpretation
-- what to do with very large values? files which are 100MBs?
 
 - release first minimal version:
     - interpretations: path+fs, json+yaml+toml+xml, rust+js, url?+http
@@ -50,7 +52,6 @@
 - todo: get should return an iterator; multiset labels
 - todo: add regex operator and shortcuts for startswith, endswith, contains
 - todo: add <, >, <=, >= operators
-- todo: improve nom parsing errors, use context
 - todo: custom tree datastructure?
 - todo: cell symlinks
 - todo: path bindings

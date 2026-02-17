@@ -10,6 +10,7 @@ bare_trait_objects,
 
 pub mod api;
 // pub mod c_api;
+pub(crate) mod config;
 mod interpretations;
 pub mod perftests;
 pub mod prog;
