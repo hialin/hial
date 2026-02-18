@@ -1,4 +1,4 @@
-use crate::{api::*, pprint, utils::log::set_verbose};
+use crate::{api::*, config::ColorPalette, pprint, utils::log::set_verbose};
 
 #[test]
 fn test_nested_0() -> Res<()> {
@@ -51,7 +51,7 @@ fn test_nested_mut() -> Res<()> {
 
     {
         let cell = text.to("^json/one/[0]^xml/root/a^yaml/mytext");
-        pprint(&cell, 0, 0);
+        pprint(&cell, 0, 0, ColorPalette::None);
         println!("6");
         assert_eq!(cell.read().value()?, "yaml string");
         println!("7");

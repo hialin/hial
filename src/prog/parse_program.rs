@@ -18,15 +18,17 @@ pub fn parse_program(input: &str) -> Res<Program<'_>> {
         .labelled("statement")
         .separated_by(ws().ignore_then(just(';')).then_ignore(ws()))
         .allow_trailing()
+        .collect::<Vec<_>>()
         .map(Program)
         .labelled("program")
         .then_ignore(end());
 
     program
         .parse(input)
+        .into_result()
         .map_err(|err| usererr(convert_error(input, err)))
 }
 
-fn ws() -> impl Parser<char, (), Error = ParseError> + Clone {
-    filter(|c: &char| c.is_whitespace()).repeated().ignored()
+fn ws<'src>() -> impl Parser<'src, &'src str, (), extra::Err<ParseError<'src>>> + Clone {
+    any().filter(|c: &char| c.is_whitespace()).repeated().ignored()
 }

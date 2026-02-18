@@ -1,4 +1,4 @@
-use crate::{api::*, pprint, utils::log::set_verbose};
+use crate::{api::*, config::ColorPalette, pprint, utils::log::set_verbose};
 
 #[test]
 fn test_simple_path() -> Res<()> {
@@ -103,7 +103,7 @@ fn search_simple_search_with_index() -> Res<()> {
         "#;
     let root = Xell::from(TREE).be("xml");
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/test/a[0]/*")?;
     assert_eq!(eval, ["x:1"]);
 
@@ -138,23 +138,23 @@ fn search_kleene() -> Res<()> {
         "#;
     let root = Xell::from(TREE).be("yaml");
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), pr("/*"))?;
     assert_eq!(eval, ["a:", "m:mval", "n:nval", "o:ø"]);
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), pr("/*#label"))?;
     assert_eq!(eval, [":a", ":m", ":n", ":o"]);
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), pr("/*[#label=='a']"))?;
     assert_eq!(eval, ["a:"]);
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), pr("/*[#label=='a']#index"))?;
     assert_eq!(eval, [":0"]);
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/*/x")?;
     assert_eq!(eval, ["x:xa"]);
 
@@ -197,7 +197,7 @@ fn search_double_kleene_basic() -> Res<()> {
 
     let path = "/**/m";
     println!("\npath: {}\n", path);
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), path)?;
     assert_eq!(eval, ["m:mval"]);
 
@@ -222,20 +222,20 @@ fn search_double_kleene_simple() -> Res<()> {
     let root = Xell::from(TREE).be("yaml");
 
     //  doublestar should match on multiple levels
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/**/x")?;
     assert_eq!(eval, ["x:xa", "x:xb", "x:xc"]);
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/**/y")?;
     assert_eq!(eval, ["y:yc"]);
 
     //  doublestar should match even nothing at all
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/**/m")?;
     assert_eq!(eval, ["m:mval"]);
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/a/**/b")?;
     assert_eq!(eval, ["b:"]);
 
@@ -309,7 +309,7 @@ fn search_double_kleene_all() -> Res<()> {
 
     let root = Xell::from(TREE).be("yaml");
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/**")?;
     assert_eq!(
         eval,
@@ -343,7 +343,7 @@ fn search_double_kleene_labels_json() -> Res<()> {
 
     let root = Xell::from(TREE).be("json");
 
-    // crate::pprint(&root, 0, 0);
+    // crate::pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/**#label")?;
     assert_eq!(
         eval,
@@ -371,7 +371,7 @@ fn search_double_kleene_labels_yaml() -> Res<()> {
 
     let root = Xell::from(TREE).be("yaml");
 
-    // crate::pprint(&root, 0, 0);
+    // crate::pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/**#label")?;
     assert_eq!(
         eval,
@@ -397,11 +397,11 @@ fn search_double_kleene_repeat() -> Res<()> {
     set_verbose(true);
     let root = Xell::from(TREE).be("yaml");
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/**/b/b")?;
     assert_eq!(eval, ["b:", "b:bval"]);
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/**/b/**/b")?;
     assert_eq!(eval, ["b:", "b:bval", "b:bval"]); // two ways to reach node b:bval
 
@@ -425,7 +425,7 @@ fn search_double_kleene_with_filter() -> Res<()> {
     set_verbose(true);
     let root = Xell::from(TREE).be("yaml");
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/dir1/**")?;
     assert_eq!(
         eval,
@@ -434,11 +434,11 @@ fn search_double_kleene_with_filter() -> Res<()> {
         ]
     );
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/dir1/**[/size]")?;
     assert_eq!(eval, ["f1:", "dir2:", "f2:"]);
 
-    pprint(&root, 0, 0);
+    pprint(&root, 0, 0, ColorPalette::None);
     let eval = str_eval(root.clone(), "/dir1/**/*[/size]")?;
     assert_eq!(eval, ["f1:", "dir2:", "f2:", "f3:"]);
 

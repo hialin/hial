@@ -14,7 +14,7 @@ repository = "https://github.com/emanueldima/hial"
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-chumsky = "0.9"
+chumsky = "0.12"
 dirs = "6.0"
 indexmap = "2"
 linkme = "0.3"
@@ -46,5 +46,5 @@ version = "0.9"
 features = ["preserve_order"]
 
 [build-dependencies]
-cc = "1.0"
+cc = "1.2"
 cbindgen = "0.29"

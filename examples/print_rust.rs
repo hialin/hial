@@ -1,5 +1,5 @@
 use hiallib::api::*;
-use hiallib::pprint;
+use hiallib::{config::ColorPalette, pprint};
 
 // examples = "."^file/examples;
 // for stack in examples/productiondump.json^json/stacks/*[/system_stack != true]:
@@ -13,7 +13,7 @@ fn main() -> Res<()> {
 
 fn test_rustapi() -> Res<()> {
     let examples = Xell::from(".").be("fs").sub().get("examples");
-    pprint(&examples, 0, 0);
+    pprint(&examples, 0, 0, ColorPalette::None);
     let folder = examples.sub();
     let stacks = folder
         .get("productiondump.json")
@@ -21,7 +21,7 @@ fn test_rustapi() -> Res<()> {
         .sub()
         .get("stacks");
     for stack in stacks.sub() {
-        pprint(&stack, 0, 0);
+        pprint(&stack, 0, 0, ColorPalette::None);
         let stack_sub = stack.sub();
         if stack_sub.get("system_stack").read().value()? == Value::Bool(true) {
             continue;
@@ -33,7 +33,7 @@ fn test_rustapi() -> Res<()> {
             .value()?
             .to_owned_value();
         let yaml = Xell::from(yaml).be("yaml");
-        pprint(&yaml, 0, 0);
+        pprint(&yaml, 0, 0, ColorPalette::None);
         let service_node = yaml.sub().get("services").sub().at(0);
         let mut filename = format!("{}.yaml", service_node.read().label()?);
         while folder.get(filename.as_str()).err().is_ok() {

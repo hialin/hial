@@ -1,7 +1,6 @@
 use std::fmt::{Error, Write};
-use std::io::IsTerminal;
 
-use crate::prog::program::{ColorMode, ColorPalette};
+use crate::config::ColorPalette;
 
 const SPACE_TO_SEPARATOR: usize = 32;
 const COLOR_RESET: &str = "\x1b[0m";
@@ -61,7 +60,6 @@ struct PPrintTheme {
 pub(crate) fn render_line(
     line_data: &LineData,
     tree_prefix: &TreePrefix,
-    color_enabled: bool,
     color_palette: ColorPalette,
 ) -> Result<String, Error> {
     let mut line = String::new();
@@ -73,21 +71,13 @@ pub(crate) fn render_line(
     } else {
         palette.key
     };
-    let interpretation = colorize(
-        color_enabled,
-        palette.interpretation,
-        &line_data.interpretation,
-    );
-    let value_type = colorize(color_enabled, &value_color, &line_data.value_type);
-    let tree = colorize(
-        color_enabled,
-        palette.tree,
-        &build_tree_prefix(tree_prefix, &theme),
-    );
+    let interpretation = colorize(palette.interpretation, &line_data.interpretation);
+    let value_type = colorize(&value_color, &line_data.value_type);
+    let tree = colorize(palette.tree, &build_tree_prefix(tree_prefix, &theme));
     let edge_prefix = if line_data.edge_prefix == "@" {
-        colorize(color_enabled, palette.tree, &line_data.edge_prefix)
+        colorize(palette.tree, &line_data.edge_prefix)
     } else {
-        colorize(color_enabled, palette.edge_prefix, &line_data.edge_prefix)
+        colorize(palette.edge_prefix, &line_data.edge_prefix)
     };
 
     write!(line, "{} {}", interpretation, value_type)?;
@@ -99,29 +89,29 @@ pub(crate) fn render_line(
     let continuation_prefix = line.clone();
 
     if let Some(err) = &line_data.read_error {
-        write!(line, "{}", colorize(color_enabled, palette.error, err))?;
+        write!(line, "{}", colorize(palette.error, err))?;
     }
     if let Some(err) = &line_data.key_error {
-        write!(line, "{} ", colorize(color_enabled, palette.error, err))?;
+        write!(line, "{} ", colorize(palette.error, err))?;
     }
     if let Some(key) = &line_data.key {
-        write!(line, "{}: ", colorize(color_enabled, key_color, key))?;
+        write!(line, "{}: ", colorize(key_color, key))?;
     }
     if let Some(err) = &line_data.value_error {
-        write!(line, "{}", colorize(color_enabled, palette.error, err))?;
+        write!(line, "{}", colorize(palette.error, err))?;
     }
     if let Some(value) = &line_data.value {
         match value {
             LineValue::Inline(v) => {
-                write!(line, "{}", colorize(color_enabled, &value_color, v))?;
+                write!(line, "{}", colorize(&value_color, v))?;
             }
             LineValue::Bytes(v) => {
                 write!(
                     line,
                     "{}{}{}",
-                    colorize(color_enabled, palette.tree, theme.bytes_open),
-                    colorize(color_enabled, palette.tree, v),
-                    colorize(color_enabled, palette.tree, theme.bytes_close)
+                    colorize(palette.tree, theme.bytes_open),
+                    colorize(palette.tree, v),
+                    colorize(palette.tree, theme.bytes_close)
                 )?;
             }
             LineValue::Multiline(lines) => {
@@ -129,8 +119,8 @@ pub(crate) fn render_line(
                     write!(
                         line,
                         "{}{}",
-                        colorize(color_enabled, &value_color, theme.multiline_prefix),
-                        colorize(color_enabled, &value_color, first),
+                        colorize(&value_color, theme.multiline_prefix),
+                        colorize(&value_color, first),
                     )?;
                 }
                 for value_line in lines.iter().skip(1) {
@@ -138,37 +128,17 @@ pub(crate) fn render_line(
                         line,
                         "\n{}{}{}",
                         continuation_prefix,
-                        colorize(color_enabled, &value_color, theme.multiline_prefix),
-                        colorize(color_enabled, &value_color, value_line),
+                        colorize(&value_color, theme.multiline_prefix),
+                        colorize(&value_color, value_line),
                     )?;
                 }
             }
         }
     }
     if line_data.empty {
-        write!(
-            line,
-            "{}",
-            colorize(color_enabled, palette.tree, theme.empty_marker)
-        )?;
+        write!(line, "{}", colorize(palette.tree, theme.empty_marker))?;
     }
     Ok(line)
-}
-
-pub(crate) fn use_color(mode: ColorMode) -> bool {
-    match mode {
-        ColorMode::Always => true,
-        ColorMode::Never => false,
-        ColorMode::Auto => {
-            if std::env::var_os("NO_COLOR").is_some() {
-                return false;
-            }
-            if std::env::var_os("FORCE_COLOR").is_some() {
-                return true;
-            }
-            std::io::stdout().is_terminal()
-        }
-    }
 }
 
 impl PPrintTheme {
@@ -205,13 +175,14 @@ fn build_tree_prefix(tree_prefix: &TreePrefix, theme: &PPrintTheme) -> String {
     prefix
 }
 
-fn colorize(color_enabled: bool, color_code: &str, text: &str) -> String {
-    if !color_enabled || text.is_empty() {
+fn colorize(color_code: &str, text: &str) -> String {
+    if color_code.is_empty() || text.is_empty() {
         return text.to_string();
     }
     format!("\x1b[{}m{}{}", color_code, text, COLOR_RESET)
 }
 
+#[derive(Default)]
 struct PaletteColors {
     interpretation: &'static str,
     type_string: &'static str,
@@ -226,6 +197,7 @@ struct PaletteColors {
 
 fn palette_colors(color_palette: ColorPalette) -> PaletteColors {
     match color_palette {
+        ColorPalette::None => PaletteColors::default(),
         ColorPalette::Dark => PaletteColors {
             interpretation: COLOR_INTERPRETATION_DARK,
             type_string: COLOR_TYPE_STRING_DARK,
@@ -270,10 +242,14 @@ fn type_color_code(value_type: &str, palette: &PaletteColors) -> String {
         return palette.type_bool.to_string();
     }
     let hash = stable_hash(&kind);
-    format!(
-        "38;5;{}",
-        palette.hash_palette[hash as usize % palette.hash_palette.len()]
-    )
+    if palette.hash_palette.is_empty() {
+        "".to_string()
+    } else {
+        format!(
+            "38;5;{}",
+            palette.hash_palette[hash as usize % palette.hash_palette.len()]
+        )
+    }
 }
 
 fn stable_hash(s: &str) -> u32 {
@@ -324,7 +300,8 @@ mod tests {
             read_error: None,
             empty: false,
         };
-        let rendered = render_line(&line, &prefix, false, ColorPalette::Dark).unwrap();
+        let rendered = render_line(&line, &prefix, ColorPalette::None).unwrap();
+        println!("rendered: {}", rendered);
         assert!(rendered.contains("mongo string"));
         assert!(rendered.contains("└── @name:"));
         assert!(!rendered.contains("\x1b["));
@@ -348,7 +325,7 @@ mod tests {
             read_error: None,
             empty: false,
         };
-        let rendered = render_line(&line, &prefix, true, ColorPalette::Dark).unwrap();
+        let rendered = render_line(&line, &prefix, ColorPalette::Dark).unwrap();
         assert!(rendered.matches("\x1b[38;5;114m").count() >= 2);
     }
 
@@ -370,7 +347,7 @@ mod tests {
             read_error: None,
             empty: false,
         };
-        let rendered = render_line(&line, &prefix, true, ColorPalette::Light).unwrap();
+        let rendered = render_line(&line, &prefix, ColorPalette::Light).unwrap();
         assert!(rendered.matches("\x1b[38;5;22m").count() >= 2);
     }
 
@@ -392,7 +369,7 @@ mod tests {
             read_error: None,
             empty: false,
         };
-        let rendered = render_line(&line, &prefix, true, ColorPalette::Light).unwrap();
+        let rendered = render_line(&line, &prefix, ColorPalette::Light).unwrap();
         assert!(rendered.contains("\x1b[38;5;88mcount"));
     }
 }

@@ -10,13 +10,14 @@ bare_trait_objects,
 
 pub mod api;
 // pub mod c_api;
-pub(crate) mod config;
+pub mod config;
 mod interpretations;
 pub mod perftests;
+pub mod pprint;
 pub mod prog;
 pub mod utils;
 
-pub use utils::pprint::pprint;
+pub use pprint::pprint;
 
 #[cfg(test)]
 mod tests;

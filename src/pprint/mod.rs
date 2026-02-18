@@ -1,34 +1,19 @@
-use std::{
-    fmt::Error,
-    io::Read,
-};
+use std::{fmt::Error, io::Read};
 
 use crate::api::*;
-use crate::prog::program::{ColorMode, ColorPalette};
-use crate::utils::pprint_render::{render_line, use_color, LineData, LineValue, TreePrefix};
+use crate::config::ColorPalette;
+use crate::pprint::render::{LineData, LineValue, TreePrefix, render_line};
 
 struct PPrintOptions {
     depth: usize,
     breadth: usize,
-    color_enabled: bool,
     color_palette: ColorPalette,
 }
 
-pub fn pprint(cell: &Xell, depth: usize, breadth: usize) {
-    pprint_with_mode(cell, depth, breadth, ColorMode::Auto, ColorPalette::Dark);
-}
-
-pub fn pprint_with_mode(
-    cell: &Xell,
-    depth: usize,
-    breadth: usize,
-    color_mode: ColorMode,
-    color_palette: ColorPalette,
-) {
+pub fn pprint(cell: &Xell, depth: usize, breadth: usize, color_palette: ColorPalette) {
     let options = PPrintOptions {
         depth,
         breadth,
-        color_enabled: use_color(color_mode),
         color_palette,
     };
     let root_prefix = cell.path().unwrap_or_default();
@@ -50,12 +35,7 @@ pub fn pprint_with_mode(
             has_parent: false,
             is_last: false,
         };
-        match render_line(
-            &root_line_data,
-            &root_tree_prefix,
-            options.color_enabled,
-            options.color_palette,
-        ) {
+        match render_line(&root_line_data, &root_tree_prefix, options.color_palette) {
             Ok(line) => println!("{}", line),
             Err(e) => {
                 eprintln!("pprint error: {:?}", e);
@@ -87,12 +67,7 @@ fn _pprint(
     };
     println!(
         "{}",
-        render_line(
-            &line_data,
-            &tree_prefix,
-            options.color_enabled,
-            options.color_palette
-        )?
+        render_line(&line_data, &tree_prefix, options.color_palette)?
     );
     pprint_group(cell, options, &tree_prefix)?;
     Ok(())
@@ -264,3 +239,5 @@ fn format_bytes(bytes: &[u8]) -> String {
     let _ = write_bytes(&mut value, bytes);
     value
 }
+
+mod render;

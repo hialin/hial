@@ -1,4 +1,4 @@
-use crate::{api::*, pprint, utils::log::set_verbose};
+use crate::{api::*, config::ColorPalette, pprint, utils::log::set_verbose};
 
 #[test]
 fn test_json() -> Res<()> {
@@ -81,24 +81,24 @@ fn json_write() -> Res<()> {
     .replace([' ', '\t', '\n'], "");
     let flattree = Xell::from(treestring).policy(WritePolicy::NoAutoWrite);
     let json = flattree.be("json");
-    pprint(&json, 0, 0);
+    pprint(&json, 0, 0, ColorPalette::None);
     {
         let path = "/hosts/[1]/labels/power";
         let newvalue = "insanely strong";
         let f1 = json.to(path);
         println!("{}", f1.path()?);
         f1.write().value(newvalue)?;
-        pprint(&json, 0, 0);
+        pprint(&json, 0, 0, ColorPalette::None);
         assert_eq!(json.to(path).read().value()?, newvalue);
     }
     {
-        pprint(&json, 0, 0);
+        pprint(&json, 0, 0, ColorPalette::None);
         let path = "/hosts/[1]/labels/power";
         let newvalue = "intensity";
         let f1 = json.to(path);
         f1.write().label(newvalue)?;
         assert_eq!(f1.read().label()?, newvalue);
-        pprint(&json, 0, 0);
+        pprint(&json, 0, 0, ColorPalette::None);
         assert_eq!(
             json.to("/hosts/[1]/labels/intensity").read().label()?,
             newvalue

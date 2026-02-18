@@ -1,4 +1,4 @@
-use crate::{api::*, pprint};
+use crate::{api::*, config::ColorPalette, pprint};
 
 #[test]
 fn test_xml() -> Res<()> {
@@ -16,7 +16,7 @@ fn test_xml() -> Res<()> {
             </doc>
         "#;
     let xml = Xell::from(xml.to_string()).be("xml");
-    pprint(&xml, 0, 0);
+    pprint(&xml, 0, 0, ColorPalette::None);
 
     let decl = xml.sub().at(0);
     assert_eq!(decl.read().label()?, "xml");
@@ -99,7 +99,7 @@ fn xml_write_and_save() -> Res<()> {
     .policy(WritePolicy::NoAutoWrite);
     let xml = text.be("xml");
 
-    pprint(&xml, 0, 0);
+    pprint(&xml, 0, 0, ColorPalette::None);
     assert_eq!(xml.to("/doc/q/qq").read().value()?, "4");
 
     xml.to("/doc/q/qq").write().value("444")?;

@@ -14,7 +14,7 @@ fn test_yaml() -> Res<()> {
                   "power": "strong"
         "#;
     let yaml = Xell::from(yaml).be("yaml");
-    // pprint::pprint(&yaml, 0, 0);
+    // pprint::pprint(&yaml, 0, 0, ColorPalette::None);
     let hosts = yaml.sub().get("hosts").sub();
     assert_eq!(hosts.len()?, 2);
     let host1 = hosts.at(0);

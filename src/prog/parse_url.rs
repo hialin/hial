@@ -8,10 +8,11 @@ pub fn parse_url(input: &str) -> Res<Url<'_>> {
     url_parser()
         .then_ignore(end())
         .parse(input)
+        .into_result()
         .map_err(|err| usererr(convert_error(input, err)))
 }
 
-pub(super) fn url_parser<'a>() -> impl Parser<char, Url<'a>, Error = ParseError> + Clone {
+pub(super) fn url_parser<'a>() -> impl Parser<'a, &'a str, Url<'a>, extra::Err<ParseError<'a>>> + Clone {
     scheme()
         .then(choice((
             authority()
@@ -37,14 +38,14 @@ pub(super) fn url_parser<'a>() -> impl Parser<char, Url<'a>, Error = ParseError>
         .labelled("url")
 }
 
-fn scheme() -> impl Parser<char, Scheme, Error = ParseError> + Clone {
+fn scheme<'src>() -> impl Parser<'src, &'src str, Scheme, extra::Err<ParseError<'src>>> + Clone {
     url_code_points()
         .then_ignore(just("://"))
         .map(|s| Scheme::from(s.as_str()))
         .labelled("scheme")
 }
 
-fn authority<'a>() -> impl Parser<char, Authority<'a>, Error = ParseError> + Clone {
+fn authority<'a>() -> impl Parser<'a, &'a str, Authority<'a>, extra::Err<ParseError<'a>>> + Clone {
     alphanumeric1()
         .then(just(':').ignore_then(alphanumeric1()).or_not())
         .map(|(u, p)| (leak_str(u), p.map(leak_str)))
@@ -52,25 +53,26 @@ fn authority<'a>() -> impl Parser<char, Authority<'a>, Error = ParseError> + Clo
         .labelled("authority")
 }
 
-fn ip_or_host() -> impl Parser<char, Host, Error = ParseError> + Clone {
+fn ip_or_host<'src>() -> impl Parser<'src, &'src str, Host, extra::Err<ParseError<'src>>> + Clone {
     choice((ip(), host())).labelled("ip or host")
 }
 
-fn port() -> impl Parser<char, u16, Error = ParseError> + Clone {
+fn port<'src>() -> impl Parser<'src, &'src str, u16, extra::Err<ParseError<'src>>> + Clone {
     just(':')
         .ignore_then(digits_between(1, 5))
         .try_map(|res: String, span| match res.parse::<u16>() {
             Ok(n) => Ok(n),
-            Err(_) => Err(Simple::custom(span, "invalid port")),
+            Err(_) => Err(chumsky::error::Rich::custom(span, "invalid port")),
         })
         .labelled("port")
 }
 
-fn ip() -> impl Parser<char, Host, Error = ParseError> + Clone {
+fn ip<'src>() -> impl Parser<'src, &'src str, Host, extra::Err<ParseError<'src>>> + Clone {
     ip_num()
         .then_ignore(just('.'))
         .repeated()
         .exactly(3)
+        .collect::<Vec<_>>()
         .then(ip_num())
         .map(|(head, tail)| {
             let mut result: [u8; 4] = [0, 0, 0, 0];
@@ -83,11 +85,12 @@ fn ip() -> impl Parser<char, Host, Error = ParseError> + Clone {
         .labelled("ip")
 }
 
-fn host() -> impl Parser<char, Host, Error = ParseError> + Clone {
+fn host<'src>() -> impl Parser<'src, &'src str, Host, extra::Err<ParseError<'src>>> + Clone {
     let dotted = alphanumerichyphen1()
         .then_ignore(just('.'))
         .repeated()
         .at_least(1)
+        .collect::<Vec<_>>()
         .then(alpha1())
         .map(|(mut head, tail)| {
             head.push(tail);
@@ -98,12 +101,13 @@ fn host() -> impl Parser<char, Host, Error = ParseError> + Clone {
     choice((dotted, single)).labelled("host")
 }
 
-fn url_path<'a>() -> impl Parser<char, Vec<&'a str>, Error = ParseError> + Clone {
+fn url_path<'a>() -> impl Parser<'a, &'a str, Vec<&'a str>, extra::Err<ParseError<'a>>> + Clone {
     just('/')
         .ignore_then(
             url_code_points()
                 .separated_by(just('/'))
                 .allow_trailing()
+                .collect::<Vec<_>>()
                 .or_not()
                 .map(|parts| parts.unwrap_or_default()),
         )
@@ -111,12 +115,12 @@ fn url_path<'a>() -> impl Parser<char, Vec<&'a str>, Error = ParseError> + Clone
         .labelled("url_path")
 }
 
-fn query_params<'a>() -> impl Parser<char, QueryParams<'a>, Error = ParseError> + Clone {
+fn query_params<'a>() -> impl Parser<'a, &'a str, QueryParams<'a>, extra::Err<ParseError<'a>>> + Clone {
     let pair = url_code_points()
         .then_ignore(just('='))
         .then(url_code_points());
     just('?')
-        .ignore_then(pair.separated_by(just('&')).at_least(1))
+        .ignore_then(pair.separated_by(just('&')).at_least(1).collect::<Vec<_>>())
         .map(|parts| {
             parts
                 .into_iter()
@@ -126,61 +130,64 @@ fn query_params<'a>() -> impl Parser<char, QueryParams<'a>, Error = ParseError> 
         .labelled("query params")
 }
 
-fn fragment() -> impl Parser<char, &'static str, Error = ParseError> + Clone {
+fn fragment<'src>() -> impl Parser<'src, &'src str, &'static str, extra::Err<ParseError<'src>>> + Clone {
     just('#')
         .ignore_then(url_code_points())
         .map(leak_str)
         .labelled("fragment")
 }
 
-fn ip_num() -> impl Parser<char, u8, Error = ParseError> + Clone {
+fn ip_num<'src>() -> impl Parser<'src, &'src str, u8, extra::Err<ParseError<'src>>> + Clone {
     digits_between(1, 3)
         .try_map(|result: String, span| match result.parse::<u8>() {
             Ok(n) => Ok(n),
-            Err(_) => Err(Simple::custom(span, "invalid ip number")),
+            Err(_) => Err(chumsky::error::Rich::custom(span, "invalid ip number")),
         })
         .labelled("ip number")
 }
 
-fn alphanumerichyphen1() -> impl Parser<char, String, Error = ParseError> + Clone {
-    filter(ascii_alnum_or_hyphen)
+fn alphanumerichyphen1<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+    any().filter(ascii_alnum_or_hyphen)
         .repeated()
         .at_least(1)
         .collect::<String>()
 }
 
-fn alphanumeric1() -> impl Parser<char, String, Error = ParseError> + Clone {
-    filter(ascii_alnum)
+fn alphanumeric1<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+    any().filter(ascii_alnum)
         .repeated()
         .at_least(1)
         .collect::<String>()
 }
 
-fn digits_between(min: usize, max: usize) -> impl Parser<char, String, Error = ParseError> + Clone {
-    filter(|c: &char| c.is_ascii_digit())
+fn digits_between<'src>(
+    min: usize,
+    max: usize,
+) -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+    any().filter(|c: &char| c.is_ascii_digit())
         .repeated()
         .at_least(min)
         .at_most(max)
         .collect::<String>()
 }
 
-fn alpha1() -> impl Parser<char, String, Error = ParseError> + Clone {
-    filter(ascii_alpha)
+fn alpha1<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+    any().filter(ascii_alpha)
         .repeated()
         .at_least(1)
         .collect::<String>()
 }
 
-pub(super) fn path_code_points() -> impl Parser<char, String, Error = ParseError> + Clone {
+pub(super) fn path_code_points<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
     let accept = |c: &char| {
         *c == '-' || *c == '_' || *c == '.' || *c == ':' || *c == '*' || c.is_ascii_alphanumeric()
     };
-    filter(accept).repeated().at_least(1).collect::<String>()
+    any().filter(accept).repeated().at_least(1).collect::<String>()
 }
 
-pub(super) fn url_code_points() -> impl Parser<char, String, Error = ParseError> + Clone {
+pub(super) fn url_code_points<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
     let accept = |c: &char| *c == '-' || *c == '.' || c.is_ascii_alphanumeric();
-    filter(accept).repeated().at_least(1).collect::<String>()
+    any().filter(accept).repeated().at_least(1).collect::<String>()
 }
 
 // TODO: this is not ok, remove this function and fix the problems
@@ -206,89 +213,89 @@ fn ascii_alnum_or_hyphen(c: &char) -> bool {
 mod tests {
     use super::*;
 
-    fn parse_with<O>(
-        parser: impl Parser<char, O, Error = ParseError>,
-        input: &str,
-    ) -> Result<O, Vec<ParseError>> {
-        parser.then_ignore(end()).parse(input)
+    fn parse_with<'src, O>(
+        parser: impl Parser<'src, &'src str, O, extra::Err<ParseError<'src>>>,
+        input: &'src str,
+    ) -> Result<O, Vec<ParseError<'src>>> {
+        parser.lazy().parse(input).into_result()
     }
 
     #[test]
     fn test_scheme() {
-        assert_eq!(scheme().parse("https://yay"), Ok(Scheme("https".into())));
-        assert_eq!(scheme().parse("http://yay"), Ok(Scheme("http".into())));
-        assert_eq!(scheme().parse("bla://yay"), Ok(Scheme("bla".into())));
-        assert!(scheme().parse("bla:/yay").is_err());
+        assert_eq!(parse_with(scheme(), "https://yay"), Ok(Scheme("https".into())));
+        assert_eq!(parse_with(scheme(), "http://yay"), Ok(Scheme("http".into())));
+        assert_eq!(parse_with(scheme(), "bla://yay"), Ok(Scheme("bla".into())));
+        assert!(parse_with(scheme(), "bla:/yay").is_err());
     }
 
     #[test]
     fn test_authority() {
         assert_eq!(
-            authority().parse("username:password@zupzup.org"),
+            parse_with(authority(), "username:password@zupzup.org"),
             Ok(("username", Some("password")))
         );
         assert_eq!(
-            authority().parse("username@zupzup.org"),
+            parse_with(authority(), "username@zupzup.org"),
             Ok(("username", None))
         );
-        assert!(authority().parse("zupzup.org").is_err());
-        assert!(authority().parse(":zupzup.org").is_err());
-        assert!(authority().parse("username:passwordzupzup.org").is_err());
-        assert!(authority().parse("@zupzup.org").is_err());
+        assert!(parse_with(authority(), "zupzup.org").is_err());
+        assert!(parse_with(authority(), ":zupzup.org").is_err());
+        assert!(parse_with(authority(), "username:passwordzupzup.org").is_err());
+        assert!(parse_with(authority(), "@zupzup.org").is_err());
     }
 
     #[test]
     fn test_host() {
         assert_eq!(
-            host().parse("localhost:8080"),
+            parse_with(host(), "localhost:8080"),
             Ok(Host::Host("localhost".to_string()))
         );
         assert_eq!(
-            host().parse("example.org:8080"),
+            parse_with(host(), "example.org:8080"),
             Ok(Host::Host("example.org".to_string()))
         );
         assert_eq!(
-            host().parse("some-subsite.example.org:8080"),
+            parse_with(host(), "some-subsite.example.org:8080"),
             Ok(Host::Host("some-subsite.example.org".to_string()))
         );
         assert_eq!(
-            host().parse("example.123"),
+            parse_with(host(), "example.123"),
             Ok(Host::Host("example".to_string()))
         );
-        assert!(host().parse("$$$.com").is_err());
-        assert!(host().parse(".com").is_err());
+        assert!(parse_with(host(), "$$$.com").is_err());
+        assert!(parse_with(host(), ".com").is_err());
     }
 
     #[test]
     fn test_ipv4() {
         assert_eq!(
-            ip().parse("192.168.0.1:8080"),
+            parse_with(ip(), "192.168.0.1:8080"),
             Ok(Host::IP([192, 168, 0, 1]))
         );
-        assert_eq!(ip().parse("0.0.0.0:8080"), Ok(Host::IP([0, 0, 0, 0])));
-        assert!(ip().parse("1924.168.0.1:8080").is_err());
-        assert!(ip().parse("192.168.0000.144:8080").is_err());
+        assert_eq!(parse_with(ip(), "0.0.0.0:8080"), Ok(Host::IP([0, 0, 0, 0])));
+        assert!(parse_with(ip(), "1924.168.0.1:8080").is_err());
+        assert!(parse_with(ip(), "192.168.0000.144:8080").is_err());
         assert_eq!(
-            ip().parse("192.168.0.1444:8080"),
+            parse_with(ip(), "192.168.0.1444:8080"),
             Ok(Host::IP([192, 168, 0, 144]))
         );
-        assert!(ip().parse("192.168.0:8080").is_err());
-        assert!(ip().parse("999.168.0.0:8080").is_err());
+        assert!(parse_with(ip(), "192.168.0:8080").is_err());
+        assert!(parse_with(ip(), "999.168.0.0:8080").is_err());
     }
 
     #[test]
     fn test_url_path() {
-        assert_eq!(url_path().parse("/?d"), Ok(vec![]));
-        assert_eq!(url_path().parse("/"), Ok(vec![]));
-        assert_eq!(url_path().parse("/a/b/c?d"), Ok(vec!["a", "b", "c"]));
-        assert_eq!(url_path().parse("/a/b/c/?d"), Ok(vec!["a", "b", "c"]));
+        assert_eq!(parse_with(url_path(), "/?d"), Ok(vec![]));
+        assert_eq!(parse_with(url_path(), "/"), Ok(vec![]));
+        assert_eq!(parse_with(url_path(), "/a/b/c?d"), Ok(vec!["a", "b", "c"]));
+        assert_eq!(parse_with(url_path(), "/a/b/c/?d"), Ok(vec!["a", "b", "c"]));
         assert_eq!(
-            url_path().parse("/a/b-c-d/c/?d"),
+            parse_with(url_path(), "/a/b-c-d/c/?d"),
             Ok(vec!["a", "b-c-d", "c"])
         );
-        assert_eq!(url_path().parse("/a/1234/c/?d"), Ok(vec!["a", "1234", "c"]));
+        assert_eq!(parse_with(url_path(), "/a/1234/c/?d"), Ok(vec!["a", "1234", "c"]));
         assert_eq!(
-            url_path().parse("/a/1234/c.txt?d"),
+            parse_with(url_path(), "/a/1234/c.txt?d"),
             Ok(vec!["a", "1234", "c.txt"])
         );
     }
@@ -296,20 +303,20 @@ mod tests {
     #[test]
     fn test_query_params() {
         assert_eq!(
-            query_params().parse("?bla=5&blub=val#yay"),
+            parse_with(query_params(), "?bla=5&blub=val#yay"),
             Ok(vec![("bla", "5"), ("blub", "val")])
         );
 
         assert_eq!(
-            query_params().parse("?bla-blub=arr-arr#yay"),
+            parse_with(query_params(), "?bla-blub=arr-arr#yay"),
             Ok(vec![("bla-blub", "arr-arr")])
         );
     }
 
     #[test]
     fn test_fragment() {
-        assert_eq!(fragment().parse("#bla"), Ok("bla"));
-        assert_eq!(fragment().parse("#bla-blub"), Ok("bla-blub"));
+        assert_eq!(parse_with(fragment(), "#bla"), Ok("bla"));
+        assert_eq!(parse_with(fragment(), "#bla-blub"), Ok("bla-blub"));
     }
 
     #[test]

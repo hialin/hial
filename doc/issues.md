@@ -1,8 +1,6 @@
 # List of Todos and other Issues
 
-- config file
-- oaic mongo connection
-- upgrade chumsky
+- cleanup leak_str
 - filter argument for get_all, mongo case
 - path interpretation: expose parent/filename/ext
 

@@ -1,4 +1,4 @@
-use crate::{api::*, pprint};
+use crate::{api::*, config::ColorPalette, pprint};
 
 const TOML: &str = r#"
 # This is a TOML document
@@ -28,7 +28,7 @@ role = "backend"
 fn toml_read() -> Res<()> {
     let toml = Xell::from(TOML).be("toml");
     let value = toml.sub().get("database").sub().get("enabled");
-    pprint(&value, 0, 0);
+    pprint(&value, 0, 0, ColorPalette::None);
     assert_eq!(value.read().value()?, Value::Bool(true));
     Ok(())
 }
