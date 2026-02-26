@@ -11,7 +11,6 @@ use url::Url;
 
 use super::{env::OidcEnvConfig, token_store};
 
-const OIDC_SCOPE_OPENID: &str = "openid";
 const OIDC_SCOPE_OFFLINE_ACCESS: &str = "offline_access";
 
 #[derive(Debug, Deserialize)]
@@ -69,19 +68,12 @@ fn run_interactive_flow(
 ) -> mongodb::error::Result<OidcTokenResponse> {
     let callback_url = Url::parse(&env.callback_url)
         .map_err(|err| oidc_error(format!("invalid OIDC callback URL: {err}")))?;
-    let redirect_uri = callback_url.to_string();
     let scopes = build_scopes(idp_info);
     let state = Alphanumeric.sample_string(&mut rand::rng(), 24);
-    let auth_url = build_auth_url(
-        &openid.authorization_endpoint,
-        client_id,
-        &redirect_uri,
-        &state,
-        &scopes,
-    )?;
+    let auth_url = build_auth_url(&openid.authorization_endpoint, client_id, &state, &scopes)?;
     println!("Please visit this URL to authenticate: {auth_url}");
     let auth_code = listen_for_auth_code(timeout, &callback_url, &state)?;
-    exchange_auth_code(&openid.token_endpoint, client_id, &redirect_uri, &auth_code)
+    exchange_auth_code(&openid.token_endpoint, client_id, &auth_code)
 }
 
 fn listen_for_auth_code(
@@ -137,7 +129,6 @@ fn listen_for_auth_code(
 fn exchange_auth_code(
     token_endpoint: &str,
     client_id: &str,
-    redirect_uri: &str,
     auth_code: &str,
 ) -> mongodb::error::Result<OidcTokenResponse> {
     let response = reqwest::blocking::Client::new()
@@ -146,7 +137,6 @@ fn exchange_auth_code(
         .body(urlencode_form(&[
             ("grant_type", "authorization_code"),
             ("client_id", client_id),
-            ("redirect_uri", redirect_uri),
             ("code", auth_code),
         ]))
         .send()
@@ -201,7 +191,6 @@ fn get_openid_configuration(issuer: &str) -> mongodb::error::Result<OpenIdConfig
 fn build_auth_url(
     authorization_endpoint: &str,
     client_id: &str,
-    redirect_uri: &str,
     state: &str,
     scopes: &str,
 ) -> mongodb::error::Result<String> {
@@ -210,17 +199,13 @@ fn build_auth_url(
     url.query_pairs_mut()
         .append_pair("response_type", "code")
         .append_pair("client_id", client_id)
-        .append_pair("redirect_uri", redirect_uri)
         .append_pair("scope", scopes)
         .append_pair("state", state);
     Ok(url.to_string())
 }
 
 fn build_scopes(idp_info: &IdpServerInfo) -> String {
-    let mut scopes = vec![
-        String::from(OIDC_SCOPE_OPENID),
-        String::from(OIDC_SCOPE_OFFLINE_ACCESS),
-    ];
+    let mut scopes = vec![String::from(OIDC_SCOPE_OFFLINE_ACCESS)];
     if let Some(request_scopes) = idp_info.request_scopes.as_ref() {
         for scope in request_scopes {
             if !scopes.iter().any(|item| item == scope) {

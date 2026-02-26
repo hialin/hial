@@ -103,6 +103,18 @@ pub fn usererr(reason: impl Into<String>) -> HErr {
     }
 }
 
+pub fn ioerr(reason: impl Into<String>) -> HErr {
+    HErr {
+        kind: HErrKind::IO,
+        data: Rc::new(HErrData {
+            msg: reason.into(),
+            xell: OnceCell::new(),
+            cause: None,
+            backtrace: Some(capture_stack_trace()),
+        }),
+    }
+}
+
 pub fn userres<T>(reason: impl Into<String>) -> Res<T> {
     Err(usererr(reason))
 }

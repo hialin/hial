@@ -12,7 +12,8 @@ pub fn parse_url(input: &str) -> Res<Url<'_>> {
         .map_err(|err| usererr(convert_error(input, err)))
 }
 
-pub(super) fn url_parser<'a>() -> impl Parser<'a, &'a str, Url<'a>, extra::Err<ParseError<'a>>> + Clone {
+pub(super) fn url_parser<'a>()
+-> impl Parser<'a, &'a str, Url<'a>, extra::Err<ParseError<'a>>> + Clone {
     scheme()
         .then(choice((
             authority()
@@ -104,7 +105,7 @@ fn host<'src>() -> impl Parser<'src, &'src str, Host, extra::Err<ParseError<'src
 fn url_path<'a>() -> impl Parser<'a, &'a str, Vec<&'a str>, extra::Err<ParseError<'a>>> + Clone {
     just('/')
         .ignore_then(
-            url_code_points()
+            path_code_points()
                 .separated_by(just('/'))
                 .allow_trailing()
                 .collect::<Vec<_>>()
@@ -115,7 +116,8 @@ fn url_path<'a>() -> impl Parser<'a, &'a str, Vec<&'a str>, extra::Err<ParseErro
         .labelled("url_path")
 }
 
-fn query_params<'a>() -> impl Parser<'a, &'a str, QueryParams<'a>, extra::Err<ParseError<'a>>> + Clone {
+fn query_params<'a>()
+-> impl Parser<'a, &'a str, QueryParams<'a>, extra::Err<ParseError<'a>>> + Clone {
     let pair = url_code_points()
         .then_ignore(just('='))
         .then(url_code_points());
@@ -130,7 +132,8 @@ fn query_params<'a>() -> impl Parser<'a, &'a str, QueryParams<'a>, extra::Err<Pa
         .labelled("query params")
 }
 
-fn fragment<'src>() -> impl Parser<'src, &'src str, &'static str, extra::Err<ParseError<'src>>> + Clone {
+fn fragment<'src>()
+-> impl Parser<'src, &'src str, &'static str, extra::Err<ParseError<'src>>> + Clone {
     just('#')
         .ignore_then(url_code_points())
         .map(leak_str)
@@ -146,15 +149,19 @@ fn ip_num<'src>() -> impl Parser<'src, &'src str, u8, extra::Err<ParseError<'src
         .labelled("ip number")
 }
 
-fn alphanumerichyphen1<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
-    any().filter(ascii_alnum_or_hyphen)
+fn alphanumerichyphen1<'src>()
+-> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+    any()
+        .filter(ascii_alnum_or_hyphen)
         .repeated()
         .at_least(1)
         .collect::<String>()
 }
 
-fn alphanumeric1<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
-    any().filter(ascii_alnum)
+fn alphanumeric1<'src>()
+-> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+    any()
+        .filter(ascii_alnum)
         .repeated()
         .at_least(1)
         .collect::<String>()
@@ -164,7 +171,8 @@ fn digits_between<'src>(
     min: usize,
     max: usize,
 ) -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
-    any().filter(|c: &char| c.is_ascii_digit())
+    any()
+        .filter(|c: &char| c.is_ascii_digit())
         .repeated()
         .at_least(min)
         .at_most(max)
@@ -172,22 +180,33 @@ fn digits_between<'src>(
 }
 
 fn alpha1<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
-    any().filter(ascii_alpha)
+    any()
+        .filter(ascii_alpha)
         .repeated()
         .at_least(1)
         .collect::<String>()
 }
 
-pub(super) fn path_code_points<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+pub(super) fn path_code_points<'src>()
+-> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
     let accept = |c: &char| {
-        *c == '-' || *c == '_' || *c == '.' || *c == ':' || *c == '*' || c.is_ascii_alphanumeric()
+        matches!(*c, '+' | '-' | '_' | '.' | ':' | '*' | '$') || c.is_ascii_alphanumeric()
     };
-    any().filter(accept).repeated().at_least(1).collect::<String>()
+    any()
+        .filter(accept)
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
 }
 
-pub(super) fn url_code_points<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
-    let accept = |c: &char| *c == '-' || *c == '.' || c.is_ascii_alphanumeric();
-    any().filter(accept).repeated().at_least(1).collect::<String>()
+pub(super) fn url_code_points<'src>()
+-> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+    let accept = |c: &char| matches!(*c, '+' | '-' | '_' | '.' | '$') || c.is_ascii_alphanumeric();
+    any()
+        .filter(accept)
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
 }
 
 // TODO: this is not ok, remove this function and fix the problems
@@ -222,8 +241,14 @@ mod tests {
 
     #[test]
     fn test_scheme() {
-        assert_eq!(parse_with(scheme(), "https://yay"), Ok(Scheme("https".into())));
-        assert_eq!(parse_with(scheme(), "http://yay"), Ok(Scheme("http".into())));
+        assert_eq!(
+            parse_with(scheme(), "https://yay"),
+            Ok(Scheme("https".into()))
+        );
+        assert_eq!(
+            parse_with(scheme(), "http://yay"),
+            Ok(Scheme("http".into()))
+        );
         assert_eq!(parse_with(scheme(), "bla://yay"), Ok(Scheme("bla".into())));
         assert!(parse_with(scheme(), "bla:/yay").is_err());
     }
@@ -293,7 +318,10 @@ mod tests {
             parse_with(url_path(), "/a/b-c-d/c/?d"),
             Ok(vec!["a", "b-c-d", "c"])
         );
-        assert_eq!(parse_with(url_path(), "/a/1234/c/?d"), Ok(vec!["a", "1234", "c"]));
+        assert_eq!(
+            parse_with(url_path(), "/a/1234/c/?d"),
+            Ok(vec!["a", "1234", "c"])
+        );
         assert_eq!(
             parse_with(url_path(), "/a/1234/c.txt?d"),
             Ok(vec!["a", "1234", "c.txt"])

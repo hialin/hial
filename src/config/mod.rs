@@ -2,7 +2,7 @@ use crate::api::*;
 use serde::Deserialize;
 use std::{fs, io::ErrorKind, path::PathBuf};
 
-const MAIN_CONFIG_FILE: &str = "main.yaml";
+const MAIN_CONFIG_FILE: &str = "hial.yaml";
 
 #[derive(Copy, Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -19,14 +19,15 @@ pub struct MainConfig {
     pub color_palette: Option<ColorPalette>,
 }
 
-pub(crate) fn config_dir() -> Option<PathBuf> {
-    dirs::config_dir().map(|path| path.join("hial"))
+pub(crate) fn config_dir() -> Res<PathBuf> {
+    let config_dir = dirs::home_dir()
+        .ok_or_else(|| ioerr("home dir not found"))?
+        .join(".config");
+    Ok(config_dir.join("hial"))
 }
 
 pub fn load_main_config() -> Res<MainConfig> {
-    let Some(path) = config_dir().map(|path| path.join(MAIN_CONFIG_FILE)) else {
-        return Ok(MainConfig::default());
-    };
+    let path = config_dir()?.join(MAIN_CONFIG_FILE);
     let contents = match fs::read_to_string(&path) {
         Ok(contents) => contents,
         Err(err) if err.kind() == ErrorKind::NotFound => return Ok(MainConfig::default()),

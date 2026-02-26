@@ -19,7 +19,15 @@ pub(super) fn connect_client(conn_str: &str) -> Res<Client> {
         let callback_env = oidc_env.clone();
         credential.oidc_callback = Callback::human(move |context| {
             let callback_env = callback_env.clone();
-            async move { oidc::run_human_oidc_callback(context, &callback_env) }.boxed()
+            async move {
+                let handle = std::thread::spawn(move || {
+                    oidc::run_human_oidc_callback(context, &callback_env)
+                });
+                handle
+                    .join()
+                    .unwrap_or_else(|_| Err(mongodb::error::Error::custom("OIDC callback thread panicked")))
+            }
+            .boxed()
         });
     }
     Client::with_options(options).map_err(|err| caused(HErrKind::Net, "mongo: cannot connect", err))

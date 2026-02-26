@@ -2,24 +2,38 @@ use std::{collections::BTreeMap, fs, path::Path};
 
 use serde::{Deserialize, Serialize};
 
+use crate::guard_some;
+
 #[derive(Debug, Default, Deserialize, Serialize)]
 struct TokenConfig {
     #[serde(default)]
     tokens: BTreeMap<String, String>,
 }
 
-pub(super) fn load_refresh_token(path: &Path, client_id: &str) -> Result<Option<String>, String> {
+pub(super) fn load_refresh_token(
+    path: Option<&Path>,
+    client_id: &str,
+) -> Result<Option<String>, String> {
+    let path = guard_some!(path, { return Ok(None) });
     let data = match fs::read_to_string(path) {
         Ok(data) => data,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(err) => return Err(format!("failed to read token config: {err}")),
     };
-    let config: TokenConfig =
-        serde_yaml::from_str(&data).map_err(|err| format!("failed to parse token config: {err}"))?;
+    let config: TokenConfig = serde_yaml::from_str(&data)
+        .map_err(|err| format!("failed to parse token config: {err}"))?;
     Ok(config.tokens.get(client_id).cloned())
 }
 
-pub(super) fn save_refresh_token(path: &Path, client_id: &str, refresh_token: &str) -> Result<(), String> {
+pub(super) fn save_refresh_token(
+    path: Option<&Path>,
+    client_id: &str,
+    refresh_token: &str,
+) -> Result<(), String> {
+    let path = guard_some!(path, {
+        println!("token file not found, skipping save");
+        return Ok(());
+    });
     let mut config = match fs::read_to_string(path) {
         Ok(data) => serde_yaml::from_str::<TokenConfig>(&data)
             .map_err(|err| format!("failed to parse existing token config: {err}"))?,
