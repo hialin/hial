@@ -295,3 +295,63 @@ fn path_items() -> Res<()> {
     );
     Ok(())
 }
+
+#[test]
+fn path_parts() -> Res<()> {
+    let path = Xell::from("./src/tests/data/write.txt").be("path");
+    assert_eq!(path.to("/dir").read().value()?, "./src/tests/data");
+    assert_eq!(path.to("/name").read().value()?, "write.txt");
+    assert_eq!(path.to("/ext").read().value()?, ".txt");
+    assert_eq!(path.to("/stem").read().value()?, "write");
+    Ok(())
+}
+
+#[test]
+fn path_parts_no_extension() -> Res<()> {
+    let path = Xell::from("./README.md").be("path");
+    assert_eq!(path.to("/stem").read().value()?, "README");
+    assert_eq!(path.to("/ext").read().value()?, ".md");
+
+    let path = Xell::from("./LICENSE").be("path");
+    assert_eq!(path.to("/stem").read().value()?, "LICENSE");
+    assert_eq!(path.to("/ext").read().value()?, "");
+    Ok(())
+}
+
+#[test]
+fn path_parts_hidden_file() -> Res<()> {
+    let path = Xell::from("./.gitignore").be("path");
+    assert_eq!(path.to("/name").read().value()?, ".gitignore");
+    assert_eq!(path.to("/ext").read().value()?, "");
+    assert_eq!(path.to("/stem").read().value()?, ".gitignore");
+    Ok(())
+}
+
+#[test]
+fn path_parts_write() -> Res<()> {
+    let path = Xell::from("./src/tests/data/write.txt")
+        .policy(WritePolicy::NoAutoWrite)
+        .be("path");
+    path.to("/ext").write().value(".md")?;
+    assert_eq!(path.read().value()?, "./src/tests/data/write.md");
+
+    path.to("/stem").write().value("renamed")?;
+    assert_eq!(path.read().value()?, "./src/tests/data/renamed.md");
+
+    path.to("/name").write().value("final.rs")?;
+    assert_eq!(path.read().value()?, "./src/tests/data/final.rs");
+
+    path.to("/dir").write().value("./src/tests")?;
+    assert_eq!(path.read().value()?, "./src/tests/final.rs");
+    Ok(())
+}
+
+#[test]
+fn path_parts_write_add_extension() -> Res<()> {
+    let path = Xell::from("./LICENSE")
+        .policy(WritePolicy::NoAutoWrite)
+        .be("path");
+    path.to("/ext").write().value(".txt")?;
+    assert_eq!(path.read().value()?, "./LICENSE.txt");
+    Ok(())
+}

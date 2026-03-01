@@ -1,8 +1,28 @@
 # Models of various domains
 
+## Path
+
+x
+    dir
+    name
+    ext
+    stem
+
+Examples:
+
+- `./src/main.rs^path/dir` -> `./src`
+- `./src/main.rs^path/name` -> `main.rs`
+- `./src/main.rs^path/ext` -> `.rs`
+- `./src/main.rs^path/stem` -> `main`
+
+Write examples:
+
+- `./src/main.rs^path/ext = ".txt"` -> `./src/main.txt`
+- `./src/main.rs^path/stem = "app"` -> `./src/app.rs`
+
 ## File system
 
-dir
+x
     file
         @size
         @modification_time
@@ -14,7 +34,7 @@ dir
 
 ## JSON
 
-object
+x
     key: value
     key: array
         value
@@ -23,7 +43,7 @@ object
 
 # xml
 
-xml
+x
     @version
     @encoding
     @standalone
@@ -40,7 +60,7 @@ xml
 
 # http
 
-response
+x
     @status_code
     @status_text
     @headers
