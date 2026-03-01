@@ -1,7 +1,7 @@
 # List of Todos and other Issues
 
-- cleanup leak_str
-- filter argument for get_all, mongo case
+- selector expression argument for get_all (mongo case)
+    - unify get and get_all
 - path interpretation: expose parent/filename/ext
 
 - add split(":") interpretation, read-write

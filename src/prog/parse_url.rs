@@ -42,14 +42,14 @@ pub(super) fn url_parser<'a>()
 fn scheme<'src>() -> impl Parser<'src, &'src str, Scheme, extra::Err<ParseError<'src>>> + Clone {
     url_code_points()
         .then_ignore(just("://"))
-        .map(|s| Scheme::from(s.as_str()))
+        .map(Scheme::from)
         .labelled("scheme")
 }
 
 fn authority<'a>() -> impl Parser<'a, &'a str, Authority<'a>, extra::Err<ParseError<'a>>> + Clone {
     alphanumeric1()
         .then(just(':').ignore_then(alphanumeric1()).or_not())
-        .map(|(u, p)| (leak_str(u), p.map(leak_str)))
+        .map(|(u, p)| (u, p))
         .then_ignore(just('@'))
         .labelled("authority")
 }
@@ -98,7 +98,7 @@ fn host<'src>() -> impl Parser<'src, &'src str, Host, extra::Err<ParseError<'src
             Host::Host(head.join("."))
         });
 
-    let single = alphanumerichyphen1().map(Host::Host);
+    let single = alphanumerichyphen1().map(|s| Host::Host(s.to_string()));
     choice((dotted, single)).labelled("host")
 }
 
@@ -112,7 +112,6 @@ fn url_path<'a>() -> impl Parser<'a, &'a str, Vec<&'a str>, extra::Err<ParseErro
                 .or_not()
                 .map(|parts| parts.unwrap_or_default()),
         )
-        .map(|parts| parts.into_iter().map(leak_str).collect::<Vec<_>>())
         .labelled("url_path")
 }
 
@@ -123,20 +122,13 @@ fn query_params<'a>()
         .then(url_code_points());
     just('?')
         .ignore_then(pair.separated_by(just('&')).at_least(1).collect::<Vec<_>>())
-        .map(|parts| {
-            parts
-                .into_iter()
-                .map(|(k, v)| (leak_str(k), leak_str(v)))
-                .collect::<Vec<_>>()
-        })
         .labelled("query params")
 }
 
 fn fragment<'src>()
--> impl Parser<'src, &'src str, &'static str, extra::Err<ParseError<'src>>> + Clone {
+-> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
     just('#')
         .ignore_then(url_code_points())
-        .map(leak_str)
         .labelled("fragment")
 }
 
@@ -150,21 +142,21 @@ fn ip_num<'src>() -> impl Parser<'src, &'src str, u8, extra::Err<ParseError<'src
 }
 
 fn alphanumerichyphen1<'src>()
--> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+-> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
     any()
         .filter(ascii_alnum_or_hyphen)
         .repeated()
         .at_least(1)
-        .collect::<String>()
+        .to_slice()
 }
 
 fn alphanumeric1<'src>()
--> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+-> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
     any()
         .filter(ascii_alnum)
         .repeated()
         .at_least(1)
-        .collect::<String>()
+        .to_slice()
 }
 
 fn digits_between<'src>(
@@ -179,16 +171,16 @@ fn digits_between<'src>(
         .collect::<String>()
 }
 
-fn alpha1<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+fn alpha1<'src>() -> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
     any()
         .filter(ascii_alpha)
         .repeated()
         .at_least(1)
-        .collect::<String>()
+        .to_slice()
 }
 
 pub(super) fn path_code_points<'src>()
--> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+-> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
     let accept = |c: &char| {
         matches!(*c, '+' | '-' | '_' | '.' | ':' | '*' | '$') || c.is_ascii_alphanumeric()
     };
@@ -196,22 +188,17 @@ pub(super) fn path_code_points<'src>()
         .filter(accept)
         .repeated()
         .at_least(1)
-        .collect::<String>()
+        .to_slice()
 }
 
 pub(super) fn url_code_points<'src>()
--> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+-> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
     let accept = |c: &char| matches!(*c, '+' | '-' | '_' | '.' | '$') || c.is_ascii_alphanumeric();
     any()
         .filter(accept)
         .repeated()
         .at_least(1)
-        .collect::<String>()
-}
-
-// TODO: this is not ok, remove this function and fix the problems
-fn leak_str(s: String) -> &'static str {
-    Box::leak(s.into_boxed_str())
+        .to_slice()
 }
 
 fn ascii_alpha(c: &char) -> bool {

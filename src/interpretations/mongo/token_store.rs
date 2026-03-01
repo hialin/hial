@@ -59,7 +59,8 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_file(&path);
-        let token = load_refresh_token(&path, "client-id").expect("load should not fail");
+        let token =
+            load_refresh_token(Some(path.as_path()), "client-id").expect("load should not fail");
         assert!(token.is_none());
     }
 
@@ -70,8 +71,10 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_file(&path);
-        save_refresh_token(&path, "client-id", "refresh-token").expect("save should succeed");
-        let token = load_refresh_token(&path, "client-id").expect("load should succeed");
+        save_refresh_token(Some(path.as_path()), "client-id", "refresh-token")
+            .expect("save should succeed");
+        let token =
+            load_refresh_token(Some(path.as_path()), "client-id").expect("load should succeed");
         assert_eq!(token.as_deref(), Some("refresh-token"));
         let _ = std::fs::remove_file(&path);
     }

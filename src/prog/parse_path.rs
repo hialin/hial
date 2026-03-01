@@ -59,7 +59,7 @@ fn path_start_parser<'a>() -> impl Parser<'a, &'a str, PathStart<'a>, extra::Err
 pub(super) fn path_items_parser<'a>() -> impl Parser<'a, &'a str, Path<'a>, extra::Err<ParseError<'a>>> + Clone {
     recursive(|path_items| {
         let path_item_selector = path_code_points()
-            .map(|s| Selector::from(leak_str(s)))
+            .map(Selector::from)
             .labelled("path_item_selector");
         let path_item_index = just('[')
             .ignore_then(number_isize_parser())
@@ -183,7 +183,7 @@ fn path_item_parser<'a>(
     path_items: impl Parser<'a, &'a str, Path<'a>, extra::Err<ParseError<'a>>> + Clone + 'a,
 ) -> impl Parser<'a, &'a str, PathItem<'a>, extra::Err<ParseError<'a>>> + Clone {
     let path_item_selector = path_code_points()
-        .map(|s| Selector::from(leak_str(s)))
+        .map(Selector::from)
         .labelled("path_item_selector");
     let path_item_index = just('[')
         .ignore_then(number_isize_parser())
@@ -291,11 +291,11 @@ fn path_item_parser<'a>(
         })
         .labelled("normal path item");
 
-    let field_shorthand_path_item = identifier_parser()
+    let field_shorthand_path_item = identifier_slice_parser()
         .map(|name| {
             PathItem::Normal(NormalPathItem {
                 relation: Relation::Field,
-                selector: Some(Selector::from(leak_str(name))),
+                selector: Some(Selector::from(name)),
                 index: None,
                 filters: vec![],
             })
@@ -392,21 +392,20 @@ fn unescape_string(s: &str, special: char) -> String {
     r
 }
 
-// TODO: this is not ok, remove this function and fix the problems
-fn leak_str(s: String) -> &'static str {
-    Box::leak(s.into_boxed_str())
-}
-
 fn ws<'src>() -> impl Parser<'src, &'src str, (), extra::Err<ParseError<'src>>> + Clone {
     any().filter(|c: &char| c.is_whitespace()).repeated().ignored()
 }
 
-fn identifier_parser<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+fn identifier_slice_parser<'src>() -> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
     any().filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_')
         .repeated()
         .at_least(1)
-        .collect::<String>()
+        .to_slice()
         .labelled("identifier")
+}
+
+fn identifier_parser<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+    identifier_slice_parser().map(|s| s.to_string())
 }
 
 fn number_isize_parser<'src>() -> impl Parser<'src, &'src str, isize, extra::Err<ParseError<'src>>> + Clone {
