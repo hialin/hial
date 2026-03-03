@@ -31,9 +31,14 @@ pub(super) fn save_refresh_token(
     refresh_token: &str,
 ) -> Result<(), String> {
     let path = guard_some!(path, {
-        println!("token file not found, skipping save");
         return Ok(());
     });
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)
+            .map_err(|err| format!("failed to create token config directory: {err}"))?;
+    }
     let mut config = match fs::read_to_string(path) {
         Ok(data) => serde_yaml::from_str::<TokenConfig>(&data)
             .map_err(|err| format!("failed to parse existing token config: {err}"))?,
@@ -77,5 +82,23 @@ mod tests {
             load_refresh_token(Some(path.as_path()), "client-id").expect("load should succeed");
         assert_eq!(token.as_deref(), Some("refresh-token"));
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn save_creates_missing_parent_directory() {
+        let root = std::env::temp_dir().join(format!(
+            "hial-mongo-token-store-parent-{}",
+            std::process::id()
+        ));
+        let path = root.join("nested").join("oidc-token.yaml");
+        let _ = std::fs::remove_dir_all(&root);
+
+        save_refresh_token(Some(path.as_path()), "client-id", "refresh-token")
+            .expect("save should succeed");
+        let token =
+            load_refresh_token(Some(path.as_path()), "client-id").expect("load should succeed");
+        assert_eq!(token.as_deref(), Some("refresh-token"));
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
