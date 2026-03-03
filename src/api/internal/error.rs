@@ -31,7 +31,7 @@ impl CellReaderTrait for HErr {
     fn ty(&self) -> Res<&str> {
         Ok(match self.kind {
             HErrKind::None => "nores",
-            HErrKind::User => "user",
+            HErrKind::Input => "user",
             HErrKind::IO => "io",
             HErrKind::Net => "net",
             HErrKind::Internal => "internal",

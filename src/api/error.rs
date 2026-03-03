@@ -17,8 +17,8 @@ pub struct HErr {
 pub enum HErrKind {
     // item not found
     None,
-    // error caused by some parameter controlled by the user
-    User,
+    // error caused by some input parameter (controlled by the user)
+    Input,
     // error caused by an IO/fmt operation
     IO,
     // error caused by an net operation
@@ -37,7 +37,7 @@ impl fmt::Display for HErrKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             HErrKind::None => write!(f, "no result"),
-            HErrKind::User => write!(f, "user error"),
+            HErrKind::Input => write!(f, "input error"),
             HErrKind::Internal => write!(f, "internal error"),
             HErrKind::IO => write!(f, "io error"),
             HErrKind::Net => write!(f, "net error"),
@@ -91,9 +91,9 @@ pub fn noresm<T>(message: impl Into<String>) -> Res<T> {
     Err(noerrm(message))
 }
 
-pub fn usererr(reason: impl Into<String>) -> HErr {
+pub fn inputerr(reason: impl Into<String>) -> HErr {
     HErr {
-        kind: HErrKind::User,
+        kind: HErrKind::Input,
         data: Rc::new(HErrData {
             msg: reason.into(),
             xell: OnceCell::new(),
@@ -115,8 +115,8 @@ pub fn ioerr(reason: impl Into<String>) -> HErr {
     }
 }
 
-pub fn userres<T>(reason: impl Into<String>) -> Res<T> {
-    Err(usererr(reason))
+pub fn inputres<T>(reason: impl Into<String>) -> Res<T> {
+    Err(inputerr(reason))
 }
 
 pub fn fault<T>(reason: impl Into<String>) -> Res<T> {

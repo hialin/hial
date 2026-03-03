@@ -1,7 +1,7 @@
 use hiallib::{
     api::*,
     config::{self, ColorPalette},
-    prog::{Program, ProgramParams},
+    prog::{ExecutionContext, Program, ProgramParams},
     *,
 };
 
@@ -22,13 +22,21 @@ fn main() -> Res<()> {
     }
 
     debug!("Command: run {}", args.program);
+    let mut exec_ctx = ExecutionContext::default();
+
+    if let Some(prelude_text) = config::load_prelude_text()? {
+        let prelude = Program::parse(&prelude_text)
+            .map_err(|e| caused(HErrKind::Input, "prelude error", e))?;
+        prelude.run_in_context(ProgramParams::default(), &mut exec_ctx)?;
+    }
+
     let program = Program::parse(&args.program)?;
     let params = ProgramParams {
         print_depth: args.depth.unwrap_or(usize::MAX),
         print_breadth: args.breadth.unwrap_or(0),
         color_palette: args.color_palette,
     };
-    program.run(params)?;
+    program.run_in_context(params, &mut exec_ctx)?;
     Ok(())
 }
 

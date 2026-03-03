@@ -87,7 +87,7 @@ impl CellWriterTrait for CellWriter {
                 let url = Url::parse(s.as_str())?;
                 Ok(())
             }
-            _ => userres(format!("cannot set url from non-string value {:?}", value)),
+            _ => inputres(format!("cannot set url from non-string value {:?}", value)),
         }
     }
 }

@@ -8,7 +8,7 @@ pub(super) mod parse_program;
 pub(super) mod parse_url;
 
 pub use path::{Path, PathStart};
-pub use program::{Program, ProgramParams};
+pub use program::{ExecutionContext, Program, ProgramParams};
 
 use chumsky::error::Rich;
 

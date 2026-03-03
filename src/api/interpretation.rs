@@ -135,7 +135,7 @@ macro_rules! implement_try_from_xell {
                 if let DynCell::$xell_enum_type(c) = x.dyn_cell {
                     Ok(c)
                 } else {
-                    userres(format!(
+                    inputres(format!(
                         "cannot convert cell {} to {}",
                         x.interpretation(),
                         stringify!($xell_enum_type)

@@ -123,7 +123,7 @@ impl CellReaderTrait for CellReader {
                 .get_index(*ii)
                 .ok_or_else(noerr)?
                 .1
-                 .1
+                .1
                 .get_index(*ip)
                 .ok_or_else(noerr)?
                 .1
@@ -143,7 +143,7 @@ impl CellReaderTrait for CellReader {
                 .get_index(*i)
                 .ok_or_else(noerr)?
                 .1
-                 .1
+                .1
                 .get_index(*ip)
                 .ok_or_else(noerr)
                 .map(|x| x.0.as_value()),
@@ -166,19 +166,19 @@ impl CellReaderTrait for CellReader {
 
 impl CellWriterTrait for Cell {
     fn set_label(&mut self, v: OwnValue) -> Res<()> {
-        userres("cannot set labels on elevation cells")
+        inputres("cannot set labels on elevation cells")
     }
 
     fn set_value(&mut self, v: OwnValue) -> Res<()> {
         match &mut self.kind {
-            CellKind::Interpretation(i) => userres("cannot set interpretation value"),
+            CellKind::Interpretation(i) => inputres("cannot set interpretation value"),
             CellKind::Param(i, ip) => {
                 *write(&self.data)?
                     .map
                     .get_index_mut(*i)
                     .ok_or_else(noerr)?
                     .1
-                     .1
+                    .1
                     .get_index_mut(*ip)
                     .ok_or_else(noerr)?
                     .1 = v;
@@ -209,7 +209,7 @@ impl GroupTrait for Group {
             GroupKind::Attr(i) => {
                 let data = read(&self.data)?;
                 let entry = data.map.get_index(i).ok_or_else(noerr)?;
-                Ok(entry.1 .1.len())
+                Ok(entry.1.1.len())
             }
             GroupKind::Sub(i) => Ok(1),
         }
@@ -235,10 +235,10 @@ impl GroupTrait for Group {
 
     fn create(&self, label: Option<OwnValue>, value: Option<OwnValue>) -> Res<Self::Cell> {
         if self.kind == GroupKind::Root {
-            return userres("cannot create new cells in interpretation root group");
+            return inputres("cannot create new cells in interpretation root group");
         }
         if let GroupKind::Sub(_) = self.kind {
-            return userres("cannot create new cells in interpretation sub group");
+            return inputres("cannot create new cells in interpretation sub group");
         }
         if let Some(label) = label {
             Ok(Cell {
@@ -246,21 +246,21 @@ impl GroupTrait for Group {
                 kind: CellKind::DetachedParam(Box::new((label, value.unwrap_or(OwnValue::None)))),
             })
         } else {
-            userres("cannot create new cells without a label")
+            inputres("cannot create new cells without a label")
         }
     }
 
     fn add(&self, index: Option<usize>, cell: Self::Cell) -> Res<()> {
         match self.kind {
-            GroupKind::Root => userres("cannot add cell to interpretaion root group"),
-            GroupKind::Sub(_) => userres("cannot add cell to interpretation sub group"),
+            GroupKind::Root => inputres("cannot add cell to interpretaion root group"),
+            GroupKind::Sub(_) => inputres("cannot add cell to interpretation sub group"),
             GroupKind::Attr(i) => {
                 let mut data = write(&self.data)?;
                 let (target, (constructor, params)) =
                     data.map.get_index_mut(i).ok_or_else(noerr)?;
                 if let CellKind::DetachedParam(b) = cell.kind {
                     if params.contains_key(&b.0.as_value()) {
-                        return userres(format!(
+                        return inputres(format!(
                             "cannot add elevation param with label `{}` twice",
                             b.0
                         ));
@@ -393,7 +393,7 @@ impl Group {
                 let Some(entry) = data.map.get_index(i) else {
                     return nores();
                 };
-                let Some(entry) = entry.1 .1.get_full(&label) else {
+                let Some(entry) = entry.1.1.get_full(&label) else {
                     return nores();
                 };
                 let cell = Cell {
@@ -406,7 +406,7 @@ impl Group {
                 ))
             }
             GroupKind::Sub(i) => {
-                userres("cannot use get to access interpretation root, use at instead")
+                inputres("cannot use get to access interpretation root, use at instead")
             }
         }
     }

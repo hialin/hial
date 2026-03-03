@@ -3,6 +3,7 @@ use serde::Deserialize;
 use std::{fs, io::ErrorKind, path::PathBuf};
 
 const MAIN_CONFIG_FILE: &str = "hial.yaml";
+const PRELUDE_FILE: &str = "prelude.hial";
 
 #[derive(Copy, Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -46,4 +47,17 @@ pub fn load_main_config() -> Res<MainConfig> {
             err,
         )
     })
+}
+
+pub fn load_prelude_text() -> Res<Option<String>> {
+    let path = config_dir()?.join(PRELUDE_FILE);
+    match fs::read_to_string(&path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(caused(
+            HErrKind::IO,
+            format!("cannot read prelude file: {}", path.display()),
+            err,
+        )),
+    }
 }

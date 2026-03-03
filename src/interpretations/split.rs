@@ -70,7 +70,7 @@ impl Cell {
         let text: String = v.as_cow_str().to_string();
 
         let Some(pattern_arg) = params.get(&Value::from(0)) else {
-            return userres("regex requires a parameter");
+            return inputres("regex requires a parameter");
         };
 
         let split_index = {
@@ -78,7 +78,7 @@ impl Cell {
                 if let OwnValue::Int(i) = i {
                     i.as_i128() as isize
                 } else {
-                    return userres("split index must be an integer");
+                    return inputres("split index must be an integer");
                 }
             } else {
                 0

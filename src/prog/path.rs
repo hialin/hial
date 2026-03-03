@@ -13,6 +13,7 @@ pub enum PathStart<'a> {
     Url(Url<'a>),
     File(String),
     String(String),
+    Var(String),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -122,6 +123,7 @@ impl Display for PathStart<'_> {
             PathStart::Url(x) => write!(f, "{}", x)?,
             PathStart::File(x) => write!(f, "{}", x)?,
             PathStart::String(x) => write!(f, "'{}'", x)?,
+            PathStart::Var(x) => write!(f, "${}", x)?,
         }
         Ok(())
     }
@@ -198,6 +200,10 @@ impl<'a> PathStart<'a> {
             PathStart::Url(s) => Xell::from(s.to_string()).be("url").err(),
             PathStart::File(s) => Xell::from(s.as_str()).be("path").be("fs").err(),
             PathStart::String(s) => Xell::from(s.as_str()).err(),
+            PathStart::Var(name) => inputres(format!(
+                "cannot evaluate variable start ?{} without execution context",
+                name
+            )),
         }
     }
 }

@@ -257,7 +257,7 @@ impl CellReader {
         if let DynCellReader::Path(ref path_cell) = self.0 {
             return path_cell.as_file_path();
         }
-        userres("this interpretation has no file path")
+        inputres("this interpretation has no file path")
     }
 
     pub fn err(self) -> Res<CellReader> {
@@ -386,7 +386,7 @@ impl Xell {
             // allow writing elevation cells, to set elevation parameters
             && !matches!(self.dyn_cell, DynCell::Elevation(_))
         {
-            let err = usererr("cannot write, read-only domain").with_xell(self.clone());
+            let err = inputerr("cannot write, read-only domain").with_xell(self.clone());
             return CellWriter {
                 dyn_cell_writer: DynCellWriter::from(err),
                 domain: Rc::clone(&self.domain),

@@ -11,7 +11,7 @@ pub fn parse_path(input: &str) -> Res<Path<'_>> {
         .then_ignore(end())
         .parse(input)
         .into_result()
-        .map_err(|err| usererr(convert_error(input, err)))
+        .map_err(|err| inputerr(convert_error(input, err)))
 }
 
 pub fn parse_path_with_starter(input: &str) -> Res<(PathStart<'_>, Path<'_>)> {
@@ -19,7 +19,7 @@ pub fn parse_path_with_starter(input: &str) -> Res<(PathStart<'_>, Path<'_>)> {
         .then_ignore(end())
         .parse(input)
         .into_result()
-        .map_err(|err| usererr(convert_error(input, err)))
+        .map_err(|err| inputerr(convert_error(input, err)))
 }
 
 pub(super) fn path_with_starter_parser<'a>()
@@ -30,8 +30,13 @@ pub(super) fn path_with_starter_parser<'a>()
         .labelled("path")
 }
 
-fn path_start_parser<'a>() -> impl Parser<'a, &'a str, PathStart<'a>, extra::Err<ParseError<'a>>> + Clone {
+fn path_start_parser<'a>()
+-> impl Parser<'a, &'a str, PathStart<'a>, extra::Err<ParseError<'a>>> + Clone {
     let path_start_url = url_parser().map(PathStart::Url).labelled("path_start_url");
+    let path_start_var = just(':')
+        .ignore_then(identifier_parser())
+        .map(PathStart::Var)
+        .labelled("path_start_var");
     let file_prefix = choice((
         just("./").to("./"),
         just("~/").to("~/"),
@@ -39,7 +44,11 @@ fn path_start_parser<'a>() -> impl Parser<'a, &'a str, PathStart<'a>, extra::Err
         empty().to(""),
     ));
     let path_start_file = file_prefix
-        .then(path_code_points().separated_by(just('/')).collect::<Vec<_>>())
+        .then(
+            path_code_points()
+                .separated_by(just('/'))
+                .collect::<Vec<_>>(),
+        )
         .map(|(prefix, parts)| {
             let suffix = parts.join("/");
             let full = if suffix.is_empty() {
@@ -53,10 +62,17 @@ fn path_start_parser<'a>() -> impl Parser<'a, &'a str, PathStart<'a>, extra::Err
     let path_start_string = string_parser()
         .map(PathStart::String)
         .labelled("path_start_string");
-    choice((path_start_url, path_start_file, path_start_string)).labelled("path_start")
+    choice((
+        path_start_url,
+        path_start_var,
+        path_start_file,
+        path_start_string,
+    ))
+    .labelled("path_start")
 }
 
-pub(super) fn path_items_parser<'a>() -> impl Parser<'a, &'a str, Path<'a>, extra::Err<ParseError<'a>>> + Clone {
+pub(super) fn path_items_parser<'a>()
+-> impl Parser<'a, &'a str, Path<'a>, extra::Err<ParseError<'a>>> + Clone {
     recursive(|path_items| {
         let path_item_selector = path_code_points()
             .map(Selector::from)
@@ -79,7 +95,10 @@ pub(super) fn path_items_parser<'a>() -> impl Parser<'a, &'a str, Path<'a>, extr
             )
             .try_map(|(left, op_right), span| {
                 if left.0.is_empty() && op_right.is_none() {
-                    return Err(chumsky::error::Rich::custom(span, "empty ternary expression"));
+                    return Err(chumsky::error::Rich::custom(
+                        span,
+                        "empty ternary expression",
+                    ));
                 }
                 Ok(Expression::Ternary { left, op_right })
             })
@@ -160,7 +179,10 @@ pub(super) fn path_items_parser<'a>() -> impl Parser<'a, &'a str, Path<'a>, extr
                     ));
                 }
                 if relation == Relation::Field && !filters.is_empty() {
-                    return Err(chumsky::error::Rich::custom(span, "field relation cannot have filters"));
+                    return Err(chumsky::error::Rich::custom(
+                        span,
+                        "field relation cannot have filters",
+                    ));
                 }
                 Ok(PathItem::Normal(NormalPathItem {
                     relation,
@@ -201,7 +223,10 @@ fn path_item_parser<'a>(
         )
         .try_map(|(left, op_right), span| {
             if left.0.is_empty() && op_right.is_none() {
-                return Err(chumsky::error::Rich::custom(span, "empty ternary expression"));
+                return Err(chumsky::error::Rich::custom(
+                    span,
+                    "empty ternary expression",
+                ));
             }
             Ok(Expression::Ternary { left, op_right })
         })
@@ -280,7 +305,10 @@ fn path_item_parser<'a>(
                 ));
             }
             if relation == Relation::Field && !filters.is_empty() {
-                return Err(chumsky::error::Rich::custom(span, "field relation cannot have filters"));
+                return Err(chumsky::error::Rich::custom(
+                    span,
+                    "field relation cannot have filters",
+                ));
             }
             Ok(PathItem::Normal(NormalPathItem {
                 relation,
@@ -326,9 +354,7 @@ fn test_parse_string() {
         Ok(r#"(\w+)"#.to_string())
     );
     assert_eq!(
-        string_parser()
-            .parse(r#""(\w+.\w+)@(\w+)""#)
-            .into_result(),
+        string_parser().parse(r#""(\w+.\w+)@(\w+)""#).into_result(),
         Ok(r#"(\w+.\w+)@(\w+)"#.to_string())
     );
 }
@@ -371,6 +397,13 @@ fn test_parse_file_path_start_variants() {
             .into_result(),
         Ok(PathStart::File("x/y".to_string()))
     );
+    assert_eq!(
+        path_start_parser()
+            .then_ignore(end())
+            .parse(":x")
+            .into_result(),
+        Ok(PathStart::Var("x".to_string()))
+    );
 }
 
 fn unescape_string(s: &str, special: char) -> String {
@@ -393,26 +426,34 @@ fn unescape_string(s: &str, special: char) -> String {
 }
 
 fn ws<'src>() -> impl Parser<'src, &'src str, (), extra::Err<ParseError<'src>>> + Clone {
-    any().filter(|c: &char| c.is_whitespace()).repeated().ignored()
+    any()
+        .filter(|c: &char| c.is_whitespace())
+        .repeated()
+        .ignored()
 }
 
-fn identifier_slice_parser<'src>() -> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
-    any().filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_')
+fn identifier_slice_parser<'src>()
+-> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
+    any()
+        .filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_')
         .repeated()
         .at_least(1)
         .to_slice()
         .labelled("identifier")
 }
 
-fn identifier_parser<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+fn identifier_parser<'src>()
+-> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
     identifier_slice_parser().map(|s| s.to_string())
 }
 
-fn number_isize_parser<'src>() -> impl Parser<'src, &'src str, isize, extra::Err<ParseError<'src>>> + Clone {
+fn number_isize_parser<'src>()
+-> impl Parser<'src, &'src str, isize, extra::Err<ParseError<'src>>> + Clone {
     one_of("+-")
         .or_not()
         .then(
-            any().filter(|c: &char| c.is_ascii_digit())
+            any()
+                .filter(|c: &char| c.is_ascii_digit())
                 .repeated()
                 .at_least(1)
                 .collect::<String>(),
@@ -452,33 +493,39 @@ fn quoted_parser<'src>(
         .map(move |raw| unescape_string(raw.as_str(), quote))
 }
 
-fn string_parser<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+fn string_parser<'src>()
+-> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
     choice((quoted_parser('\''), quoted_parser('"'))).labelled("string")
 }
 
-fn operation_parser<'src>() -> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
+fn operation_parser<'src>()
+-> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
     choice((just("==").to("=="), just("!=").to("!="))).labelled("operation")
 }
 
-pub(super) fn value_int_parser<'src>() -> impl Parser<'src, &'src str, OwnValue, extra::Err<ParseError<'src>>> + Clone {
+pub(super) fn value_int_parser<'src>()
+-> impl Parser<'src, &'src str, OwnValue, extra::Err<ParseError<'src>>> + Clone {
     number_isize_parser()
         .map(|num| OwnValue::from(num as i64))
         .labelled("value_int")
 }
 
-fn value_string_parser<'src>() -> impl Parser<'src, &'src str, OwnValue, extra::Err<ParseError<'src>>> + Clone {
+fn value_string_parser<'src>()
+-> impl Parser<'src, &'src str, OwnValue, extra::Err<ParseError<'src>>> + Clone {
     string_parser()
         .map(OwnValue::String)
         .labelled("value_string")
 }
 
-fn value_ident_parser<'src>() -> impl Parser<'src, &'src str, OwnValue, extra::Err<ParseError<'src>>> + Clone {
+fn value_ident_parser<'src>()
+-> impl Parser<'src, &'src str, OwnValue, extra::Err<ParseError<'src>>> + Clone {
     identifier_parser()
         .map(OwnValue::String)
         .labelled("value_ident")
 }
 
-pub(super) fn rvalue_parser<'src>() -> impl Parser<'src, &'src str, OwnValue, extra::Err<ParseError<'src>>> + Clone {
+pub(super) fn rvalue_parser<'src>()
+-> impl Parser<'src, &'src str, OwnValue, extra::Err<ParseError<'src>>> + Clone {
     choice((
         value_string_parser(),
         value_int_parser(),
@@ -487,7 +534,8 @@ pub(super) fn rvalue_parser<'src>() -> impl Parser<'src, &'src str, OwnValue, ex
     .labelled("value")
 }
 
-fn relation_parser<'src>() -> impl Parser<'src, &'src str, Relation, extra::Err<ParseError<'src>>> + Clone {
+fn relation_parser<'src>()
+-> impl Parser<'src, &'src str, Relation, extra::Err<ParseError<'src>>> + Clone {
     let rels = [
         Relation::Attr as u8 as char,
         Relation::Sub as u8 as char,

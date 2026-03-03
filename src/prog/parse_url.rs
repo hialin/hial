@@ -9,7 +9,7 @@ pub fn parse_url(input: &str) -> Res<Url<'_>> {
         .then_ignore(end())
         .parse(input)
         .into_result()
-        .map_err(|err| usererr(convert_error(input, err)))
+        .map_err(|err| inputerr(convert_error(input, err)))
 }
 
 pub(super) fn url_parser<'a>()

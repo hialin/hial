@@ -224,7 +224,7 @@ impl<'s> Searcher<'s> {
                 }
             }
             Selector::Str(itp) => group.get(itp),
-            _ => return Some(userres("bad interpretation selector")),
+            _ => return Some(inputres("bad interpretation selector")),
         };
         let itp_cell = guard_ok!(itp_cell.err(), err => {
             ifdebug!(println!("no such interpretation: {:?}", err));
@@ -470,7 +470,7 @@ impl<'s> Searcher<'s> {
 
         fn eval_expr(op: &str, left: Value, right: &OwnValue) -> Res<bool> {
             if !["==", "!="].contains(&op) {
-                return userres(format!("bad operand: {}", op));
+                return inputres(format!("bad operand: {}", op));
             }
             match op {
                 "==" if left == right.as_value() => Ok(true),

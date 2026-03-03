@@ -108,7 +108,8 @@ impl Cell {
                 let reader = r.value_read()?;
                 let mut indentation_reader = IndentationReader::new(reader);
                 let root = {
-                    let mut xml_reader = Reader::from_reader(BufReader::new(&mut indentation_reader));
+                    let mut xml_reader =
+                        Reader::from_reader(BufReader::new(&mut indentation_reader));
                     xml_to_node(&mut xml_reader)?
                 };
                 let indent = indentation_reader.detected_indentation();
@@ -491,8 +492,8 @@ impl CellWriterTrait for CellWriter {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
         match self {
             CellWriter::Node { nodes, pos } => match &mut nodes[*pos] {
-                Node::Document(_) => return userres("cannot set value of document"),
-                Node::Decl(x) => return userres("cannot set value of decl"),
+                Node::Document(_) => return inputres("cannot set value of document"),
+                Node::Decl(x) => return inputres("cannot set value of decl"),
                 Node::DocType(x) => *x = value.as_value().as_cow_str().to_string(),
                 Node::PI(x) => *x = value.as_value().as_cow_str().to_string(),
                 Node::Element((_, _, x, _)) => *x = value.as_value().as_cow_str().to_string(),
@@ -502,11 +503,11 @@ impl CellWriterTrait for CellWriter {
                 Node::CData(x) => {
                     *x = value.as_value().as_cow_str().to_string().into_bytes();
                 }
-                Node::Error(x) => return userres("cannot set value of error node"),
+                Node::Error(x) => return inputres("cannot set value of error node"),
             },
             CellWriter::Attr { nodes, pos } => match &mut nodes[*pos] {
                 Attribute::Attribute(_, x) => *x = value.as_value().as_cow_str().to_string(),
-                Attribute::Error(x) => return userres("cannot set value of error attribute"),
+                Attribute::Error(x) => return inputres("cannot set value of error attribute"),
             },
         }
         Ok(())

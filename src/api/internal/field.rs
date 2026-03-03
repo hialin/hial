@@ -198,14 +198,14 @@ impl CellWriterTrait for FieldWriter {
                 if let OwnValue::String(t) = value {
                     self.writer.ty(t.as_str())
                 } else {
-                    userres("set type argument must be a string")
+                    inputres("set type argument must be a string")
                 }
             }
             FieldType::Index => {
                 if let OwnValue::Int(i) = value {
                     self.writer.index(i.as_i128() as usize)
                 } else {
-                    userres("set type argument must be a string")
+                    inputres("set type argument must be a string")
                 }
             }
             FieldType::Serial => self.writer.serial(value),

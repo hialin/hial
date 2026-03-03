@@ -105,7 +105,7 @@ fn sitter_from_source(source: String, language: String) -> Res<Cell> {
         "javascript" => unsafe { crate::tree_sitter_javascript() },
         // "python" => unsafe { tree_sitter_python() },
         "rust" => unsafe { crate::tree_sitter_rust() },
-        _ => return userres(format!("unsupported language: {}", language)),
+        _ => return inputres(format!("unsupported language: {}", language)),
     };
 
     // debug!("sitter language: {}", language);

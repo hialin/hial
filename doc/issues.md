@@ -1,9 +1,9 @@
 # List of Todos and other Issues
 
+- prelude variables
+- when pprint-ing, collapse multiple lines with just dot (cell with no value) into one line
 - selector expression argument for get_all (mongo case)
-    - unify get and get_all
-- path interpretation: expose parent/filename/ext
-
+    - unify get and get_all?
 - add split(":") interpretation, read-write
 - '**[filter]' must work as '**/*[filter]' (filter to be applied only on leaves)
 - support rust/ts write: `hial './src/tests/rust.rs^rust/*[:function_item].label = "modified_fn_name"'`
@@ -14,12 +14,7 @@
 - support diff  ./file.json^json^tree  ./file.xml^xml^tree
 - basic profiling
 - functions
-- should blobs/bytes be part of value? they are only useful via reinterpretation
-
-- release first minimal version:
-    - interpretations: path+fs, json+yaml+toml+xml, rust+js, url?+http
-    - explicit and implicit write support (policy, include readonly)
-    - fix tests, todo!() and TODO: in code
+- fix tests, todo!() and TODO: in code
 
 - operations:
     - assign to variables;

@@ -78,11 +78,11 @@ impl Cell {
         let text = v.as_cow_str().to_string();
 
         let Some(pattern) = params.get(&Value::from(0)) else {
-            return userres("regex requires a parameter");
+            return inputres("regex requires a parameter");
         };
 
         let re = Regex::new(pattern.as_cow_str().as_ref())
-            .map_err(|e| caused(HErrKind::User, "bad regex", e))?;
+            .map_err(|e| caused(HErrKind::Input, "bad regex", e))?;
 
         let mut data = Data { matches: vec![] };
         for (i, captures) in re.captures_iter(text.as_str()).enumerate() {
@@ -168,7 +168,7 @@ impl CellReaderTrait for CellReader {
 
 impl CellWriterTrait for CellWriter {
     fn set_value(&mut self, value: OwnValue) -> Res<()> {
-        userres("cannot set value of a regex cell")
+        inputres("cannot set value of a regex cell")
     }
 }
 
@@ -192,7 +192,7 @@ impl CellTrait for Cell {
     }
 
     fn write(&self) -> Res<CellWriter> {
-        userres("cannot write a regex cell")
+        inputres("cannot write a regex cell")
     }
 
     fn head(&self) -> Res<(Self, Relation)> {

@@ -1,4 +1,6 @@
 use crate::{api::*, config::ColorPalette, pprint, utils::log::set_verbose};
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+use std::time::Duration;
 
 #[test]
 fn test_simple_path() -> Res<()> {
@@ -20,6 +22,10 @@ fn test_simple_path() -> Res<()> {
 #[test]
 fn test_multihop_path() -> Res<()> {
     set_verbose(true);
+    if !can_reach("api.github.com", 80, Duration::from_secs(2)) {
+        eprintln!("warning: skipping test_multihop_path, network unavailable");
+        return Ok(());
+    }
 
     let start = Xell::from("http://api.github.com");
     let path = "^http^json/rate_limit_url^http^json/resources/core/limit";
@@ -37,6 +43,17 @@ fn test_multihop_path() -> Res<()> {
     );
 
     Ok(())
+}
+
+fn can_reach(host: &str, port: u16, timeout: Duration) -> bool {
+    let addrs = format!("{host}:{port}");
+    let resolved: Vec<SocketAddr> = match addrs.to_socket_addrs() {
+        Ok(iter) => iter.collect(),
+        Err(_) => return false,
+    };
+    resolved
+        .iter()
+        .any(|addr| TcpStream::connect_timeout(addr, timeout).is_ok())
 }
 
 #[test]

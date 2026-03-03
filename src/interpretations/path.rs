@@ -145,7 +145,7 @@ impl CellWriterTrait for CellWriter {
                     *(self.path) = PathBuf::from(s);
                     Ok(())
                 }
-                _ => userres(format!("cannot set fs path to {:?}", value)),
+                _ => inputres(format!("cannot set fs path to {:?}", value)),
             },
             Kind::Dir => {
                 let dir = value.as_cow_str().to_string();
@@ -160,7 +160,7 @@ impl CellWriterTrait for CellWriter {
             Kind::Name => {
                 let name = value.as_cow_str().to_string();
                 if name.is_empty() {
-                    return userres("name cannot be empty");
+                    return inputres("name cannot be empty");
                 }
                 self.path.set_file_name(name);
                 Ok(())
@@ -179,18 +179,18 @@ impl CellWriterTrait for CellWriter {
             Kind::Stem => {
                 let stem = value.as_cow_str().to_string();
                 if stem.is_empty() {
-                    return userres("stem cannot be empty");
+                    return inputres("stem cannot be empty");
                 }
                 let ext = self
                     .path
                     .extension()
                     .map(|x| x.to_string_lossy().to_string());
                 let mut base = stem;
-                if let Some(ext) = ext {
-                    if !ext.is_empty() {
-                        base.push('.');
-                        base.push_str(ext.as_str());
-                    }
+                if let Some(ext) = ext
+                    && !ext.is_empty()
+                {
+                    base.push('.');
+                    base.push_str(ext.as_str());
                 }
                 self.path.set_file_name(base);
                 Ok(())

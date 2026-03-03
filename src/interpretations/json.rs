@@ -287,7 +287,7 @@ impl CellWriterTrait for CellWriter {
     fn set_label(&mut self, label: OwnValue) -> Res<()> {
         match self.nodes {
             WriteNodeGroup::Array(_) => {
-                return userres("cannot set label on array object");
+                return inputres("cannot set label on array object");
             }
             WriteNodeGroup::Object(ref mut o) => {
                 let (_, v) = guard_some!(o.swap_remove_index(self.pos), {
