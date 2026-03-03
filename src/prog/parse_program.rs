@@ -5,7 +5,7 @@ use crate::{
 use chumsky::prelude::*;
 
 pub fn parse_program(input: &str) -> Res<Program<'_>> {
-    let var_bind = just(':')
+    let var_bind = just('$')
         .ignore_then(identifier_parser())
         .then_ignore(ws())
         .then_ignore(just(":="))

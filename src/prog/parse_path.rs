@@ -33,7 +33,7 @@ pub(super) fn path_with_starter_parser<'a>()
 fn path_start_parser<'a>()
 -> impl Parser<'a, &'a str, PathStart<'a>, extra::Err<ParseError<'a>>> + Clone {
     let path_start_url = url_parser().map(PathStart::Url).labelled("path_start_url");
-    let path_start_var = just(':')
+    let path_start_var = just('$')
         .ignore_then(identifier_parser())
         .map(PathStart::Var)
         .labelled("path_start_var");
@@ -400,7 +400,7 @@ fn test_parse_file_path_start_variants() {
     assert_eq!(
         path_start_parser()
             .then_ignore(end())
-            .parse(":x")
+            .parse("$x")
             .into_result(),
         Ok(PathStart::Var("x".to_string()))
     );
