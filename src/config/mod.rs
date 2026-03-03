@@ -18,6 +18,7 @@ pub enum ColorPalette {
 #[serde(default)]
 pub struct MainConfig {
     pub color_palette: Option<ColorPalette>,
+    pub mongo_oidc_human: Option<bool>,
 }
 
 pub(crate) fn config_dir() -> Res<PathBuf> {

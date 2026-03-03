@@ -34,14 +34,18 @@ pub fn parse_program(input: &str) -> Res<Program<'_>> {
     program
         .parse(input)
         .into_result()
-        .map_err(|err| inputerr(convert_error(input, err)))
+        .map_err(|err| inputerr(convert_error(input, err, "<program>")))
 }
 
 fn ws<'src>() -> impl Parser<'src, &'src str, (), extra::Err<ParseError<'src>>> + Clone {
-    any().filter(|c: &char| c.is_whitespace()).repeated().ignored()
+    any()
+        .filter(|c: &char| c.is_whitespace())
+        .repeated()
+        .ignored()
 }
 
-fn identifier_parser<'src>() -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
+fn identifier_parser<'src>()
+-> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
     any()
         .filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_')
         .repeated()

@@ -20,7 +20,11 @@ pub fn detect_file_indentation(path: &Path) -> String {
     let file = match File::open(path) {
         Ok(file) => file,
         Err(err) => {
-            warning!("cannot open file for indentation detection {:?}: {}", path, err);
+            warning!(
+                "cannot open file for indentation detection {:?}: {}",
+                path,
+                err
+            );
             return String::new();
         }
     };
@@ -28,7 +32,8 @@ pub fn detect_file_indentation(path: &Path) -> String {
     if let Err(err) = io::copy(&mut reader, &mut io::sink()) {
         warning!(
             "cannot read file for indentation detection {:?}: {}",
-            path, err
+            path,
+            err
         );
     }
     reader.detected_indentation()

@@ -9,7 +9,7 @@ pub fn parse_url(input: &str) -> Res<Url<'_>> {
         .then_ignore(end())
         .parse(input)
         .into_result()
-        .map_err(|err| inputerr(convert_error(input, err)))
+        .map_err(|err| inputerr(convert_error(input, err, "<url>")))
 }
 
 pub(super) fn url_parser<'a>()
@@ -125,8 +125,8 @@ fn query_params<'a>()
         .labelled("query params")
 }
 
-fn fragment<'src>()
--> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
+fn fragment<'src>() -> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone
+{
     just('#')
         .ignore_then(url_code_points())
         .labelled("fragment")
@@ -152,11 +152,7 @@ fn alphanumerichyphen1<'src>()
 
 fn alphanumeric1<'src>()
 -> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
-    any()
-        .filter(ascii_alnum)
-        .repeated()
-        .at_least(1)
-        .to_slice()
+    any().filter(ascii_alnum).repeated().at_least(1).to_slice()
 }
 
 fn digits_between<'src>(
@@ -172,11 +168,7 @@ fn digits_between<'src>(
 }
 
 fn alpha1<'src>() -> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
-    any()
-        .filter(ascii_alpha)
-        .repeated()
-        .at_least(1)
-        .to_slice()
+    any().filter(ascii_alpha).repeated().at_least(1).to_slice()
 }
 
 pub(super) fn path_code_points<'src>()
@@ -184,21 +176,13 @@ pub(super) fn path_code_points<'src>()
     let accept = |c: &char| {
         matches!(*c, '+' | '-' | '_' | '.' | ':' | '*' | '$') || c.is_ascii_alphanumeric()
     };
-    any()
-        .filter(accept)
-        .repeated()
-        .at_least(1)
-        .to_slice()
+    any().filter(accept).repeated().at_least(1).to_slice()
 }
 
 pub(super) fn url_code_points<'src>()
 -> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
     let accept = |c: &char| matches!(*c, '+' | '-' | '_' | '.' | '$') || c.is_ascii_alphanumeric();
-    any()
-        .filter(accept)
-        .repeated()
-        .at_least(1)
-        .to_slice()
+    any().filter(accept).repeated().at_least(1).to_slice()
 }
 
 fn ascii_alpha(c: &char) -> bool {

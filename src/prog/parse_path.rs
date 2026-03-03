@@ -11,7 +11,7 @@ pub fn parse_path(input: &str) -> Res<Path<'_>> {
         .then_ignore(end())
         .parse(input)
         .into_result()
-        .map_err(|err| inputerr(convert_error(input, err)))
+        .map_err(|err| inputerr(convert_error(input, err, "<path>")))
 }
 
 pub fn parse_path_with_starter(input: &str) -> Res<(PathStart<'_>, Path<'_>)> {
@@ -19,7 +19,7 @@ pub fn parse_path_with_starter(input: &str) -> Res<(PathStart<'_>, Path<'_>)> {
         .then_ignore(end())
         .parse(input)
         .into_result()
-        .map_err(|err| inputerr(convert_error(input, err)))
+        .map_err(|err| inputerr(convert_error(input, err, "<path>")))
 }
 
 pub(super) fn path_with_starter_parser<'a>()

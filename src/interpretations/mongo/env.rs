@@ -1,7 +1,6 @@
 use crate::config::config_dir;
 use std::{env, path::PathBuf};
 
-const OIDC_HUMAN_ENV: &str = "HIAL_MONGO_OIDC_HUMAN";
 const OIDC_CALLBACK_URL_ENV: &str = "HIAL_MONGO_OIDC_CALLBACK_URL";
 
 const DEFAULT_TOKEN_FILE: &str = "mongo/oidc-token.yaml";
@@ -20,18 +19,15 @@ pub(super) fn oidc_env_config() -> OidcEnvConfig {
         .filter(|value| !value.trim().is_empty())
         .map(|value| value.trim().to_string())
         .unwrap_or_else(|| String::from(DEFAULT_CALLBACK_URL));
+    let enabled = crate::config::load_main_config()
+        .ok()
+        .and_then(|config| config.mongo_oidc_human)
+        .unwrap_or(false);
     OidcEnvConfig {
-        enabled: env::var(OIDC_HUMAN_ENV).is_ok_and(|value| is_truthy(&value)),
+        enabled,
         token_file: config_dir().ok().map(|path| path.join(DEFAULT_TOKEN_FILE)),
         callback_url,
     }
-}
-
-fn is_truthy(value: &str) -> bool {
-    matches!(
-        value.trim().to_ascii_lowercase().as_str(),
-        "1" | "true" | "yes" | "on"
-    )
 }
 
 #[cfg(test)]

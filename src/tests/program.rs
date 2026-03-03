@@ -91,3 +91,13 @@ fn program_undefined_variable_errors() -> Res<()> {
     assert!(format!("{}", err).contains("undefined variable :missing"));
     Ok(())
 }
+
+#[test]
+fn program_parse_error_uses_diagnostic_format() {
+    let err = Program::parse("abc := ./src/tests/data/assignment.json^json")
+        .expect_err("expected parse error");
+    let rendered = format!("{}", err);
+    assert!(rendered.contains("parse error"));
+    assert!(rendered.contains("<program>:1:"));
+    assert!(rendered.contains("expected"));
+}

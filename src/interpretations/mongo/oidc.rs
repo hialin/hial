@@ -48,13 +48,18 @@ pub(super) fn run_human_oidc_callback(
             exchange_refresh_token(&openid.token_endpoint, client_id, &refresh_token)
     {
         if let Some(refresh_token) = response.refresh_token.as_deref() {
-            let _ = token_store::save_refresh_token(env.token_file.as_deref(), client_id, refresh_token);
+            let _ = token_store::save_refresh_token(
+                env.token_file.as_deref(),
+                client_id,
+                refresh_token,
+            );
         }
         return Ok(to_idp_response(response));
     }
     let response = run_interactive_flow(context.timeout, &idp_info, &openid, client_id, env)?;
     if let Some(refresh_token) = response.refresh_token.as_deref() {
-        let _ = token_store::save_refresh_token(env.token_file.as_deref(), client_id, refresh_token);
+        let _ =
+            token_store::save_refresh_token(env.token_file.as_deref(), client_id, refresh_token);
     }
     Ok(to_idp_response(response))
 }
