@@ -50,11 +50,8 @@ pub(super) fn run_human_oidc_callback(
             exchange_refresh_token(&openid.token_endpoint, client_id, &refresh_token)
     {
         if let Some(refresh_token) = response.refresh_token.as_deref()
-            && let Err(err) = token_store::save_refresh_token(
-                env.token_file.as_deref(),
-                client_id,
-                refresh_token,
-            )
+            && let Err(err) =
+                token_store::save_refresh_token(env.token_file.as_deref(), client_id, refresh_token)
         {
             warning!("failed to save mongo oidc refresh token: {}", err);
         }

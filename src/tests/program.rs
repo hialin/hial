@@ -101,3 +101,26 @@ fn program_parse_error_uses_diagnostic_format() {
     assert!(rendered.contains("<program>:1:"));
     assert!(rendered.contains("expected"));
 }
+
+#[test]
+fn program_allows_spaces_around_assignment_and_var_binding() -> Res<()> {
+    Program::parse(
+        "$cfg := ./src/tests/data/assignment.json^json; $cfg/a=1; $cfg/a = 1; $cfg/a =1",
+    )?;
+    assert!(Program::parse("$cfg : = ./src/tests/data/assignment.json^json").is_err());
+    Ok(())
+}
+
+#[test]
+fn program_allows_hyphenated_variable_names() -> Res<()> {
+    Program::parse("$mongo-local := ./src/tests/data/assignment.json^json; $mongo-local/a = 1")?;
+    Ok(())
+}
+
+#[test]
+fn program_allows_newline_statement_separator() -> Res<()> {
+    Program::parse(
+        "$mongo-local := mongodb://localhost:27017/?directConnection=true^mongo\n$mongo-stg := mongodb+srv://cluster/?authSource=$external^mongo",
+    )?;
+    Ok(())
+}

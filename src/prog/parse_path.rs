@@ -427,7 +427,7 @@ fn unescape_string(s: &str, special: char) -> String {
 
 fn ws<'src>() -> impl Parser<'src, &'src str, (), extra::Err<ParseError<'src>>> + Clone {
     any()
-        .filter(|c: &char| c.is_whitespace())
+        .filter(|c: &char| c.is_whitespace() && !matches!(*c, '\n' | '\r'))
         .repeated()
         .ignored()
 }
@@ -435,7 +435,7 @@ fn ws<'src>() -> impl Parser<'src, &'src str, (), extra::Err<ParseError<'src>>> 
 fn identifier_slice_parser<'src>()
 -> impl Parser<'src, &'src str, &'src str, extra::Err<ParseError<'src>>> + Clone {
     any()
-        .filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_')
+        .filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
         .repeated()
         .at_least(1)
         .to_slice()

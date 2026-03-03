@@ -22,9 +22,14 @@ pub fn parse_program(input: &str) -> Res<Program<'_>> {
 
     let path_stmt = path_with_starter_parser().map(|(start, path)| Statement::Path(start, path));
 
+    let statement_sep = choice((
+        ws().ignore_then(just(';')).then_ignore(ws()).ignored(),
+        line_ws(),
+    ));
+
     let program = choice((var_bind, assignment, path_stmt))
         .labelled("statement")
-        .separated_by(ws().ignore_then(just(';')).then_ignore(ws()))
+        .separated_by(statement_sep)
         .allow_trailing()
         .collect::<Vec<_>>()
         .map(Program)
@@ -44,10 +49,28 @@ fn ws<'src>() -> impl Parser<'src, &'src str, (), extra::Err<ParseError<'src>>> 
         .ignored()
 }
 
+fn line_ws<'src>() -> impl Parser<'src, &'src str, (), extra::Err<ParseError<'src>>> + Clone {
+    any()
+        .filter(|c: &char| c.is_whitespace() && !matches!(*c, '\n' | '\r'))
+        .repeated()
+        .ignore_then(
+            any()
+                .filter(|c: &char| matches!(*c, '\n' | '\r'))
+                .repeated()
+                .at_least(1),
+        )
+        .then_ignore(
+            any()
+                .filter(|c: &char| c.is_whitespace() && !matches!(*c, '\n' | '\r'))
+                .repeated(),
+        )
+        .ignored()
+}
+
 fn identifier_parser<'src>()
 -> impl Parser<'src, &'src str, String, extra::Err<ParseError<'src>>> + Clone {
     any()
-        .filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_')
+        .filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
         .repeated()
         .at_least(1)
         .collect::<String>()
