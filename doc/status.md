@@ -20,7 +20,7 @@
 | zip        |            |            |
 |            |            |            |
 | plain text |    yes     |    yes     |
-| markdown   |            |            |
+| markdown   |    yes     |            |
 |            |            |            |
 | python     |            |            |
 | javascript |            |            |

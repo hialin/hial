@@ -100,6 +100,8 @@ pub(crate) fn auto_interpretation(cell: &Xell) -> Option<&str> {
     {
         if name.ends_with(".c") {
             return Some("c");
+        } else if name.ends_with(".markdown") || name.ends_with(".md") {
+            return Some("markdown");
         } else if name.ends_with(".javascript") {
             return Some("javascript");
         } else if name.ends_with(".json") {

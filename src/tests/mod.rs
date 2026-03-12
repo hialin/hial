@@ -1,6 +1,7 @@
 mod fs;
 mod http;
 mod json;
+mod markdown;
 mod nested;
 mod path;
 mod perf;

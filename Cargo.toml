@@ -15,6 +15,7 @@ crate-type = ["lib", "cdylib"]
 
 [dependencies]
 chumsky = "0.12"
+comrak = "0.50"
 dirs = "6.0"
 indexmap = "2"
 linkme = "0.3"

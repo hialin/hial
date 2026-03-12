@@ -53,6 +53,20 @@ Examples:
 - `./notes.txt^text/[0]` -> first line
 - `./notes.txt^text/[1] = "updated"` -> rewrites the second line
 
+## Markdown
+
+x
+    preamble
+    section
+        @level
+        section
+            @level
+
+Examples:
+
+- `./README.md^markdown/Installation` -> the `Installation` section
+- `./README.md^markdown/Installation@level` -> the heading depth of that section
+
 # xml
 
 x
