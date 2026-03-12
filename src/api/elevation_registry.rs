@@ -106,6 +106,8 @@ pub(crate) fn auto_interpretation(cell: &Xell) -> Option<&str> {
             return Some("json");
         } else if name.ends_with(".rs") {
             return Some("rust");
+        } else if name.ends_with(".txt") || name.ends_with(".log") || name.ends_with(".text") {
+            return Some("text");
         } else if name.ends_with(".toml") {
             return Some("toml");
         } else if name.ends_with(".xml") {

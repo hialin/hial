@@ -19,7 +19,7 @@
 | ical       |            |            |
 | zip        |            |            |
 |            |            |            |
-| plain text |            |            |
+| plain text |    yes     |    yes     |
 | markdown   |            |            |
 |            |            |            |
 | python     |            |            |

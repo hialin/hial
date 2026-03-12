@@ -41,6 +41,18 @@ x
         object
     key: object
 
+## Text
+
+x
+    line
+    line
+    line
+
+Examples:
+
+- `./notes.txt^text/[0]` -> first line
+- `./notes.txt^text/[1] = "updated"` -> rewrites the second line
+
 # xml
 
 x

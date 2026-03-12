@@ -1,7 +1,10 @@
 # List of Todos and other Issues
 
-- prelude variables
+- create some specification for the library, what is the expected behavior of the library?
+    - useful for AI and human documentation
+- create markdown (hierarchical) and text (array of lines) interpretations
 - when pprint-ing, collapse multiple lines with just dot (cell with no value) into one line
+    - automatically reduce search tree when too much data is being printed
 - selector expression argument for get_all (mongo case)
     - unify get and get_all?
 - add split(":") interpretation, read-write

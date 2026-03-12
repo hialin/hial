@@ -6,6 +6,7 @@ pub mod ownvalue;
 pub mod path;
 pub mod regex;
 pub mod split;
+pub mod text;
 pub mod toml;
 pub mod treesitter;
 pub mod url;

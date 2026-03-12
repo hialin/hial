@@ -9,6 +9,7 @@ mod regex;
 mod rust;
 mod search;
 mod split;
+mod text;
 mod toml;
 mod xml;
 mod yaml;
