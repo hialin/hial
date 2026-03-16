@@ -2,7 +2,7 @@ use std::fmt::{Error, Write};
 
 use crate::config::ColorPalette;
 
-const SPACE_TO_SEPARATOR: usize = 32;
+const SPACE_TO_SEPARATOR: usize = 20;
 const COLOR_RESET: &str = "\x1b[0m";
 const COLOR_INTERPRETATION_DARK: &str = "2";
 const COLOR_TYPE_STRING_DARK: &str = "38;5;114";
@@ -73,7 +73,9 @@ pub(crate) fn render_line(
     };
     let interpretation = colorize(palette.interpretation, &line_data.interpretation);
     let value_type = colorize(&value_color, &line_data.value_type);
-    let tree = colorize(palette.tree, &build_tree_prefix(tree_prefix, &theme));
+    let raw_tree = build_tree_prefix(tree_prefix, &theme);
+    let raw_continuation_tree = build_multiline_tree_prefix(tree_prefix, &theme);
+    let tree = colorize(palette.tree, &raw_tree);
     let edge_prefix = if line_data.edge_prefix == "@" {
         colorize(palette.tree, &line_data.edge_prefix)
     } else {
@@ -85,8 +87,14 @@ pub(crate) fn render_line(
     if width < SPACE_TO_SEPARATOR {
         write!(line, "{:width$}", "", width = SPACE_TO_SEPARATOR - width)?;
     }
+    let prefix_before_tree = line.clone();
     write!(line, "{}{}", tree, edge_prefix)?;
-    let continuation_prefix = line.clone();
+    let continuation_prefix = format!(
+        "{}{}{}",
+        prefix_before_tree,
+        colorize(palette.tree, &raw_continuation_tree),
+        " ".repeat(line_data.edge_prefix.chars().count())
+    );
 
     if let Some(err) = &line_data.read_error {
         write!(line, "{}", colorize(palette.error, err))?;
@@ -170,6 +178,25 @@ fn build_tree_prefix(tree_prefix: &TreePrefix, theme: &PPrintTheme) -> String {
             prefix.push_str(theme.last_branch);
         } else {
             prefix.push_str(theme.branch);
+        }
+    }
+    prefix
+}
+
+fn build_multiline_tree_prefix(tree_prefix: &TreePrefix, theme: &PPrintTheme) -> String {
+    let mut prefix = String::new();
+    for has_next in &tree_prefix.ancestors_have_next {
+        if *has_next {
+            prefix.push_str(theme.vertical);
+        } else {
+            prefix.push_str(theme.space);
+        }
+    }
+    if tree_prefix.has_parent {
+        if tree_prefix.is_last {
+            prefix.push_str(theme.space);
+        } else {
+            prefix.push_str(theme.vertical);
         }
     }
     prefix
@@ -371,5 +398,71 @@ mod tests {
         };
         let rendered = render_line(&line, &prefix, ColorPalette::Light).unwrap();
         assert!(rendered.contains("\x1b[38;5;88mcount"));
+    }
+
+    #[test]
+    fn multiline_continuations_do_not_repeat_tree_guides() {
+        let prefix = TreePrefix {
+            ancestors_have_next: vec![true],
+            has_parent: true,
+            is_last: false,
+        };
+        let line = LineData {
+            interpretation: "markdown".to_string(),
+            value_type: "text".to_string(),
+            edge_prefix: "".to_string(),
+            key: None,
+            key_error: None,
+            value: Some(LineValue::Multiline(vec![
+                "first".to_string(),
+                "second".to_string(),
+            ])),
+            value_error: None,
+            read_error: None,
+            empty: false,
+        };
+        let rendered = render_line(&line, &prefix, ColorPalette::None).unwrap();
+        let mut lines = rendered.lines();
+        let first = lines.next().unwrap();
+        let second = lines.next().unwrap();
+
+        assert!(first.contains("│   ├── ❝ first"));
+        assert!(second.contains("│   │   ❝ second"));
+        assert!(second.ends_with("❝ second"));
+        assert!(!second.contains("│   ├── "));
+        assert!(!second.contains("│   └── "));
+    }
+
+    #[test]
+    fn multiline_continuations_for_last_child_omit_final_bar() {
+        let prefix = TreePrefix {
+            ancestors_have_next: vec![true],
+            has_parent: true,
+            is_last: true,
+        };
+        let line = LineData {
+            interpretation: "markdown".to_string(),
+            value_type: "text".to_string(),
+            edge_prefix: "".to_string(),
+            key: None,
+            key_error: None,
+            value: Some(LineValue::Multiline(vec![
+                "first".to_string(),
+                "second".to_string(),
+            ])),
+            value_error: None,
+            read_error: None,
+            empty: false,
+        };
+        let rendered = render_line(&line, &prefix, ColorPalette::None).unwrap();
+        let mut lines = rendered.lines();
+        let first = lines.next().unwrap();
+        let second = lines.next().unwrap();
+
+        assert!(first.contains("│   └── ❝ first"));
+        assert!(second.contains("│       ❝ second"));
+        assert!(second.ends_with("❝ second"));
+        assert!(!second.contains("│   └── "));
+        assert!(!second.contains("│   ├── "));
     }
 }

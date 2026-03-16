@@ -1,6 +1,7 @@
 use comrak::{
-    Arena, Options, parse_document,
+    Arena, Options,
     nodes::{AstNode, NodeValue},
+    parse_document,
 };
 use linkme::distributed_slice;
 use std::io::Read;
@@ -8,10 +9,7 @@ use std::io::Read;
 use crate::{
     api::{interpretation::*, *},
     implement_try_from_xell,
-    utils::{
-        ownrc::{OwnRc, ReadRc},
-        ownrcutils::read,
-    },
+    utils::ownrc::{OwnRc, ReadRc},
 };
 
 #[distributed_slice(ELEVATION_CONSTRUCTORS)]
@@ -37,14 +35,10 @@ struct Entry {
 
 #[derive(Clone, Debug)]
 enum EntryKind {
-    Preamble {
-        body: String,
-    },
-    Section {
-        label: String,
-        level: u8,
-        body: String,
-    },
+    Preamble,
+    Section { label: String },
+    Paragraph { value: String },
+    Code { value: String },
 }
 
 #[derive(Clone, Debug)]
@@ -57,7 +51,6 @@ pub(crate) struct Cell {
 enum Kind {
     Root,
     Entry(usize),
-    LevelAttr(usize),
 }
 
 #[derive(Debug)]
@@ -67,9 +60,7 @@ pub(crate) struct CellReader {
 }
 
 #[derive(Debug)]
-pub(crate) struct CellWriter {
-    kind: Kind,
-}
+pub(crate) struct CellWriter;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Group {
@@ -83,15 +74,12 @@ pub(crate) type CellIterator = std::vec::IntoIter<Res<Cell>>;
 enum GroupKind {
     Root,
     Children(usize),
-    Attrs(usize),
 }
 
 #[derive(Clone, Debug)]
-struct HeadingInfo {
-    label: String,
+struct HeadingFrame {
     level: u8,
-    start_line: usize,
-    end_line: usize,
+    entry_id: Option<usize>,
 }
 
 implement_try_from_xell!(Cell, Markdown);
@@ -127,75 +115,77 @@ impl Cell {
 
 impl Data {
     fn from_source(source: &str) -> Self {
-        let headings = collect_headings(source);
-        let line_starts = line_starts(source);
-        let line_count = line_starts.len().saturating_sub(1);
+        let arena = Arena::new();
+        let root = parse_document(&arena, source, &Options::default());
 
-        let mut roots = Vec::new();
-        let mut entries = Vec::<Entry>::new();
-        let mut stack: Vec<(usize, u8)> = Vec::new();
-
-        let first_heading_start = headings.first().map(|h| h.start_line).unwrap_or(line_count + 1);
-        let preamble = trim_newline_edges(slice_line_range(
-            source,
-            &line_starts,
-            1,
-            first_heading_start,
-        ));
-        if !preamble.is_empty() {
-            roots.push(entries.len());
-            entries.push(Entry {
-                parent: None,
-                kind: EntryKind::Preamble { body: preamble },
-                children: vec![],
-            });
-        }
-
-        for (idx, heading) in headings.iter().enumerate() {
-            while let Some((_, parent_level)) = stack.last() {
-                if *parent_level >= heading.level {
-                    stack.pop();
-                } else {
-                    break;
-                }
-            }
-
-            let next_heading_start = headings
-                .get(idx + 1)
-                .map(|h| h.start_line)
-                .unwrap_or(line_count + 1);
-            let body = trim_newline_edges(slice_line_range(
-                source,
-                &line_starts,
-                heading.end_line + 1,
-                next_heading_start,
-            ));
-
-            let entry_id = entries.len();
-            let parent = stack.last().map(|(entry_id, _)| *entry_id);
-            entries.push(Entry {
-                parent,
-                kind: EntryKind::Section {
-                    label: heading.label.clone(),
-                    level: heading.level,
-                    body,
-                },
-                children: vec![],
-            });
-
-            if let Some(parent_id) = parent {
-                entries[parent_id].children.push(entry_id);
-            } else {
-                roots.push(entry_id);
-            }
-
-            stack.push((entry_id, heading.level));
-        }
-
-        Self {
+        let mut data = Self {
             source: source.to_string(),
-            roots,
-            entries,
+            roots: Vec::new(),
+            entries: Vec::new(),
+        };
+        let mut headings: Vec<HeadingFrame> = Vec::new();
+        let mut preamble_id = None;
+
+        let mut child = root.first_child();
+        while let Some(node) = child {
+            if let Some((level, label)) = heading_from_node(node) {
+                while headings.last().is_some_and(|parent| parent.level >= level) {
+                    headings.pop();
+                }
+
+                let entry_id = if label.is_empty() {
+                    None
+                } else {
+                    Some(data.push_section(nearest_section_parent(&headings), label))
+                };
+                headings.push(HeadingFrame { level, entry_id });
+            } else if let Some(kind) = block_kind(node) {
+                let parent = nearest_section_parent(&headings);
+                let entry_id = match parent {
+                    Some(parent_id) => data.push_child(parent_id, kind),
+                    None => {
+                        let preamble_id = *preamble_id.get_or_insert_with(|| data.push_preamble());
+                        data.push_child(preamble_id, kind)
+                    }
+                };
+                debug_assert!(data.entries.get(entry_id).is_some());
+            }
+            child = node.next_sibling();
+        }
+
+        data
+    }
+
+    fn push_root(&mut self, kind: EntryKind) -> usize {
+        let entry_id = self.entries.len();
+        self.entries.push(Entry {
+            parent: None,
+            kind,
+            children: Vec::new(),
+        });
+        self.roots.push(entry_id);
+        entry_id
+    }
+
+    fn push_child(&mut self, parent_id: usize, kind: EntryKind) -> usize {
+        let entry_id = self.entries.len();
+        self.entries.push(Entry {
+            parent: Some(parent_id),
+            kind,
+            children: Vec::new(),
+        });
+        self.entries[parent_id].children.push(entry_id);
+        entry_id
+    }
+
+    fn push_preamble(&mut self) -> usize {
+        self.push_root(EntryKind::Preamble)
+    }
+
+    fn push_section(&mut self, parent_id: Option<usize>, label: String) -> usize {
+        match parent_id {
+            Some(parent_id) => self.push_child(parent_id, EntryKind::Section { label }),
+            None => self.push_root(EntryKind::Section { label }),
         }
     }
 }
@@ -204,11 +194,13 @@ impl CellReaderTrait for CellReader {
     fn ty(&self) -> Res<&str> {
         match self.kind {
             Kind::Root => Ok("document"),
-            Kind::Entry(entry_id) => match &self.data.entries.get(entry_id).ok_or_else(noerr)?.kind {
-                EntryKind::Preamble { .. } => Ok("preamble"),
-                EntryKind::Section { .. } => Ok("section"),
+            Kind::Entry(entry_id) => match &self.data.entries.get(entry_id).ok_or_else(noerr)?.kind
+            {
+                EntryKind::Preamble => Ok("preamble"),
+                EntryKind::Section { .. } => Ok("title"),
+                EntryKind::Paragraph { .. } => Ok("text"),
+                EntryKind::Code { .. } => Ok("code"),
             },
-            Kind::LevelAttr(_) => Ok("attribute"),
         }
     }
 
@@ -216,31 +208,30 @@ impl CellReaderTrait for CellReader {
         match self.kind {
             Kind::Root => Ok(0),
             Kind::Entry(entry_id) => Ok(entry_id),
-            Kind::LevelAttr(_) => Ok(0),
         }
     }
 
     fn label(&self) -> Res<Value<'_>> {
         match self.kind {
             Kind::Root => nores(),
-            Kind::Entry(entry_id) => match &self.data.entries.get(entry_id).ok_or_else(noerr)?.kind {
-                EntryKind::Preamble { .. } => Ok(Value::Str("preamble")),
-                EntryKind::Section { label, .. } => Ok(Value::Str(label.as_str())),
+            Kind::Entry(entry_id) => match &self.data.entries.get(entry_id).ok_or_else(noerr)?.kind
+            {
+                EntryKind::Preamble => Ok(Value::Str("preamble")),
+                EntryKind::Section { label } => Ok(Value::Str(label.as_str())),
+                EntryKind::Paragraph { .. } | EntryKind::Code { .. } => nores(),
             },
-            Kind::LevelAttr(_) => Ok(Value::Str("level")),
         }
     }
 
     fn value(&self) -> Res<Value<'_>> {
         match self.kind {
             Kind::Root => nores(),
-            Kind::Entry(entry_id) => match &self.data.entries.get(entry_id).ok_or_else(noerr)?.kind {
-                EntryKind::Preamble { body } => Ok(Value::Str(body.as_str())),
-                EntryKind::Section { body, .. } => Ok(Value::Str(body.as_str())),
-            },
-            Kind::LevelAttr(entry_id) => match &self.data.entries.get(entry_id).ok_or_else(noerr)?.kind {
-                EntryKind::Section { level, .. } => Ok(Value::from(*level as usize)),
-                EntryKind::Preamble { .. } => nores(),
+            Kind::Entry(entry_id) => match &self.data.entries.get(entry_id).ok_or_else(noerr)?.kind
+            {
+                EntryKind::Paragraph { value } | EntryKind::Code { value } => {
+                    Ok(Value::Str(value.as_str()))
+                }
+                EntryKind::Preamble | EntryKind::Section { .. } => nores(),
             },
         }
     }
@@ -248,7 +239,7 @@ impl CellReaderTrait for CellReader {
     fn serial(&self) -> Res<String> {
         match self.kind {
             Kind::Root => Ok(self.data.source.clone()),
-            Kind::Entry(_) | Kind::LevelAttr(_) => nores(),
+            Kind::Entry(_) => nores(),
         }
     }
 }
@@ -283,16 +274,21 @@ impl CellTrait for Cell {
     }
 
     fn write(&self) -> Res<Self::CellWriter> {
-        Ok(CellWriter {
-            kind: self.kind.clone(),
-        })
+        Ok(CellWriter)
     }
 
     fn head(&self) -> Res<(Self, Relation)> {
         match self.kind {
             Kind::Root => nores(),
             Kind::Entry(entry_id) => {
-                let entry = read(&self.data)?.entries.get(entry_id).ok_or_else(noerr)?.clone();
+                let entry = self
+                    .data
+                    .read()
+                    .ok_or_else(|| lockerr("cannot read markdown"))?
+                    .entries
+                    .get(entry_id)
+                    .ok_or_else(noerr)?
+                    .clone();
                 match entry.parent {
                     Some(parent_id) => Ok((
                         Cell {
@@ -310,13 +306,6 @@ impl CellTrait for Cell {
                     )),
                 }
             }
-            Kind::LevelAttr(entry_id) => Ok((
-                Cell {
-                    data: self.data.clone(),
-                    kind: Kind::Entry(entry_id),
-                },
-                Relation::Attr,
-            )),
         }
     }
 
@@ -330,26 +319,11 @@ impl CellTrait for Cell {
                 data: self.data.clone(),
                 kind: GroupKind::Children(entry_id),
             }),
-            Kind::LevelAttr(_) => nores(),
         }
     }
 
     fn attr(&self) -> Res<Self::Group> {
-        match self.kind {
-            Kind::Entry(entry_id) => {
-                let data = read(&self.data)?;
-                let entry = data.entries.get(entry_id).ok_or_else(noerr)?;
-                if matches!(entry.kind, EntryKind::Section { .. }) {
-                    Ok(Group {
-                        data: self.data.clone(),
-                        kind: GroupKind::Attrs(entry_id),
-                    })
-                } else {
-                    nores()
-                }
-            }
-            Kind::Root | Kind::LevelAttr(_) => nores(),
-        }
+        nores()
     }
 }
 
@@ -366,49 +340,43 @@ impl GroupTrait for Group {
 
     fn len(&self) -> Res<usize> {
         match self.kind {
-            GroupKind::Root => Ok(read(&self.data)?.roots.len()),
-            GroupKind::Children(entry_id) => Ok(read(&self.data)?
+            GroupKind::Root => Ok(self
+                .data
+                .read()
+                .ok_or_else(|| lockerr("cannot read markdown"))?
+                .roots
+                .len()),
+            GroupKind::Children(entry_id) => Ok(self
+                .data
+                .read()
+                .ok_or_else(|| lockerr("cannot read markdown"))?
                 .entries
                 .get(entry_id)
                 .ok_or_else(noerr)?
                 .children
                 .len()),
-            GroupKind::Attrs(_) => Ok(1),
         }
     }
 
     fn at(&self, index: usize) -> Res<Self::Cell> {
-        match self.kind {
-            GroupKind::Root => {
-                let entry_id = *read(&self.data)?.roots.get(index).ok_or_else(noerr)?;
-                Ok(Cell {
-                    data: self.data.clone(),
-                    kind: Kind::Entry(entry_id),
-                })
-            }
-            GroupKind::Children(parent_id) => {
-                let entry_id = *read(&self.data)?
-                    .entries
-                    .get(parent_id)
-                    .ok_or_else(noerr)?
-                    .children
-                    .get(index)
-                    .ok_or_else(noerr)?;
-                Ok(Cell {
-                    data: self.data.clone(),
-                    kind: Kind::Entry(entry_id),
-                })
-            }
-            GroupKind::Attrs(entry_id) => {
-                if index != 0 {
-                    return nores();
-                }
-                Ok(Cell {
-                    data: self.data.clone(),
-                    kind: Kind::LevelAttr(entry_id),
-                })
-            }
-        }
+        let data = self
+            .data
+            .read()
+            .ok_or_else(|| lockerr("cannot read markdown"))?;
+        let entry_id = match self.kind {
+            GroupKind::Root => *data.roots.get(index).ok_or_else(noerr)?,
+            GroupKind::Children(parent_id) => *data
+                .entries
+                .get(parent_id)
+                .ok_or_else(noerr)?
+                .children
+                .get(index)
+                .ok_or_else(noerr)?,
+        };
+        Ok(Cell {
+            data: self.data.clone(),
+            kind: Kind::Entry(entry_id),
+        })
     }
 
     fn get_all(&self, label: Value<'_>) -> Res<Self::CellIterator> {
@@ -416,7 +384,10 @@ impl GroupTrait for Group {
             return nores();
         };
 
-        let data = read(&self.data)?;
+        let data = self
+            .data
+            .read()
+            .ok_or_else(|| lockerr("cannot read markdown"))?;
         let ids: Vec<usize> = match self.kind {
             GroupKind::Root => data
                 .roots
@@ -433,16 +404,6 @@ impl GroupTrait for Group {
                 .copied()
                 .filter(|entry_id| entry_matches_label(&data.entries[*entry_id], label))
                 .collect(),
-            GroupKind::Attrs(entry_id) => {
-                if label == "level" {
-                    return Ok(vec![Ok(Cell {
-                        data: self.data.clone(),
-                        kind: Kind::LevelAttr(entry_id),
-                    })]
-                    .into_iter());
-                }
-                vec![]
-            }
         };
 
         Ok(ids
@@ -458,42 +419,47 @@ impl GroupTrait for Group {
     }
 }
 
+fn nearest_section_parent(headings: &[HeadingFrame]) -> Option<usize> {
+    headings.iter().rev().find_map(|frame| frame.entry_id)
+}
+
+fn block_kind(node: &AstNode<'_>) -> Option<EntryKind> {
+    let value = node.data.borrow().value.clone();
+    match value {
+        NodeValue::Paragraph => {
+            let value = collect_text(node).trim().to_string();
+            if value.is_empty() {
+                None
+            } else {
+                Some(EntryKind::Paragraph { value })
+            }
+        }
+        NodeValue::CodeBlock(code) => {
+            let value = trim_newline_edges(code.literal);
+            if value.is_empty() {
+                None
+            } else {
+                Some(EntryKind::Code { value })
+            }
+        }
+        _ => None,
+    }
+}
+
 fn entry_matches_label(entry: &Entry, label: &str) -> bool {
     match &entry.kind {
-        EntryKind::Preamble { .. } => label == "preamble",
-        EntryKind::Section { label: entry_label, .. } => entry_label == label,
+        EntryKind::Preamble => label == "preamble",
+        EntryKind::Section { label: entry_label } => entry_label == label,
+        EntryKind::Paragraph { .. } | EntryKind::Code { .. } => false,
     }
 }
 
-fn collect_headings(source: &str) -> Vec<HeadingInfo> {
-    let arena = Arena::new();
-    let root = parse_document(&arena, source, &Options::default());
-    let mut headings = Vec::new();
-
-    let mut child = root.first_child();
-    while let Some(node) = child {
-        if let Some(heading) = heading_from_node(node) {
-            headings.push(heading);
-        }
-        child = node.next_sibling();
-    }
-
-    headings
-}
-
-fn heading_from_node(node: &AstNode<'_>) -> Option<HeadingInfo> {
+fn heading_from_node(node: &AstNode<'_>) -> Option<(u8, String)> {
     let data = node.data.borrow();
     let NodeValue::Heading(heading) = &data.value else {
         return None;
     };
-
-    let label = collect_text(node).trim().to_string();
-    Some(HeadingInfo {
-        label,
-        level: heading.level,
-        start_line: data.sourcepos.start.line,
-        end_line: data.sourcepos.end.line,
-    })
+    Some((heading.level, collect_text(node).trim().to_string()))
 }
 
 fn collect_text(node: &AstNode<'_>) -> String {
@@ -517,31 +483,6 @@ fn collect_text_into(node: &AstNode<'_>, text: &mut String) {
         collect_text_into(next, text);
         child = next.next_sibling();
     }
-}
-
-fn line_starts(source: &str) -> Vec<usize> {
-    let mut starts = vec![0];
-    for (idx, ch) in source.char_indices() {
-        if ch == '\n' {
-            starts.push(idx + 1);
-        }
-    }
-    starts.push(source.len());
-    starts
-}
-
-fn slice_line_range(source: &str, starts: &[usize], start_line: usize, end_line_exclusive: usize) -> String {
-    if start_line >= end_line_exclusive {
-        return String::new();
-    }
-    let fallback = source.len();
-    let start = *starts
-        .get(start_line.saturating_sub(1))
-        .unwrap_or_else(|| starts.last().unwrap_or(&0));
-    let end = *starts
-        .get(end_line_exclusive.saturating_sub(1))
-        .unwrap_or_else(|| starts.last().unwrap_or(&fallback));
-    source[start..end].to_string()
 }
 
 fn trim_newline_edges(s: String) -> String {

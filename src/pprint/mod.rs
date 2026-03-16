@@ -43,7 +43,7 @@ pub fn pprint(cell: &Xell, depth: usize, breadth: usize, color_palette: ColorPal
             }
         }
     }
-    if let Err(e) = _pprint(cell, "", &options, &[], has_root_prefix, true) {
+    if let Err(e) = _pprint(cell, "", &options, &[], false, true) {
         eprintln!("pprint error: {:?}", e);
     }
 }
