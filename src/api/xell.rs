@@ -37,6 +37,7 @@ enumerated_dynamic_type! {
         Elevation(elevation::Cell),
         Field(field::Cell),
         OwnValue(ownvalue::Cell),
+        Diff(diff::Cell),
         File(fs::Cell),
         Json(json::Cell),
         Toml(toml::Cell),
@@ -61,6 +62,7 @@ enumerated_dynamic_type! {
         Elevation(elevation::CellReader),
         Field(field::FieldReader),
         OwnValue(ownvalue::CellReader),
+        Diff(diff::CellReader),
         File(fs::CellReader),
         Json(json::CellReader),
         Toml(toml::CellReader),
@@ -88,6 +90,7 @@ enumerated_dynamic_type! {
         Elevation(elevation::Cell),
         Field(field::FieldWriter),
         OwnValue(ownvalue::CellWriter),
+        Diff(diff::Cell),
         File(fs::CellWriter),
         Json(json::CellWriter),
         Toml(toml::CellWriter),
@@ -119,6 +122,7 @@ enumerated_dynamic_type! {
         Elevation(elevation::Group),
         Field(field::Group),
         OwnValue(VoidGroup<ownvalue::Cell>),
+        Diff(diff::Group),
         File(fs::Group),
         Json(json::Group),
         Toml(toml::Group),
@@ -163,6 +167,7 @@ enumerated_dynamic_type! {
         Elevation(std::iter::Empty<Res<elevation::Cell>>),
         Field(std::iter::Once<Res<field::Cell>>),
         OwnValue(std::iter::Empty<Res<ownvalue::Cell>>),
+        Diff(std::vec::IntoIter<Res<diff::Cell>>),
         File(std::iter::Once<Res<fs::Cell>>),
         Json(std::iter::Once<Res<json::Cell>>),
         Toml(std::iter::Once<Res<toml::Cell>>),
@@ -530,6 +535,16 @@ impl Xell {
 
     pub fn all(&self, path: &str) -> Res<Vec<Xell>> {
         self.search(path)?.collect()
+    }
+
+    pub fn diff(&self, other: &Xell) -> Res<Xell> {
+        if let DynCell::Error(err) = &self.dyn_cell {
+            return Err(err.clone());
+        }
+        if let DynCell::Error(err) = &other.dyn_cell {
+            return Err(err.clone());
+        }
+        Ok(diff::Cell::from_nodes(diff::diff_one_level(self, other)?))
     }
 
     pub fn head(&self) -> Res<(Xell, Relation)> {

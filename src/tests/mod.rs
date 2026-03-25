@@ -1,3 +1,4 @@
+mod diff;
 mod fs;
 mod http;
 mod json;

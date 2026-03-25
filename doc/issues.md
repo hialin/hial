@@ -1,5 +1,8 @@
 # List of Todos and other Issues
 
+- support diff  ./file.json^json^tree  ./file.xml^xml^tree
+- add general tree store format, use it for some of the interpretations
+- each interp in its own subdirectory
 - when pprint-ing, collapse multiple lines with just dot (cell with no value) into one line
     - automatically reduce search tree when too much data is being printed
 - selector expression argument for get_all (mongo case)
@@ -8,10 +11,9 @@
 - '**[filter]' must work as '**/*[filter]' (filter to be applied only on leaves)
 - support rust/ts write: `hial './src/tests/rust.rs^rust/*[:function_item].label = "modified_fn_name"'`
 - add interpretation params to Xell::be()
-- support zip, markdown
+- support zip
 - support 'copy source destination'
 - support ^json^tree^xml
-- support diff  ./file.json^json^tree  ./file.xml^xml^tree
 - basic profiling
 - functions
 - fix tests, todo!() and TODO: in code
